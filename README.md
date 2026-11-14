@@ -60,7 +60,13 @@ The chat assistant follows a fixed script for now. To connect a real AI model la
 - [ ] Add Google Analytics or Search Console tags and a cookie notice if you start tracking.
 - [ ] After deploying, submit `https://your-domain/sitemap.xml` in Google Search Console.
 
-## Deploying
+## Live preview (GitHub Pages)
+
+Every push to `main` runs `.github/workflows/deploy-pages.yml`. It builds the ASP.NET site, exports every page to static HTML (`scripts/export_static.py`) and publishes the result to **https://mathonsimm.github.io/KCMTravel-Tours/**.
+
+GitHub Pages has no server, so on that version the booking and contact forms open WhatsApp with the details filled in, instead of saving to `App_Data`. Everything else works as normal.
+
+## Deploying the full site
 
 The site runs on any host that supports ASP.NET Core 8: Azure App Service, Windows hosting with IIS, or a Linux VPS. In Visual Studio, right-click the project, choose **Publish**, and follow the wizard.
 
