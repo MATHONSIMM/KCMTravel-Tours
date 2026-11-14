@@ -1,0 +1,58 @@
+@{
+    var site = SiteOptions.Value;
+    ViewData["Title"] = "About Us: A Local Mbombela Travel Agency";
+    ViewData["Description"] = "A locally owned travel agency from Msogwaba, Mbombela, planning Kruger safaris, Panorama tours, heritage routes and holidays across South Africa.";
+    ViewData["HeroHeader"] = true;
+}
+
+<partial name="_PageHero" model="@(("About us", "A local travel agency, <em>local knowledge.</em>", "KCM Travel & Tours started in Msogwaba, Mbombela, close to some of the most beautiful places in South Africa. Our job is to help more people see them.", Catalog.P.LowveldHills))" />
+
+<section class="section">
+    <div class="container two-col">
+        <div>
+            <p class="section-label reveal"><span>01</span> Our story</p>
+            <h2 class="section-title reveal">We grew up <em>an hour from Kruger.</em></h2>
+        </div>
+        <div class="prose">
+            <p class="lead reveal">Many South Africans have never been to Kruger, even those who live just down the road. KCM Travel &amp; Tours was started to change that. We want to make great trips simple, honest and affordable for local families, church and school groups, and visitors from further away.</p>
+            <p class="reveal">We're a registered South African company (@site.LegalName, reg. @site.RegistrationNumber) and a registered supplier on the National Treasury Central Supplier Database. That means we can also quote for government, municipal and corporate travel.</p>
+            <p class="reveal">From the first WhatsApp message to the drive home, you deal with people who know the area and care about how your trip goes.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section section--sand">
+    <div class="container">
+        <p class="section-label reveal"><span>02</span> What we stand for</p>
+        <h2 class="section-title reveal">Three promises <em>on every trip.</em></h2>
+        <div class="value-grid">
+            <div class="value reveal"><h3>Clear prices in rand</h3><p>What you see is what you pay. VAT is included, the extras are listed, and there are no surprise fees at the gate.</p></div>
+            <div class="value reveal"><h3>Real people, quick replies</h3><p>WhatsApp us seven days a week. A consultant, not a call centre, looks after your booking from start to finish.</p></div>
+            <div class="value reveal"><h3>Travel that gives back</h3><p>We work with local guides, craft centres and community lodges, so your money stays in the places you visit.</p></div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container two-col">
+        <div class="intro-media reveal">
+            <img src="@Catalog.P.Sagole.Url" alt="@Catalog.P.Sagole.Alt" width="800" height="530" loading="lazy" style="aspect-ratio: 4/3" />
+        </div>
+        <div>
+            <p class="section-label reveal"><span>03</span> What we do</p>
+            <h2 class="section-title reveal">Tours, transfers <em>&amp; tailor-made trips.</em></h2>
+            <ul class="tick-list reveal">
+                <li>Kruger day safaris and multi-day packages</li>
+                <li>Panorama Route, Blyde Canyon and Sudwala tours</li>
+                <li>Venda and Mapungubwe heritage routes</li>
+                <li>Holidays to Cape Town, the Garden Route, Durban and the Berg</li>
+                <li>School, church, stokvel and corporate group travel</li>
+                <li>Airport transfers from KMIA and OR Tambo</li>
+            </ul>
+            <div class="btn-row reveal">
+                <a class="btn btn--primary" href="/tours">Browse trips</a>
+                <a class="arrow-link" href="/contact">Talk to us <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 7-7 7M20 12H4" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+            </div>
+        </div>
+    </div>
+</section>

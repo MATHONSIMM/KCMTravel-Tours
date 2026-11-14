@@ -1,0 +1,166 @@
+@{
+    var site = SiteOptions.Value;
+    var baseUrl = site.BaseUrl.TrimEnd('/');
+    var title = ViewData["Title"] as string ?? "Tours & Safaris from Mbombela";
+    var fullTitle = title.Contains("KCM") ? title : $"{title} | KCM Travel";
+    var socials = new[] { site.Facebook, site.Instagram, site.TikTok, site.YouTube, site.LinkedIn }.Where(u => !string.IsNullOrWhiteSpace(u) && u != "#").ToArray();
+    var description = ViewData["Description"] as string
+        ?? "Kruger safaris, Panorama Route tours, Venda heritage trips and South African holidays, planned by a local team in Mbombela, Mpumalanga. Book online or on WhatsApp.";
+    var path = (Context.Request.Path.Value?.TrimEnd('/') ?? "").ToLowerInvariant();
+    var canonical = baseUrl + (string.IsNullOrEmpty(path) ? "/" : path);
+    var ogImage = ViewData["OgImage"] as string ?? Catalog.P.GodsWindow.Sized(1200);
+    if (ogImage.StartsWith("/")) ogImage = baseUrl + ogImage;
+    var bodyClass = ViewData["BodyClass"] as string ?? "";
+    var heroHeader = ViewData["HeroHeader"] as bool? ?? false;
+    string Active(string p) => (p == "/" ? path == "" : path.StartsWith(p)) ? "is-active" : "";
+}
+<!DOCTYPE html>
+<html lang="en-ZA">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@fullTitle</title>
+    <meta name="description" content="@description" />
+    <link rel="canonical" href="@canonical" />
+    <meta name="theme-color" content="#0e1512" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="@site.Name" />
+    <meta property="og:title" content="@fullTitle" />
+    <meta property="og:description" content="@description" />
+    <meta property="og:url" content="@canonical" />
+    <meta property="og:image" content="@ogImage" />
+    <meta property="og:locale" content="en_ZA" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="@fullTitle" />
+    <meta name="twitter:description" content="@description" />
+    <meta name="twitter:image" content="@ogImage" />
+
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/images/brand/kcm-logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/images/brand/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <link rel="preload" href="/fonts/fraunces.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preconnect" href="https://images.unsplash.com" />
+    @await RenderSectionAsync("Head", required: false)
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+    @JsonLd.Script(JsonLd.Node("TravelAgency",
+        ("name", site.Name), ("legalName", site.LegalName), ("url", baseUrl + "/"),
+        ("logo", baseUrl + "/images/brand/icon-512.png"), ("image", ogImage),
+        ("telephone", site.Phone), ("email", site.Email), ("priceRange", "R1 250 – R29 000"),
+        ("address", JsonLd.Obj("PostalAddress", ("addressLocality", "Mbombela"), ("addressRegion", "Mpumalanga"), ("postalCode", "1216"), ("addressCountry", "ZA"))),
+        ("areaServed", new[] { "Mpumalanga", "Limpopo", "Western Cape", "KwaZulu-Natal", "North West", "South Africa" }),
+        ("sameAs", socials.Length > 0 ? socials : null)))
+    @await RenderSectionAsync("JsonLd", required: false)
+</head>
+<body class="@bodyClass">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header @(heroHeader ? "site-header--over-hero" : "")" data-header>
+        <div class="container header-inner">
+            <a class="brand" href="/" aria-label="@site.Name home">
+                <img class="brand-logo brand-logo--light" src="/images/brand/kcm-logo-light.svg" alt="" width="66" height="50" />
+                <img class="brand-logo brand-logo--dark" src="/images/brand/kcm-logo.svg" alt="" width="66" height="50" />
+                <span class="brand-word"><strong>KCM</strong> <span>Travel &amp; Tours</span></span>
+            </a>
+            <nav class="main-nav" aria-label="Main" data-nav>
+                <ul>
+                    <li><a class="@Active("/tours")" href="/tours">Tours</a></li>
+                    <li><a class="@Active("/destinations")" href="/destinations">Destinations</a></li>
+                    <li><a href="/tours?category=Safari">Safaris</a></li>
+                    <li><a href="/tours?style=family">Groups &amp; families</a></li>
+                    <li><a class="@Active("/about")" href="/about">About</a></li>
+                    <li><a class="@Active("/contact")" href="/contact">Contact</a></li>
+                </ul>
+                <div class="nav-mobile-extra">
+                    <a class="btn btn--primary" href="/book">Plan &amp; book</a>
+                    <a class="nav-phone" href="tel:@site.Phone">@site.PhoneDisplay</a>
+                </div>
+            </nav>
+            <div class="header-actions">
+                <a class="header-phone" href="tel:@site.Phone" aria-label="Call @site.PhoneDisplay">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.2 15.2 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg>
+                    <span>@site.PhoneDisplay</span>
+                </a>
+                <a class="btn btn--primary btn--sm" href="/book">Plan &amp; book</a>
+                <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-nav-toggle><span></span><span></span></button>
+            </div>
+        </div>
+    </header>
+
+    <main id="main">
+        @RenderBody()
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <div class="footer-cta">
+                <p class="footer-cta-title">Tell us where you dream of going.<br /><em>We'll handle the rest.</em></p>
+                <div class="footer-cta-actions">
+                    <a class="btn btn--primary" href="/book">Start planning</a>
+                    <a class="btn btn--ghost-light" href="@site.WhatsAppLink("Hi KCM Travel & Tours, I'd like help planning a trip.")" target="_blank" rel="noopener">Chat on WhatsApp</a>
+                </div>
+            </div>
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <img src="/images/brand/kcm-logo-light.svg" alt="@site.Name logo" width="96" height="73" loading="lazy" />
+                    <p>Tours, safaris and holidays planned by a local team in Mbombela, the gateway to Kruger and the Panorama Route.</p>
+                    <ul class="socials" aria-label="Social media">
+                        @if (!string.IsNullOrWhiteSpace(site.Facebook)) { <li><a href="@site.Facebook" target="_blank" rel="noopener" aria-label="Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8V6.2c0-.8.2-1.2 1.4-1.2H17V2h-2.6C11.3 2 10 3.5 10 6v2H8v3h2v11h4V11h2.7l.3-3z"/></svg></a></li> }
+                        @if (!string.IsNullOrWhiteSpace(site.Instagram)) { <li><a href="@site.Instagram" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4zM17.3 5.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zM21.9 7.1A6 6 0 0 0 16.9 2C15.4 2 8.6 2 7.1 2.1A6 6 0 0 0 2 7.1C2 8.6 2 15.4 2.1 16.9A6 6 0 0 0 7.1 22c1.5 0 8.3 0 9.8-.1a6 6 0 0 0 5-5c.1-1.5.1-8.3 0-9.8zM20 18.3a3.4 3.4 0 0 1-1.9 1.9c-1.3.5-4.5.4-6.1.4s-4.8.1-6.1-.4A3.4 3.4 0 0 1 4 18.3c-.5-1.3-.4-4.5-.4-6.1s-.1-4.8.4-6.1A3.4 3.4 0 0 1 5.9 4.2C7.2 3.7 10.4 3.8 12 3.8s4.8-.1 6.1.4A3.4 3.4 0 0 1 20 6.1c.5 1.3.4 4.5.4 6.1s.1 4.8-.4 6.1z"/></svg></a></li> }
+                        @if (!string.IsNullOrWhiteSpace(site.TikTok)) { <li><a href="@site.TikTok" target="_blank" rel="noopener" aria-label="TikTok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.6 6.7a4.8 4.8 0 0 1-3.8-4.2V2h-3.4v13.6a2.9 2.9 0 1 1-2-2.7V9.4a6.3 6.3 0 1 0 5.4 6.2V8.7a8.2 8.2 0 0 0 4.8 1.5V6.8a4.8 4.8 0 0 1-1-.1z"/></svg></a></li> }
+                        @if (!string.IsNullOrWhiteSpace(site.YouTube)) { <li><a href="@site.YouTube" target="_blank" rel="noopener" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23 7.2a3 3 0 0 0-2.1-2.1C19 4.6 12 4.6 12 4.6s-7 0-8.9.5A3 3 0 0 0 1 7.2 31 31 0 0 0 .5 12a31 31 0 0 0 .5 4.8 3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.8 31 31 0 0 0-.5-4.8zM9.8 15V9l5.8 3z"/></svg></a></li> }
+                        <li><a href="@site.WhatsAppLink("Hi KCM Travel & Tours!")" target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.8-.9-2-1s-.5-.1-.7.1-.8 1-.9 1.2-.3.2-.6.1a8.2 8.2 0 0 1-4.1-3.6c-.3-.5.3-.5.9-1.6.1-.2 0-.4 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6a1.1 1.1 0 0 0-.8.4 3.4 3.4 0 0 0-1.1 2.5 5.9 5.9 0 0 0 1.2 3.1 13.4 13.4 0 0 0 5.2 4.6c1.9.8 2.7.9 3.6.7a3.1 3.1 0 0 0 2-1.4 2.5 2.5 0 0 0 .2-1.4c-.1-.2-.3-.3-.7-.5zM12 21.8a9.8 9.8 0 0 1-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4A9.8 9.8 0 1 1 12 21.8zM12 0a12 12 0 0 0-10.3 18L0 24l6.2-1.6A12 12 0 1 0 12 0z"/></svg></a></li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="footer-head">Explore</p>
+                    <ul class="footer-links">
+                        <li><a href="/destinations/kruger-national-park">Kruger National Park</a></li>
+                        <li><a href="/destinations/gods-window-panorama-route">God's Window &amp; Panorama</a></li>
+                        <li><a href="/destinations/venda-sacred-sites">Venda heritage route</a></li>
+                        <li><a href="/destinations/cape-town">Cape Town</a></li>
+                        <li><a href="/destinations">All destinations</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="footer-head">Plan</p>
+                    <ul class="footer-links">
+                        <li><a href="/tours">All tours</a></li>
+                        <li><a href="/tours?category=Safari">Safaris</a></li>
+                        <li><a href="/tours/group-kruger-school-church">School &amp; church groups</a></li>
+                        <li><a href="/book">Book online</a></li>
+                        <li><a href="/about">About KCM</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="footer-head">Talk to us</p>
+                    <ul class="footer-links">
+                        <li><a href="tel:@site.Phone">@site.PhoneDisplay</a></li>
+                        <li><a href="mailto:@site.Email">@site.Email</a></li>
+                        <li>@site.Area</li>
+                        <li class="muted">@site.Hours</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>© @DateTime.Now.Year @site.LegalName · Reg. @site.RegistrationNumber · Registered supplier on the National Treasury CSD</p>
+                <p><a href="/privacy">Privacy &amp; POPIA</a> · <a href="/terms">Booking terms</a> · Prices in ZAR incl. VAT</p>
+            </div>
+        </div>
+    </footer>
+
+    <a class="wa-float" href="@site.WhatsAppLink("Hi KCM Travel & Tours, I'd like to ask about a trip.")" target="_blank" rel="noopener" aria-label="Chat with us on WhatsApp">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.5 14.4c-.3-.1-1.8-.9-2-1s-.5-.1-.7.1-.8 1-.9 1.2-.3.2-.6.1a8.2 8.2 0 0 1-4.1-3.6c-.3-.5.3-.5.9-1.6.1-.2 0-.4 0-.5l-.9-2.2c-.2-.6-.5-.5-.7-.5h-.6a1.1 1.1 0 0 0-.8.4 3.4 3.4 0 0 0-1.1 2.5 5.9 5.9 0 0 0 1.2 3.1 13.4 13.4 0 0 0 5.2 4.6c1.9.8 2.7.9 3.6.7a3.1 3.1 0 0 0 2-1.4 2.5 2.5 0 0 0 .2-1.4c-.1-.2-.3-.3-.7-.5zM12 21.8a9.8 9.8 0 0 1-5-1.4l-.4-.2-3.7 1 1-3.6-.2-.4A9.8 9.8 0 1 1 12 21.8zM12 0a12 12 0 0 0-10.3 18L0 24l6.2-1.6A12 12 0 1 0 12 0z"/></svg>
+    </a>
+
+    <partial name="_ChatWidget" />
+
+    <script src="~/js/site.js" asp-append-version="true" defer></script>
+    <script src="~/js/chat.js" asp-append-version="true" defer></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

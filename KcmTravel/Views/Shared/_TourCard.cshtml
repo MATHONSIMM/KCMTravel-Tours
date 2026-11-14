@@ -1,0 +1,26 @@
+@model TourPackage
+@{
+    var places = string.Join(" · ", Model.DestinationSlugs.Select(s => Catalog.FindDestination(s)?.Name.Split(" &")[0].Split(":")[0]).Where(n => n != null).Take(2));
+}
+<article class="tour-card reveal" data-category="@Model.Category" data-tags="@string.Join(" ", Model.Tags)">
+    <a class="tour-card-link" href="/tours/@Model.Slug" aria-label="@Model.Title">
+        <div class="tour-card-media">
+            <img src="@Model.Hero.Sized(720)" srcset="@Model.Hero.SrcSet(480, 720, 960)" sizes="(max-width: 700px) 92vw, (max-width: 1100px) 46vw, 30vw"
+                 alt="@Model.Hero.Alt" width="720" height="540" loading="lazy" decoding="async" />
+            @if (Model.Badge is not null)
+            {
+                <span class="badge">@Model.Badge</span>
+            }
+            <span class="tour-card-duration">@Model.DaysLabel</span>
+        </div>
+        <div class="tour-card-body">
+            <p class="eyebrow">@Model.Category · @places</p>
+            <h3 class="tour-card-title">@Model.Title</h3>
+            <p class="tour-card-summary">@Model.Summary</p>
+            <div class="tour-card-foot">
+                <p class="price"><span>from</span> <strong>@PricingService.Fmt(Model.PricePerPersonSharing)</strong> <span>pp sharing</span></p>
+                <span class="arrow-link" aria-hidden="true">View trip <svg viewBox="0 0 24 24"><path d="M13 5l7 7-7 7M20 12H4" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
+            </div>
+        </div>
+    </a>
+</article>

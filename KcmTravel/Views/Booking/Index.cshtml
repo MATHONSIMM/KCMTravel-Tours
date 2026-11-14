@@ -1,0 +1,193 @@
+@model BookingRequest
+@{
+    var site = SiteOptions.Value;
+    ViewData["Title"] = "Book a Trip Online";
+    ViewData["Description"] = "Book a KCM Travel & Tours trip online. Choose dates, travellers and extras, see the price in rand, and we confirm on WhatsApp within a working day.";
+    var minDate = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd");
+    var catalogJson = System.Text.Json.JsonSerializer.Serialize(new
+    {
+        tours = Catalog.Tours.ToDictionary(t => t.Slug, t => new { t.Title, t.Nights, price = t.PricePerPersonSharing, extraNight = t.ExtraNightPerPerson, image = t.Hero.Sized(640), t.Accommodation, days = t.DaysLabel }),
+        extras = Catalog.Extras.ToDictionary(e => e.Code, e => new { e.Name, e.Price, e.Basis }),
+        rooms = Catalog.Rooms.ToDictionary(r => r.Key, r => r.Value.Factor),
+        childRate = Catalog.ChildRate, pensionerDiscount = Catalog.PensionerDiscount, depositRate = Catalog.DepositRate,
+    }, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+    string ExtraBasis(string b) => b switch { "person" => "per person", "person-night" => "per person per night", "night" => "per day", _ => "per booking" };
+}
+
+<div class="booking-wrap">
+    <div class="container">
+        <div class="booking-head">
+            <p class="eyebrow">Book online · no payment needed today</p>
+            <h1>Plan your trip, <em>step by step.</em></h1>
+            <p class="lead" style="max-width: 60ch">Choose your trip and the details. The price updates as you go. A consultant then confirms availability on WhatsApp and sends your booking reference.</p>
+        </div>
+
+        <form method="post" action="/book" class="booking-grid" data-booking novalidate>
+            @Html.AntiForgeryToken()
+            <div>
+                <ol class="progress" data-progress aria-label="Booking steps">
+                    <li class="is-current">1 · Trip</li><li>2 · Travellers</li><li>3 · Stay &amp; extras</li><li>4 · Your details</li><li>5 · Review</li>
+                </ol>
+                <div asp-validation-summary="ModelOnly" class="validation-summary-errors"></div>
+
+                <!-- STEP 1 -->
+                <section class="step-card" data-step="1" aria-labelledby="s1">
+                    <h2 id="s1">Where are we taking you?</h2>
+                    <p>Pick a ready-made trip. You can change anything with your consultant later.</p>
+                    <span asp-validation-for="TourSlug" class="field-validation-error"></span>
+                    <div class="tour-options field" role="radiogroup" aria-label="Trips">
+                        @foreach (var t in Catalog.Tours)
+                        {
+                            <div class="tour-option">
+                                <input type="radio" id="t-@t.Slug" name="TourSlug" value="@t.Slug" checked="@(Model.TourSlug == t.Slug)" required />
+                                <label for="t-@t.Slug">
+                                    <img src="@t.Hero.Sized(160)" alt="" width="70" height="56" loading="lazy" />
+                                    <span>@t.Title<small>@t.DaysLabel · from @PricingService.Fmt(t.PricePerPersonSharing) pp</small></span>
+                                </label>
+                            </div>
+                        }
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label asp-for="StartDate">Start date</label>
+                            <input asp-for="StartDate" type="date" min="@minDate" required />
+                            <span asp-validation-for="StartDate" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Nights">Number of nights</label>
+                            <input asp-for="Nights" type="number" min="0" max="30" inputmode="numeric" />
+                            <p class="field-hint" data-nights-hint>Extend any trip with extra nights.</p>
+                        </div>
+                    </div>
+                    <div class="step-nav"><span></span><button type="button" class="btn btn--primary" data-next-step>Next: travellers</button></div>
+                </section>
+
+                <!-- STEP 2 -->
+                <section class="step-card" data-step="2" aria-labelledby="s2">
+                    <h2 id="s2">Who's coming along?</h2>
+                    <p>Children's and pensioners' rates are applied automatically.</p>
+                    <div class="counter-list">
+                        @foreach (var (name, label, hint, min, value) in new[] {
+                            ("Adults", "Adults", "12 years and older", 1, Model.Adults),
+                            ("Children", "Children", "3–11 years · 50% of the adult rate", 0, Model.Children),
+                            ("Infants", "Infants", "Under 3 · free", 0, Model.Infants),
+                            ("Pensioners", "Pensioners", "60+ · 10% off", 0, Model.Pensioners) })
+                        {
+                            <div class="counter">
+                                <div><strong id="lbl-@name">@label</strong><small>@hint</small></div>
+                                <div class="stepper">
+                                    <button type="button" data-dec="@name" aria-label="Fewer @label.ToLower()">−</button>
+                                    <input type="number" name="@name" id="@name" value="@value" min="@min" max="60" aria-labelledby="lbl-@name" inputmode="numeric" />
+                                    <button type="button" data-inc="@name" aria-label="More @label.ToLower()">+</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <span asp-validation-for="Adults" class="field-validation-error"></span>
+                    <p class="field-hint" style="margin-top: 16px">Travelling as a group of 20 or more? See our <a href="/tours/group-kruger-school-church">group safari</a> rates, where leaders travel free.</p>
+                    <div class="step-nav"><button type="button" class="btn btn--ghost" data-prev-step>Back</button><button type="button" class="btn btn--primary" data-next-step>Next: stay &amp; extras</button></div>
+                </section>
+
+                <!-- STEP 3 -->
+                <section class="step-card" data-step="3" aria-labelledby="s3">
+                    <h2 id="s3">How would you like to stay?</h2>
+                    <p>Choose a room type, then add anything that will make the trip special.</p>
+                    <fieldset class="field" style="border: 0; padding: 0; margin: 0 0 30px">
+                        <legend class="visually-hidden">Room type</legend>
+                        <div class="option-grid">
+                            @foreach (var r in Catalog.Rooms)
+                            {
+                                var pct = (int)Math.Round((r.Value.Factor - 1) * 100);
+                                <div class="option-card">
+                                    <input type="radio" id="room-@r.Key" name="Room" value="@r.Key" checked="@(Model.Room == r.Key)" />
+                                    <label for="room-@r.Key"><strong>@r.Value.Label</strong><em>@(pct == 0 ? "Standard rate" : pct > 0 ? $"+{pct}%" : $"{pct}%")</em></label>
+                                </div>
+                            }
+                        </div>
+                    </fieldset>
+                    <fieldset style="border: 0; padding: 0; margin: 0">
+                        <legend class="field" style="font-family: var(--font-display); font-size: 22px; margin-bottom: 14px">Extras</legend>
+                        <div class="option-grid">
+                            @foreach (var x in Catalog.Extras)
+                            {
+                                <div class="option-card">
+                                    <input type="checkbox" id="x-@x.Code" name="Extras" value="@x.Code" checked="@Model.Extras.Contains(x.Code)" />
+                                    <label for="x-@x.Code"><strong>@x.Name</strong><span>@x.Description</span><em>@PricingService.Fmt(x.Price) @ExtraBasis(x.Basis)</em></label>
+                                </div>
+                            }
+                        </div>
+                    </fieldset>
+                    <div class="step-nav"><button type="button" class="btn btn--ghost" data-prev-step>Back</button><button type="button" class="btn btn--primary" data-next-step>Next: your details</button></div>
+                </section>
+
+                <!-- STEP 4 -->
+                <section class="step-card" data-step="4" aria-labelledby="s4">
+                    <h2 id="s4">Where do we send your quote?</h2>
+                    <p>We'll confirm by WhatsApp and email. We won't share your details or send you spam.</p>
+                    <div class="field">
+                        <label asp-for="FullName">Full name</label>
+                        <input asp-for="FullName" autocomplete="name" required />
+                        <span asp-validation-for="FullName" class="field-validation-error"></span>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label asp-for="Email">Email</label>
+                            <input asp-for="Email" type="email" autocomplete="email" required />
+                            <span asp-validation-for="Email" class="field-validation-error"></span>
+                        </div>
+                        <div class="field">
+                            <label asp-for="Phone">Cell / WhatsApp number</label>
+                            <input asp-for="Phone" type="tel" autocomplete="tel" placeholder="e.g. 082 123 4567" required />
+                            <span asp-validation-for="Phone" class="field-validation-error"></span>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label asp-for="Notes">Anything we should know? <span style="text-transform: none; letter-spacing: 0; font-weight: 500">(optional)</span></label>
+                        <textarea asp-for="Notes" placeholder="Dietary needs, wheelchair access, a birthday, pickup address…"></textarea>
+                    </div>
+                    <fieldset style="border: 0; padding: 0; margin: 0">
+                        <legend class="field" style="font-family: var(--font-display); font-size: 22px; margin-bottom: 14px">How would you like to pay?</legend>
+                        <div class="option-grid">
+                            <div class="option-card"><input type="radio" id="pay-deposit" name="Payment" value="deposit" checked="@(Model.Payment == "deposit")" /><label for="pay-deposit"><strong>30% deposit</strong><span>Balance due 30 days before you travel</span></label></div>
+                            <div class="option-card"><input type="radio" id="pay-full" name="Payment" value="full" checked="@(Model.Payment == "full")" /><label for="pay-full"><strong>Pay in full</strong><span>EFT or card once confirmed</span></label></div>
+                            <div class="option-card"><input type="radio" id="pay-layby" name="Payment" value="layby" checked="@(Model.Payment == "layby")" /><label for="pay-layby"><strong>Lay-by</strong><span>Monthly payments, settled before you travel</span></label></div>
+                        </div>
+                    </fieldset>
+                    <div class="hp" aria-hidden="true"><label for="Website">Leave this empty</label><input asp-for="Website" tabindex="-1" autocomplete="off" /></div>
+                    <div class="step-nav"><button type="button" class="btn btn--ghost" data-prev-step>Back</button><button type="button" class="btn btn--primary" data-next-step>Review booking</button></div>
+                </section>
+
+                <!-- STEP 5 -->
+                <section class="step-card" data-step="5" aria-labelledby="s5">
+                    <h2 id="s5">Check everything looks right</h2>
+                    <p>Nothing is charged yet. Once you send your request, a consultant confirms availability and sends payment details.</p>
+                    <dl class="facts" data-review></dl>
+                    <label class="check field">
+                        <input asp-for="Consent" type="checkbox" required />
+                        <span>I agree that KCM Travel &amp; Tours may contact me about this booking and process my details as described in the <a href="/privacy" target="_blank">privacy notice</a> (POPIA).</span>
+                    </label>
+                    <span asp-validation-for="Consent" class="field-validation-error"></span>
+                    <div class="step-nav"><button type="button" class="btn btn--ghost" data-prev-step>Back</button><button type="submit" class="btn btn--primary btn--lg">Send booking request</button></div>
+                </section>
+            </div>
+
+            <aside class="summary" aria-live="polite" aria-label="Price summary">
+                <div class="summary-media"><img data-sum-img src="@Catalog.P.GodsWindow.Sized(640)" alt="" width="640" height="360" /></div>
+                <div class="summary-body">
+                    <h2 data-sum-title>Choose a trip</h2>
+                    <p class="summary-meta" data-sum-meta>Prices per person sharing, VAT included</p>
+                    <ul class="summary-lines" data-sum-lines></ul>
+                    <div class="summary-total"><span>Estimated total</span><strong data-sum-total>R0</strong></div>
+                    <p class="summary-small">Incl. 15% VAT. Excludes park conservation fees unless stated.</p>
+                    <div class="summary-deposit"><span data-sum-dep-label>Deposit due on confirmation</span><strong data-sum-dep>R0</strong></div>
+                </div>
+            </aside>
+        </form>
+    </div>
+</div>
+
+<script type="application/json" id="booking-data">@Html.Raw(catalogJson)</script>
+
+@section Scripts {
+    <script src="~/js/booking.js" asp-append-version="true" defer></script>
+}

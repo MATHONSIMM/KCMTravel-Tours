@@ -1,0 +1,117 @@
+@model TourPackage
+@{
+    var site = SiteOptions.Value;
+    var baseUrl = site.BaseUrl.TrimEnd('/');
+    var dests = Model.DestinationSlugs.Select(Catalog.FindDestination).Where(d => d is not null).Select(d => d!).ToList();
+    var related = Catalog.Tours.Where(t => t.Slug != Model.Slug && (t.Category == Model.Category || t.DestinationSlugs.Intersect(Model.DestinationSlugs).Any())).Take(3).ToList();
+    var gallery = dests.SelectMany(d => d.Gallery.Prepend(d.Hero)).Where(p => p.Url != Model.Hero.Url).DistinctBy(p => p.Url).Take(4).ToList();
+    ViewData["Title"] = Model.Title.Length > 46 ? Model.Title.Split(":")[0] : Model.Title;
+    ViewData["Description"] = Seo.Desc($"{Model.Summary} From {PricingService.Fmt(Model.PricePerPersonSharing)} pp sharing.");
+    ViewData["HeroHeader"] = true;
+    ViewData["OgImage"] = Model.Hero.Sized(1200);
+    var waText = $"Hi KCM Travel & Tours, I'm interested in the {Model.Title}. Can you help me?";
+}
+
+@section JsonLd {
+    @JsonLd.Script(JsonLd.Node("TouristTrip",
+        ("name", Model.Title), ("description", Model.Summary), ("image", Model.Hero.Sized(1200).StartsWith("/") ? baseUrl + Model.Hero.Url : Model.Hero.Sized(1200)),
+        ("touristType", Model.Category),
+        ("itinerary", JsonLd.Obj("ItemList", ("itemListElement", Model.Itinerary.Select(d => JsonLd.Obj("ListItem", ("position", d.Day), ("name", d.Title), ("description", d.Detail))).ToArray()))),
+        ("offers", JsonLd.Obj("Offer", ("price", Model.PricePerPersonSharing.ToString("0")), ("priceCurrency", "ZAR"), ("availability", "https://schema.org/InStock"), ("url", $"{baseUrl}/tours/{Model.Slug}"))),
+        ("provider", JsonLd.Obj("TravelAgency", ("name", site.Name), ("url", baseUrl + "/")))))
+    @JsonLd.Script(JsonLd.Breadcrumbs(baseUrl, ("Home", "/"), ("Tours", "/tours"), (Model.Title, $"/tours/{Model.Slug}")))
+}
+
+<section class="page-hero">
+    <div class="page-hero-media" data-parallax>
+        <img src="@Model.Hero.Sized(1800)" srcset="@Model.Hero.SrcSet(800, 1280, 1800, 2400)" sizes="100vw" alt="@Model.Hero.Alt" width="1800" height="1000" fetchpriority="high" />
+    </div>
+    <div class="container page-hero-content">
+        <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span>/</span><a href="/tours">Tours</a><span>/</span>@Model.Category</nav>
+        <p class="eyebrow eyebrow--light">@Model.Category · @Model.DaysLabel · @string.Join(" & ", dests.Select(d => d.Province).Distinct())</p>
+        <h1 class="page-hero-title" style="max-width: 20ch">@Model.Title</h1>
+        <p class="page-hero-lead">@Model.Summary</p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container detail-grid">
+        <div class="detail-main">
+            <dl class="facts reveal">
+                <div><dt>Duration</dt><dd>@Model.DaysLabel / @Model.NightsLabel</dd></div>
+                <div><dt>Stay</dt><dd>@Model.Accommodation</dd></div>
+                <div><dt>Starts from</dt><dd>@Model.Departure</dd></div>
+                <div><dt>Groups</dt><dd>@(Model.GroupFriendly ? "Great for groups" : "Couples & small groups")</dd></div>
+            </dl>
+
+            <h2 class="reveal">Day by day</h2>
+            <ol class="itinerary">
+                @foreach (var d in Model.Itinerary)
+                {
+                    <li class="reveal"><span class="itinerary-day">@d.Day</span><h3>@d.Title</h3><p>@d.Detail</p></li>
+                }
+            </ol>
+
+            <h2 class="reveal">What's included</h2>
+            <div class="incl-grid reveal">
+                <div class="incl-yes"><h3>Included</h3><ul>@foreach (var i in Model.Includes) { <li>@i</li> }</ul></div>
+                <div class="incl-no"><h3>Not included</h3><ul>@foreach (var i in Model.Excludes) { <li>@i</li> }</ul></div>
+            </div>
+
+            @if (gallery.Count > 0)
+            {
+                <h2 class="reveal">Where you'll go</h2>
+                <div class="gallery reveal">
+                    @foreach (var g in gallery)
+                    {
+                        <figure><img src="@g.Sized(900)" alt="@g.Alt" width="900" height="675" loading="lazy" /></figure>
+                    }
+                </div>
+                <p class="reveal" style="margin-top: 20px">
+                    @foreach (var d in dests)
+                    {
+                        <a class="arrow-link" style="margin-right: 22px" href="/destinations/@d.Slug">About @d.Name <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 7-7 7M20 12H4" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+                    }
+                </p>
+            }
+        </div>
+
+        <aside class="sticky-box" aria-label="Book this trip">
+            <p class="price"><span>from</span> <strong>@PricingService.Fmt(Model.PricePerPersonSharing)</strong></p>
+            <p class="price" style="margin-top: -4px">per adult sharing · VAT incl.@(Model.ExtraNightPerPerson > 0 ? $" · extra nights {PricingService.Fmt(Model.ExtraNightPerPerson)} pp" : "")</p>
+            <form class="mini-form" action="/book" method="get">
+                <input type="hidden" name="tour" value="@Model.Slug" />
+                <div>
+                    <label for="mf-date">Start date</label>
+                    <input id="mf-date" type="date" name="date" min="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="field-row" style="gap: 12px">
+                    <div>
+                        <label for="mf-adults">Adults</label>
+                        <select id="mf-adults" name="adults">@for (var i = 1; i <= 10; i++) { <option value="@i" selected="@(i == 2)">@i</option> }</select>
+                    </div>
+                    <div>
+                        <label for="mf-kids">Children 3–11</label>
+                        <select id="mf-kids" name="children">@for (var i = 0; i <= 6; i++) { <option value="@i">@i</option> }</select>
+                    </div>
+                </div>
+                <button class="btn btn--primary btn--block" type="submit">Check price &amp; book</button>
+            </form>
+            <a class="btn btn--ghost btn--block" href="@site.WhatsAppLink(waText)" target="_blank" rel="noopener">Ask on WhatsApp</a>
+            <p class="box-note">No payment needed to request. We confirm within one working day.</p>
+        </aside>
+    </div>
+</section>
+
+@if (related.Count > 0)
+{
+    <section class="section section--sand">
+        <div class="container">
+            <p class="section-label reveal"><span>+</span> You may also like</p>
+            <h2 class="section-title reveal">More trips <em>like this one.</em></h2>
+            <div class="tour-grid">
+                @foreach (var t in related) { <partial name="_TourCard" model="t" /> }
+            </div>
+        </div>
+    </section>
+}

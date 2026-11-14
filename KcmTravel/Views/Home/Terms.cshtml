@@ -1,0 +1,26 @@
+@{
+    var site = SiteOptions.Value;
+    ViewData["Title"] = "Booking Terms & Conditions";
+    ViewData["Description"] = "Booking, deposit, lay-by, cancellation and pricing terms for trips booked with KCM Travel & Tours.";
+}
+<article class="legal">
+    <p class="eyebrow">Legal</p>
+    <h1>Booking terms</h1>
+    <p><em>Template for review. Please have this checked by a legal adviser and update it with your real policies before launch.</em></p>
+    <h2>Prices</h2>
+    <p>All prices are in South African rand, include 15% VAT, and are per adult sharing unless stated otherwise. Prices shown on this website are estimates until a consultant confirms availability in writing.</p>
+    <h2>Deposits and payment</h2>
+    <ul>
+        <li>A 30% deposit secures your booking. The balance is due 30 days before departure.</li>
+        <li>Lay-by bookings are paid in monthly instalments and must be settled 30 days before departure.</li>
+        <li>Bookings made within 30 days of departure must be paid in full.</li>
+    </ul>
+    <h2>Cancellations</h2>
+    <p>Cancellation fees depend on how close to departure you cancel and on the policies of the lodges and suppliers involved. Your consultant will confirm the applicable fees with your quote.</p>
+    <h2>Park and conservation fees</h2>
+    <p>SANParks and reserve conservation fees are excluded unless listed under "Included" for your trip.</p>
+    <h2>Travel insurance</h2>
+    <p>We strongly recommend travel insurance for every trip.</p>
+    <h2>Contact</h2>
+    <p>@site.LegalName · Reg. @site.RegistrationNumber · <a href="mailto:@site.Email">@site.Email</a> · @site.PhoneDisplay</p>
+</article>

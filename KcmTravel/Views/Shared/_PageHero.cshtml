@@ -1,0 +1,11 @@
+@model (string Eyebrow, string Title, string Lead, Photo Photo)
+<section class="page-hero">
+    <div class="page-hero-media" data-parallax>
+        <img src="@Model.Photo.Sized(1800)" srcset="@Model.Photo.SrcSet(800, 1280, 1800, 2400)" sizes="100vw" alt="@Model.Photo.Alt" width="1800" height="1000" fetchpriority="high" />
+    </div>
+    <div class="container page-hero-content">
+        <p class="eyebrow eyebrow--light reveal">@Model.Eyebrow</p>
+        <h1 class="page-hero-title reveal">@Html.Raw(Model.Title)</h1>
+        <p class="page-hero-lead reveal">@Model.Lead</p>
+    </div>
+</section>

@@ -1,0 +1,19 @@
+@model Destination
+@{
+    var from = Catalog.ToursFor(Model.Slug).Select(t => t.PricePerPersonSharing).DefaultIfEmpty(0).Min();
+}
+<article class="dest-card reveal" data-region="@Model.Region.Replace(" ", "-")">
+    <a href="/destinations/@Model.Slug" class="dest-card-link">
+        <img src="@Model.Hero.Sized(800)" srcset="@Model.Hero.SrcSet(480, 800, 1100)" sizes="(max-width: 700px) 85vw, 32vw"
+             alt="@Model.Hero.Alt" width="800" height="1000" loading="lazy" decoding="async" />
+        <div class="dest-card-overlay">
+            <p class="eyebrow eyebrow--light">@Model.Province</p>
+            <h3>@Model.Name</h3>
+            <p class="dest-card-tag">@Model.Tagline</p>
+            @if (from > 0)
+            {
+                <p class="dest-card-price">Trips from <strong>@PricingService.Fmt(from)</strong></p>
+            }
+        </div>
+    </a>
+</article>

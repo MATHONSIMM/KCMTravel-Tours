@@ -1,0 +1,73 @@
+@model IReadOnlyList<TourPackage>
+@{
+    string? category = ViewBag.Category;
+    string? style = ViewBag.Style;
+    Destination? dest = ViewBag.Destination;
+    string? date = ViewBag.Date;
+    int? adults = ViewBag.Adults;
+
+    IEnumerable<TourPackage> list = Model;
+    if (dest is not null) list = list.Where(t => t.DestinationSlugs.Contains(dest.Slug) || t.DestinationSlugs.Any(s => Catalog.FindDestination(s)?.Region == dest.Region));
+    if (!string.IsNullOrEmpty(style)) list = list.Where(t => t.Tags.Contains(style));
+    if (adults >= 15) list = list.Where(t => t.GroupFriendly);
+    var tours = list.ToList();
+    if (dest is not null) tours = tours.OrderByDescending(t => t.DestinationSlugs.Contains(dest.Slug)).ToList();
+
+    var styleTitle = Catalog.Styles.FirstOrDefault(s => s.Key == style)?.Title;
+    var heading = dest is not null ? $"Trips to {dest.Name}" : styleTitle is not null ? styleTitle : category is not null ? $"{category} tours" : "All tours & safaris";
+
+    ViewData["Title"] = dest is not null ? $"{dest.Name} Tours & Packages" : category == "Safari" ? "Kruger Safaris & Game Drive Tours" : "Tours & Holiday Packages in South Africa";
+    ViewData["Description"] = "Compare Kruger safaris, Panorama Route day tours, Venda heritage trips, Cape Town breaks and family beach holidays. Rand prices per person sharing, VAT included.";
+    ViewData["HeroHeader"] = true;
+    ViewData["OgImage"] = Catalog.P.Elephant.Sized(1200);
+}
+
+<partial name="_PageHero" model="@(("Tours & safaris", "Find the trip that <em>feels like you.</em>", "Ready-made trips you can book online, with prices per person sharing and VAT included. Every one of them can be changed to suit you.", Catalog.P.Elephant))" />
+
+<section class="section" style="padding-top: 0">
+    <div class="container">
+        <div class="filter-bar">
+            <div class="chips" role="group" aria-label="Filter by trip type" data-filter-group="tours">
+                <button type="button" class="chip @(category is null ? "is-active" : "")" data-filter="all">All</button>
+                @foreach (var c in Catalog.Categories)
+                {
+                    <button type="button" class="chip @(category == c ? "is-active" : "")" data-filter="@c">@c</button>
+                }
+            </div>
+            <p class="filter-count"><strong data-filter-count>@tours.Count</strong> trips</p>
+        </div>
+
+        @if (dest is not null || style is not null || adults >= 15)
+        {
+            <div class="filter-note">
+                <span>Showing <strong>@heading</strong>@(adults >= 15 ? " suitable for groups" : "")@(date is not null ? $" · travelling {DateTime.Parse(date):d MMM yyyy}" : "")</span>
+                <a class="arrow-link" href="/tours">Clear filters</a>
+            </div>
+        }
+
+        @if (tours.Count == 0)
+        {
+            <div class="empty-state">
+                <h2>No ready-made trip matches that yet</h2>
+                <p>We can build one for you. Ask Naledi or send us a WhatsApp.</p>
+                <button class="btn btn--primary" type="button" data-chat-open>Plan a custom trip</button>
+            </div>
+        }
+        else
+        {
+            <div class="tour-grid" data-filter-target="tours">
+                @foreach (var t in tours)
+                {
+                    <partial name="_TourCard" model="t" />
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    @if (category is not null)
+    {
+        <script src="~/js/tours-filter.js" asp-append-version="true" defer data-category="@category"></script>
+    }
+}

@@ -1,0 +1,44 @@
+@model StoredBooking
+@{
+    var site = SiteOptions.Value;
+    var r = Model.Request;
+    var tour = Catalog.FindTour(r.TourSlug)!;
+    ViewData["Title"] = $"Booking request {Model.Reference} received";
+    ViewData["Description"] = "Your KCM Travel & Tours booking request has been received. A consultant will confirm availability on WhatsApp within one working day.";
+    var waText = $"Hi KCM Travel & Tours, I've just sent booking request {Model.Reference} for the {tour.Title} starting {r.StartDate:d MMM yyyy}.";
+}
+@section Head { <meta name="robots" content="noindex" /> }
+
+<div class="booking-wrap">
+    <div class="container confirm">
+        <div class="confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="white" stroke-width="3"/></svg></div>
+        <p class="eyebrow">Request received</p>
+        <h1 class="section-title" style="margin: 0 auto 10px; max-width: 18ch">Thank you, @r.FullName.Split(' ')[0]. <em>Your adventure is on its way.</em></h1>
+        <p class="lead">Your booking reference is</p>
+        <div class="confirm-ref">@Model.Reference</div>
+        <p>A consultant will check availability and contact you on <strong>@Model.MaskedPhone</strong> within one working day. You don't need to pay anything yet.</p>
+
+        <div class="confirm-card">
+            <h2 style="font-size: 24px">@tour.Title</h2>
+            <dl class="facts" style="margin-bottom: 20px">
+                <div><dt>Starts</dt><dd>@r.StartDate?.ToString("ddd d MMM yyyy")</dd></div>
+                <div><dt>Nights</dt><dd>@(Model.Quote.Nights == 0 ? "Day trip" : Model.Quote.Nights.ToString())</dd></div>
+                <div><dt>Travellers</dt><dd>@Model.Quote.Travellers</dd></div>
+                <div><dt>Payment</dt><dd>@(r.Payment switch { "full" => "Pay in full", "layby" => "Lay-by", _ => "30% deposit" })</dd></div>
+            </dl>
+            <ul class="summary-lines" style="color: var(--ink)">
+                @foreach (var l in Model.Quote.Lines)
+                {
+                    <li style="border-color: var(--line)"><span>@l.Label</span><span>@PricingService.Fmt(l.Amount)</span></li>
+                }
+            </ul>
+            <div class="summary-total"><span>Estimated total (incl. VAT)</span><strong>@PricingService.Fmt(Model.Quote.Total)</strong></div>
+            <p class="box-note" style="text-align: left">Estimate only. Your consultant confirms the final price once availability is checked.</p>
+        </div>
+
+        <div class="btn-row" style="justify-content: center">
+            <a class="btn btn--primary" href="@site.WhatsAppLink(waText)" target="_blank" rel="noopener">Follow up on WhatsApp</a>
+            <a class="btn btn--ghost" href="/tours">Keep exploring</a>
+        </div>
+    </div>
+</div>

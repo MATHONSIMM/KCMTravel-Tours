@@ -1,0 +1,104 @@
+@model Destination
+@{
+    var site = SiteOptions.Value;
+    var baseUrl = site.BaseUrl.TrimEnd('/');
+    var tours = Catalog.ToursFor(Model.Slug).ToList();
+    var nearby = Catalog.Destinations.Where(d => d.Region == Model.Region && d.Slug != Model.Slug).Take(3).ToList();
+    if (nearby.Count < 3) nearby.AddRange(Catalog.Destinations.Where(d => d.Region != Model.Region && d.Tags.Intersect(Model.Tags).Any()).Take(3 - nearby.Count));
+    var shortName = Model.Name.Split(":")[0];
+    ViewData["Title"] = shortName.Length > 28 ? $"{shortName.Split(" &")[0]} Tours & Guide" : $"{shortName} Tours & Travel Guide";
+    ViewData["Description"] = Seo.Desc($"{shortName} tours with KCM Travel & Tours. {Model.Tagline}. Best time: {Model.BestTime}.");
+    ViewData["HeroHeader"] = true;
+    ViewData["OgImage"] = Model.Hero.Sized(1200);
+}
+
+@section JsonLd {
+    @JsonLd.Script(JsonLd.Node("TouristDestination",
+        ("name", Model.Name), ("description", Model.Summary), ("image", Model.Hero.Url.StartsWith("/") ? baseUrl + Model.Hero.Url : Model.Hero.Sized(1200)),
+        ("containedInPlace", JsonLd.Obj("AdministrativeArea", ("name", Model.Province + ", South Africa"))),
+        ("touristType", Model.Tags)))
+    @JsonLd.Script(JsonLd.Breadcrumbs(baseUrl, ("Home", "/"), ("Destinations", "/destinations"), (Model.Name, $"/destinations/{Model.Slug}")))
+}
+
+<section class="page-hero">
+    <div class="page-hero-media" data-parallax>
+        <img src="@Model.Hero.Sized(1800)" srcset="@Model.Hero.SrcSet(800, 1280, 1800, 2400)" sizes="100vw" alt="@Model.Hero.Alt" width="1800" height="1000" fetchpriority="high" />
+    </div>
+    <div class="container page-hero-content">
+        <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">Home</a><span>/</span><a href="/destinations">Destinations</a><span>/</span>@Model.Province</nav>
+        <p class="eyebrow eyebrow--light">@Model.Province</p>
+        <h1 class="page-hero-title">@Model.Name</h1>
+        <p class="page-hero-lead">@Model.Tagline</p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container detail-grid">
+        <div class="detail-main">
+            <dl class="facts reveal">
+                <div><dt>Best time</dt><dd>@Model.BestTime</dd></div>
+                <div><dt>Getting there</dt><dd>@Model.DriveFromJhb</dd></div>
+                <div><dt>Province</dt><dd>@Model.Province</dd></div>
+            </dl>
+            <div class="prose reveal">
+                <p class="lead">@Model.Summary</p>
+                <p>@Model.Story</p>
+            </div>
+
+            <h2 class="reveal">Highlights</h2>
+            <ul class="highlights reveal">
+                @foreach (var h in Model.Highlights) { <li>@h</li> }
+            </ul>
+
+            @if (Model.Gallery.Length > 0)
+            {
+                <h2 class="reveal">Gallery</h2>
+                <div class="gallery reveal">
+                    @foreach (var g in Model.Gallery.Take(4))
+                    {
+                        <figure><img src="@g.Sized(900)" alt="@g.Alt" width="900" height="675" loading="lazy" /></figure>
+                    }
+                </div>
+            }
+        </div>
+
+        <aside class="sticky-box" aria-label="Plan a trip here">
+            <h2>Plan a trip to @Model.Name.Split(":")[0]</h2>
+            @if (tours.Count > 0)
+            {
+                <p class="price"><span>trips from</span> <strong>@PricingService.Fmt(tours.Min(t => t.PricePerPersonSharing))</strong></p>
+                <p class="price" style="margin-top: -4px">per adult sharing · VAT incl.</p>
+                <a class="btn btn--primary btn--block" href="/book?tour=@tours.First().Slug">Book a trip</a>
+            }
+            else
+            {
+                <p>We build custom trips here. Tell us your dates and we'll quote within a day.</p>
+            }
+            <button class="btn btn--dark btn--block" type="button" data-chat-open>Ask Naledi for ideas</button>
+            <a class="btn btn--ghost btn--block" href="@site.WhatsAppLink($"Hi KCM, I'd like to visit {Model.Name}.")" target="_blank" rel="noopener">WhatsApp a consultant</a>
+        </aside>
+    </div>
+</section>
+
+@if (tours.Count > 0)
+{
+    <section class="section section--sand">
+        <div class="container">
+            <p class="section-label reveal"><span>→</span> Trips that include @Model.Name.Split(":")[0]</p>
+            <h2 class="section-title reveal">Ready to <em>book.</em></h2>
+            <div class="tour-grid">
+                @foreach (var t in tours) { <partial name="_TourCard" model="t" /> }
+            </div>
+        </div>
+    </section>
+}
+
+<section class="section">
+    <div class="container">
+        <p class="section-label reveal"><span>+</span> Nearby &amp; similar</p>
+        <h2 class="section-title reveal">Keep <em>exploring.</em></h2>
+        <div class="dest-grid">
+            @foreach (var d in nearby) { <partial name="_DestinationCard" model="d" /> }
+        </div>
+    </div>
+</section>

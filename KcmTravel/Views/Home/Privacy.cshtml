@@ -1,0 +1,26 @@
+@{
+    var site = SiteOptions.Value;
+    ViewData["Title"] = "Privacy Notice (POPIA)";
+    ViewData["Description"] = "How KCM Travel & Tours collects, uses and protects your personal information under the Protection of Personal Information Act (POPIA).";
+}
+<article class="legal">
+    <p class="eyebrow">Legal</p>
+    <h1>Privacy notice</h1>
+    <p><em>Template for review. Please have this checked by a legal adviser before the site goes live.</em></p>
+    <p>@site.LegalName ("KCM Travel &amp; Tours", "we") respects your privacy. This notice explains how we handle your personal information under the Protection of Personal Information Act, 2013 (POPIA).</p>
+    <h2>What we collect</h2>
+    <p>When you send a booking request, chat with us or contact us, we collect your name, email address, cell number, travel dates, number and ages of travellers, and any notes you give us (for example dietary or accessibility needs).</p>
+    <h2>Why we collect it</h2>
+    <ul>
+        <li>To prepare quotes and confirm bookings with lodges, guides and transport providers</li>
+        <li>To contact you about your booking by WhatsApp, phone or email</li>
+        <li>To meet our legal and accounting obligations</li>
+    </ul>
+    <p>We do not sell your information. We only share it with suppliers who need it to deliver your trip.</p>
+    <h2>How long we keep it</h2>
+    <p>We keep booking records for as long as the law requires for tax and accounting purposes, and delete enquiry details that don't lead to a booking within 12 months.</p>
+    <h2>Your rights</h2>
+    <p>You may ask to see, correct or delete your personal information, or object to us processing it, by emailing <a href="mailto:@site.Email">@site.Email</a>. You may also complain to the Information Regulator of South Africa.</p>
+    <h2>Cookies</h2>
+    <p>This website uses only essential cookies needed to keep forms secure. If we add analytics later, we will update this notice and ask for your consent.</p>
+</article>

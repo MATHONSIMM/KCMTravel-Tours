@@ -1,0 +1,371 @@
+@{
+    var site = SiteOptions.Value;
+    ViewData["Title"] = "Mbombela Travel Agency: Kruger Safaris & Tours | KCM";
+    ViewData["Description"] = "KCM Travel & Tours is a travel agency in Mbombela, Mpumalanga: Kruger safaris, God's Window tours, Venda heritage trips and South African holidays. Book online.";
+    ViewData["HeroHeader"] = true;
+    ViewData["BodyClass"] = "page-home";
+
+    var slides = new[]
+    {
+        (Photo: Catalog.P.Elephant, Place: "Kruger National Park · Mpumalanga", Title: "Meet the Big Five<br><em>before breakfast.</em>", Line: "Open-vehicle safaris leave Mbombela at first light.", Tour: Catalog.FindTour("kruger-panorama-3-day")!),
+        (Photo: Catalog.P.GodsWindow, Place: "God's Window · Panorama Route", Title: "Stand where the clouds<br><em>sit below you.</em>", Line: "The escarpment, the canyon and a waterfall around every bend.", Tour: Catalog.FindTour("panorama-route-day")!),
+        (Photo: Catalog.P.Mapungubwe, Place: "Mapungubwe · Limpopo", Title: "Walk through a<br><em>thousand-year-old kingdom.</em>", Line: "The hill of the golden rhino, where three countries meet.", Tour: Catalog.FindTour("mapungubwe-heritage-escape")!),
+        (Photo: Catalog.P.CableCar, Place: "Table Mountain · Cape Town", Title: "Ride above the clouds<br><em>in the Mother City.</em>", Line: "Mountain, island and ocean in four easy days.", Tour: Catalog.FindTour("cape-town-4-night")!),
+        (Photo: Catalog.P.Drakensberg, Place: "uKhahlamba-Drakensberg · KZN", Title: "Mountain air and<br><em>ancient rock art.</em>", Line: "Fireside weekends and hikes in the Berg.", Tour: Catalog.FindTour("drakensberg-weekend")!),
+        (Photo: Catalog.P.Durban, Place: "Durban · KwaZulu-Natal", Title: "Warm water,<br><em>even in winter.</em>", Line: "Beach holidays the whole family will remember.", Tour: Catalog.FindTour("durban-family-beach-3-night")!),
+    };
+
+    var months = new[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+    var season = new Dictionary<int, string[]>
+    {
+        [1] = new[] { "cape-town", "garden-route", "durban-kzn-coast" },
+        [2] = new[] { "cape-winelands", "cape-town", "drakensberg" },
+        [3] = new[] { "venda-sacred-sites", "cape-winelands", "gods-window-panorama-route" },
+        [4] = new[] { "drakensberg", "gods-window-panorama-route", "venda-sacred-sites" },
+        [5] = new[] { "kruger-national-park", "drakensberg", "mapungubwe" },
+        [6] = new[] { "kruger-national-park", "durban-kzn-coast", "mapungubwe" },
+        [7] = new[] { "kruger-national-park", "sun-city-pilanesberg", "durban-kzn-coast" },
+        [8] = new[] { "kruger-national-park", "gods-window-panorama-route", "mapungubwe" },
+        [9] = new[] { "kruger-national-park", "cape-town", "venda-sacred-sites" },
+        [10] = new[] { "cape-town", "garden-route", "sudwala-caves" },
+        [11] = new[] { "cape-winelands", "garden-route", "blyde-river-canyon" },
+        [12] = new[] { "durban-kzn-coast", "cape-town", "pilgrims-rest-graskop" },
+    };
+    var thisMonth = DateTime.Today.Month;
+    var featured = new[] { "kruger-panorama-3-day", "venda-sacred-sites-3-day", "greater-kruger-lodge-4-day", "sudwala-pilgrims-rest-weekend", "cape-town-4-night", "group-kruger-school-church" }
+        .Select(s => Catalog.FindTour(s)!).ToList();
+}
+
+@section Head {
+    <link rel="preload" as="image" href="@slides[0].Photo.Sized(1600)" imagesrcset="@slides[0].Photo.SrcSet(800, 1280, 1600, 2400)" imagesizes="100vw" fetchpriority="high" />
+}
+
+@section JsonLd {
+    @JsonLd.Script(JsonLd.Node("WebSite", ("name", site.Name), ("url", site.BaseUrl.TrimEnd('/') + "/")))
+}
+
+<!-- ============ HERO SLIDESHOW ============ -->
+<section class="hero" data-hero aria-roledescription="carousel" aria-label="Places to visit">
+    <div class="hero-slides">
+        @for (var i = 0; i < slides.Length; i++)
+        {
+            var s = slides[i];
+            <div class="hero-slide @(i == 0 ? "is-active" : "")" data-slide aria-roledescription="slide" aria-label="@(i + 1) of @slides.Length" @(i == 0 ? "" : "aria-hidden=true")>
+                <div class="hero-slide-media">
+                    <img src="@s.Photo.Sized(1600)" srcset="@s.Photo.SrcSet(800, 1280, 1600, 2400)" sizes="100vw" alt="@s.Photo.Alt"
+                         width="1600" height="1000" @(i == 0 ? "fetchpriority=high" : "loading=lazy") decoding="async" />
+                </div>
+                <div class="container hero-slide-content">
+                    <p class="hero-place"><span class="hero-place-line"></span>@s.Place</p>
+                    @if (i == 0)
+                    {
+                        <h1 class="hero-title"><span class="visually-hidden">KCM Travel &amp; Tours, a travel agency in Mbombela, Mpumalanga: </span>@Html.Raw(s.Title)</h1>
+                    }
+                    else
+                    {
+                        <p class="hero-title" role="heading" aria-level="2">@Html.Raw(s.Title)</p>
+                    }
+                    <p class="hero-line">@s.Line</p>
+                    <div class="hero-cta">
+                        <a class="btn btn--primary btn--lg" href="/tours/@s.Tour.Slug" tabindex="@(i == 0 ? "0" : "-1")">Explore this trip</a>
+                        <p class="hero-price">from <strong>@PricingService.Fmt(s.Tour.PricePerPersonSharing)</strong> pp · @s.Tour.DaysLabel</p>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="container hero-controls">
+        <ol class="hero-dots" role="tablist">
+            @for (var i = 0; i < slides.Length; i++)
+            {
+                <li role="presentation">
+                    <button type="button" role="tab" class="hero-dot @(i == 0 ? "is-active" : "")" data-dot="@i" aria-label="Show slide @(i + 1): @slides[i].Place" aria-selected="@(i == 0 ? "true" : "false")">
+                        <span class="hero-dot-num">0@(i + 1)</span>
+                        <span class="hero-dot-name">@slides[i].Place.Split(" · ")[0]</span>
+                        <span class="hero-dot-bar"><span></span></span>
+                    </button>
+                </li>
+            }
+        </ol>
+        <div class="hero-arrows">
+            <button type="button" class="hero-arrow" data-prev aria-label="Previous slide"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+            <button type="button" class="hero-arrow" data-next aria-label="Next slide"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+        </div>
+    </div>
+</section>
+
+<!-- ============ QUICK SEARCH ============ -->
+<section class="quick-search-wrap" aria-label="Find a trip">
+    <div class="container reveal">
+        <form class="quick-search" action="/tours" method="get">
+            <div class="qs-field">
+                <label for="qs-where">Where to?</label>
+                <select id="qs-where" name="destination">
+                    <option value="">Anywhere in South Africa</option>
+                    @foreach (var g in Catalog.Destinations.GroupBy(d => d.Region))
+                    {
+                        <optgroup label="@g.Key">
+                            @foreach (var d in g) { <option value="@d.Slug">@d.Name</option> }
+                        </optgroup>
+                    }
+                </select>
+            </div>
+            <div class="qs-field">
+                <label for="qs-when">When?</label>
+                <input id="qs-when" type="date" name="date" min="@DateTime.Today.AddDays(1).ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="qs-field">
+                <label for="qs-who">How many?</label>
+                <select id="qs-who" name="adults">
+                    <option value="1">1 traveller</option>
+                    <option value="2" selected>2 travellers</option>
+                    <option value="3">3 travellers</option>
+                    <option value="4">4 travellers</option>
+                    <option value="6">5–8 travellers</option>
+                    <option value="20">Group (20+)</option>
+                </select>
+            </div>
+            <div class="qs-field">
+                <label for="qs-style">Trip style</label>
+                <select id="qs-style" name="style">
+                    <option value="">Any style</option>
+                    @foreach (var st in Catalog.Styles) { <option value="@st.Key">@st.Title</option> }
+                </select>
+            </div>
+            <button class="btn btn--primary qs-submit" type="submit">Find my trip</button>
+        </form>
+    </div>
+</section>
+
+<!-- ============ MARQUEE ============ -->
+<div class="marquee" aria-hidden="true">
+    <div class="marquee-track">
+        @for (var r = 0; r < 2; r++)
+        {
+            foreach (var n in new[] { "Kruger", "God's Window", "Blyde River Canyon", "Sudwala Caves", "Pilgrim's Rest", "Lake Fundudzi", "Mapungubwe", "Table Mountain", "Franschhoek", "Tsitsikamma", "Durban", "Drakensberg", "Pilanesberg" })
+            {
+                <span>@n</span><span class="marquee-star">✦</span>
+            }
+        }
+    </div>
+</div>
+
+<!-- ============ INTRO ============ -->
+<section class="section intro">
+    <div class="container intro-grid">
+        <div class="intro-copy">
+            <p class="section-label reveal"><span>01</span> Who we are</p>
+            <h2 class="section-title reveal">A Mbombela travel agency with the <em>Lowveld</em> in our blood.</h2>
+            <p class="lead reveal">KCM Travel &amp; Tours is a Mpumalanga travel agency started in Msogwaba, about an hour from the Kruger gates. We plan Kruger safari tours, God's Window and Panorama Route tours, Venda heritage trips, scenic tours and holidays across South Africa, for families, couples, church and school groups, and anyone else who wants to see this country properly.</p>
+            <p class="reveal">You deal with a real person from the first WhatsApp to the drop-off at home. We know the guides and the lodges, and we know which viewpoint to visit before the mist rolls in.</p>
+            <a class="arrow-link reveal" href="/about">Our story <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 7-7 7M20 12H4" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+        </div>
+        <div class="intro-media reveal" data-parallax>
+            <img src="@Catalog.P.Canyon.Sized(900)" srcset="@Catalog.P.Canyon.SrcSet(600, 900, 1300)" sizes="(max-width: 900px) 90vw, 45vw" alt="@Catalog.P.Canyon.Alt" width="900" height="1100" loading="lazy" />
+            <div class="intro-stamp" aria-hidden="true">
+                <svg viewBox="0 0 200 200"><defs><path id="circ" d="M100,100 m-78,0 a78,78 0 1,1 156,0 a78,78 0 1,1 -156,0"/></defs><text><textPath href="#circ">LOCAL GUIDES · MBOMBELA · MPUMALANGA · </textPath></text></svg>
+                <span>Est.<br />2026</span>
+            </div>
+        </div>
+        <ul class="stats">
+            <li class="reveal"><strong data-count="@Catalog.Destinations.Count">0</strong><span>destinations across five provinces</span></li>
+            <li class="reveal"><strong data-count="@Catalog.Tours.Count">0</strong><span>ready-made trips, or build your own</span></li>
+            <li class="reveal"><strong data-count="60" data-suffix=" km">0</strong><span>from our base to the Kruger gates</span></li>
+            <li class="reveal"><strong data-count="7" data-suffix=" days">0</strong><span>a week on WhatsApp</span></li>
+        </ul>
+    </div>
+</section>
+
+<!-- ============ DESTINATIONS RAIL ============ -->
+<section class="section section--ink rail-section">
+    <div class="container rail-head">
+        <div>
+            <p class="section-label section-label--light reveal"><span>02</span> Destinations</p>
+            <h2 class="section-title section-title--light reveal">Where to <em>next?</em></h2>
+        </div>
+        <div class="rail-nav">
+            <button type="button" class="rail-btn" data-rail-prev aria-label="Scroll destinations left"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+            <button type="button" class="rail-btn" data-rail-next aria-label="Scroll destinations right"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+            <a class="btn btn--ghost-light btn--sm" href="/destinations">All destinations</a>
+        </div>
+    </div>
+    <div class="rail" data-rail tabindex="0" aria-label="Destinations, scroll sideways">
+        @foreach (var d in Catalog.Destinations)
+        {
+            <partial name="_DestinationCard" model="d" />
+        }
+    </div>
+</section>
+
+<!-- ============ TRIP STYLES ============ -->
+<section class="section styles-section">
+    <div class="container">
+        <p class="section-label reveal"><span>03</span> Travel your way</p>
+        <h2 class="section-title reveal">What kind of trip <em>are you dreaming of?</em></h2>
+        <div class="styles-grid">
+            @foreach (var st in Catalog.Styles)
+            {
+                <a class="style-tile reveal" href="/tours?style=@st.Key">
+                    <img src="@st.Photo.Sized(700)" srcset="@st.Photo.SrcSet(480, 700, 1000)" sizes="(max-width: 700px) 90vw, 33vw" alt="@st.Photo.Alt" width="700" height="520" loading="lazy" />
+                    <span class="style-tile-text">
+                        <strong>@st.Title</strong>
+                        <span>@st.Line</span>
+                    </span>
+                </a>
+            }
+        </div>
+    </div>
+</section>
+
+<!-- ============ FEATURED TOURS ============ -->
+<section class="section section--sand">
+    <div class="container">
+        <div class="split-head">
+            <div>
+                <p class="section-label reveal"><span>04</span> Popular trips</p>
+                <h2 class="section-title reveal">Trips our guests <em>keep booking.</em></h2>
+            </div>
+            <div class="chips reveal" role="group" aria-label="Filter trips" data-filter-group="home">
+                <button type="button" class="chip is-active" data-filter="all">All</button>
+                <button type="button" class="chip" data-filter="Safari">Safari</button>
+                <button type="button" class="chip" data-filter="Heritage">Heritage</button>
+                <button type="button" class="chip" data-filter="City">City</button>
+            </div>
+        </div>
+        <div class="tour-grid" data-filter-target="home">
+            @foreach (var t in featured)
+            {
+                <partial name="_TourCard" model="t" />
+            }
+        </div>
+        <p class="center reveal"><a class="btn btn--dark" href="/tours">See all @Catalog.Tours.Count trips</a></p>
+    </div>
+</section>
+
+<!-- ============ VENDA FEATURE ============ -->
+<section class="section feature-venda">
+    <div class="container venda-grid">
+        <div class="venda-collage">
+            <figure class="venda-img venda-img--a reveal" data-parallax><img src="@Catalog.P.Sagole.Url" alt="@Catalog.P.Sagole.Alt" width="800" height="530" loading="lazy" /></figure>
+            <figure class="venda-img venda-img--b reveal"><img src="@Catalog.P.VondoForest.Url" alt="@Catalog.P.VondoForest.Alt" width="980" height="670" loading="lazy" /></figure>
+            <figure class="venda-img venda-img--c reveal"><img src="@Catalog.P.Fundudzi.Url" alt="@Catalog.P.Fundudzi.Alt" width="512" height="384" loading="lazy" /></figure>
+        </div>
+        <div class="venda-copy">
+            <p class="section-label reveal"><span>05</span> Only at KCM</p>
+            <h2 class="section-title reveal">The sacred lakes and forests of <em>Venda.</em></h2>
+            <p class="lead reveal">Most tour companies stop at Kruger. We keep going north into the Soutpansberg, to Lake Fundudzi, the Thathe Vondo forest, Phiphidi Falls and the giant Sagole baobab.</p>
+            <ul class="tick-list reveal">
+                <li>Travel with local Venda heritage guides</li>
+                <li>Visit pottery and woodcarving studios</li>
+                <li>Green hills, cool forests and real stories</li>
+            </ul>
+            <div class="btn-row reveal">
+                <a class="btn btn--primary" href="/tours/venda-sacred-sites-3-day">See the 3-day route</a>
+                <a class="arrow-link" href="/destinations/venda-sacred-sites">About Venda <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 7-7 7M20 12H4" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ PARALLAX BAND ============ -->
+<section class="band" aria-label="Kruger at sunset">
+    <div class="band-media" data-parallax data-parallax-speed="0.25">
+        <img src="@Catalog.P.SavannaSunset.Sized(1800)" srcset="@Catalog.P.SavannaSunset.SrcSet(900, 1400, 2000)" sizes="100vw" alt="@Catalog.P.SavannaSunset.Alt" width="1800" height="1000" loading="lazy" />
+    </div>
+    <div class="container band-content">
+        <p class="band-quote reveal">“The bush teaches you to slow down. <em>We plan the trip so you can.</em>”</p>
+    </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="section how">
+    <div class="container">
+        <p class="section-label reveal"><span>06</span> Booking made simple</p>
+        <h2 class="section-title reveal">From idea to the open road <em>in four steps.</em></h2>
+        <ol class="steps">
+            <li class="reveal"><span class="step-num">1</span><h3>Pick a trip, or ask Naledi</h3><p>Browse our trips, or let the chat assistant suggest places that suit your dates, group and budget.</p></li>
+            <li class="reveal"><span class="step-num">2</span><h3>Choose dates and extras</h3><p>Add travellers, nights, room type and extras. The price updates as you go, in rand, VAT included.</p></li>
+            <li class="reveal"><span class="step-num">3</span><h3>We confirm on WhatsApp</h3><p>A consultant checks availability and sends your quote and booking reference, usually the same day.</p></li>
+            <li class="reveal"><span class="step-num">4</span><h3>Pay your way, then travel</h3><p>Pay a 30% deposit, pay in full, or use lay-by in monthly payments. Then pack your bags.</p></li>
+        </ol>
+        <div class="how-cta reveal">
+            <button class="btn btn--dark" type="button" data-chat-open>Ask Naledi to plan my trip</button>
+            <a class="arrow-link" href="/book">or book a trip yourself <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 7-7 7M20 12H4" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+        </div>
+    </div>
+</section>
+
+<!-- ============ SEASON PLANNER ============ -->
+<section class="section section--sand season" data-season>
+    <div class="container">
+        <div class="split-head">
+            <div>
+                <p class="section-label reveal"><span>07</span> When to go</p>
+                <h2 class="section-title reveal">Pick a month. <em>We'll show you where it shines.</em></h2>
+            </div>
+        </div>
+        <div class="months reveal" role="tablist" aria-label="Choose a month">
+            @for (var m = 1; m <= 12; m++)
+            {
+                <button type="button" role="tab" class="month @(m == thisMonth ? "is-active" : "")" data-month="@m" aria-selected="@(m == thisMonth ? "true" : "false")">@months[m - 1]</button>
+            }
+        </div>
+        @for (var m = 1; m <= 12; m++)
+        {
+            <div class="season-panel" data-month-panel="@m" @(m == thisMonth ? "" : "hidden") role="tabpanel">
+                @foreach (var slug in season[m])
+                {
+                    var d = Catalog.FindDestination(slug)!;
+                    <a class="season-card" href="/destinations/@d.Slug">
+                        <img src="@d.Hero.Sized(600)" alt="@d.Hero.Alt" width="600" height="400" loading="lazy" />
+                        <span><strong>@d.Name</strong><small>@d.BestTime</small></span>
+                    </a>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@if (site.ShowReviews)
+{
+<!-- ============ REVIEWS ============ -->
+<section class="section reviews">
+    <div class="container">
+        <p class="section-label reveal"><span>08</span> Traveller stories</p>
+        <h2 class="section-title reveal">What travellers say <em>after the trip.</em></h2>
+        @if (site.ShowSampleLabels)
+        {
+            <p class="sample-note">Sample reviews for the website demo. Replace them with real guest reviews before launch.</p>
+        }
+        <div class="review-grid">
+            @foreach (var r in Catalog.Testimonials)
+            {
+                <figure class="review reveal">
+                    <div class="stars" aria-label="5 out of 5">★★★★★</div>
+                    <blockquote>“@r.Quote”</blockquote>
+                    <figcaption><strong>@r.Name</strong> · @r.From<span>@r.Trip</span></figcaption>
+                </figure>
+            }
+        </div>
+    </div>
+</section>
+}
+
+<!-- ============ GROUPS ============ -->
+<section class="section groups">
+    <div class="container groups-card reveal">
+        <div class="groups-media">
+            <img src="@Catalog.P.ElephantHerd.Sized(1000)" srcset="@Catalog.P.ElephantHerd.SrcSet(600, 1000, 1400)" sizes="(max-width: 900px) 100vw, 50vw" alt="@Catalog.P.ElephantHerd.Alt" width="1000" height="700" loading="lazy" />
+        </div>
+        <div class="groups-copy">
+            <p class="section-label section-label--light"><span>09</span> Groups</p>
+            <h2 class="section-title section-title--light">Schools, churches, stokvels <em>&amp; companies.</em></h2>
+            <p>Group trips with bus transport, meals and game drives, priced per person. Leaders travel free (one per 15), and you can pay off the trip in monthly instalments. We also quote for government and corporate travel.</p>
+            <div class="btn-row">
+                <a class="btn btn--primary" href="/tours/group-kruger-school-church">Group Kruger safari</a>
+                <a class="btn btn--ghost-light" href="@site.WhatsAppLink("Hi KCM, I'd like a quote for a group trip.")" target="_blank" rel="noopener">Request a group quote</a>
+            </div>
+        </div>
+    </div>
+</section>

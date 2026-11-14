@@ -1,0 +1,5 @@
+bin/
+obj/
+.vs/
+*.user
+KcmTravel/App_Data/*.json

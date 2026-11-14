@@ -1,0 +1,31 @@
+@model IReadOnlyList<Destination>
+@{
+    string? region = ViewBag.Region;
+    ViewData["Title"] = "Destinations: Kruger, Panorama Route & More";
+    ViewData["Description"] = "Kruger, God's Window, Sudwala Caves, Venda, Mapungubwe, Cape Town, the Drakensberg and Durban: trip ideas and the best time to visit each one.";
+    ViewData["HeroHeader"] = true;
+    ViewData["OgImage"] = Catalog.P.Canyon.Sized(1200);
+}
+
+<partial name="_PageHero" model="@(("Destinations", "From the Lowveld <em>to the Cape.</em>", "Mpumalanga is home, so we know it best. But we plan trips to the best of South Africa, from Limpopo's heritage sites to the beaches of KwaZulu-Natal.", Catalog.P.Canyon))" />
+
+<section class="section" style="padding-top: 0">
+    <div class="container">
+        <div class="filter-bar">
+            <div class="chips" role="group" aria-label="Filter by province" data-filter-group="dest" data-filter-attr="region">
+                <button type="button" class="chip @(region is null ? "is-active" : "")" data-filter="all">All provinces</button>
+                @foreach (var r in Catalog.Regions)
+                {
+                    <button type="button" class="chip" data-filter="@r.Replace(" ", "-")">@r</button>
+                }
+            </div>
+            <p class="filter-count"><strong data-filter-count>@Model.Count</strong> destinations</p>
+        </div>
+        <div class="dest-grid" data-filter-target="dest">
+            @foreach (var d in Model)
+            {
+                <partial name="_DestinationCard" model="d" />
+            }
+        </div>
+    </div>
+</section>

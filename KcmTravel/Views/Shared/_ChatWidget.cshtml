@@ -1,0 +1,35 @@
+@{ var site = SiteOptions.Value; }
+<div class="chat" data-chat data-wa="@site.WhatsApp">
+    <button class="chat-launcher" type="button" aria-label="Plan a trip with Naledi, our trip assistant" aria-expanded="false" aria-controls="chat-panel" data-chat-open>
+        <span class="chat-launcher-avatar" aria-hidden="true">
+            <img src="/images/brand/kcm-logo.svg" alt="" width="34" height="26" />
+        </span>
+        <span class="chat-launcher-text"><strong>Plan a trip</strong><span>Ask Naledi, our trip assistant</span></span>
+    </button>
+
+    <section class="chat-panel" id="chat-panel" role="dialog" aria-modal="false" aria-labelledby="chat-title" hidden>
+        <header class="chat-head">
+            <span class="chat-avatar" aria-hidden="true"><img src="/images/brand/kcm-logo.svg" alt="" width="34" height="26" /></span>
+            <div>
+                <p class="chat-title" id="chat-title">Naledi · KCM trip assistant</p>
+                <p class="chat-status"><span class="dot"></span> Usually helps in under a minute</p>
+            </div>
+            <button class="chat-restart" type="button" data-chat-restart aria-label="Start over" title="Start over">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>
+            </button>
+            <button class="chat-close" type="button" data-chat-close aria-label="Close chat">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3z"/></svg>
+            </button>
+        </header>
+        <div class="chat-log" data-chat-log aria-live="polite"></div>
+        <div class="chat-choices" data-chat-choices></div>
+        <form class="chat-input" data-chat-form autocomplete="off">
+            <label class="visually-hidden" for="chat-text">Type your answer</label>
+            <input id="chat-text" type="text" placeholder="Type a message…" data-chat-text />
+            <button type="submit" aria-label="Send">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20.5 21 12 3 3.5v6.6l12 1.9-12 1.9z"/></svg>
+            </button>
+        </form>
+        <p class="chat-foot">Demo assistant · prices are estimates until confirmed by a consultant</p>
+    </section>
+</div>
