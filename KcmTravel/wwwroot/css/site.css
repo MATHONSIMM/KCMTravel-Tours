@@ -121,7 +121,7 @@ em { font-style: italic; }
 .brand-word span { font-style: italic; font-weight: 400; }
 .main-nav { margin-left: auto; }
 .main-nav ul { list-style: none; display: flex; gap: 4px; margin: 0; padding: 0; }
-.main-nav a { display: block; padding: 8px 14px; text-decoration: none; font-weight: 600; font-size: 15px; border-radius: 999px; position: relative; }
+.main-nav a { display: block; padding: 8px 14px; text-decoration: none; font-weight: 600; font-size: 15px; border-radius: 999px; position: relative; white-space: nowrap; }
 .main-nav a::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 4px; height: 1.5px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform .35s var(--ease); }
 .main-nav a:hover::after, .main-nav a.is-active::after { transform: scaleX(1); }
 .nav-mobile-extra { display: none; }
@@ -592,7 +592,8 @@ em { font-style: italic; }
 /* ---------- Responsive ---------- */
 @media (max-width: 1180px) {
     .header-phone span { display: none; }
-    .main-nav a { padding: 8px 10px; font-size: 14px; }
+    .main-nav a { padding: 8px 9px; font-size: 14px; }
+    .header-inner { gap: 18px; }
     .review-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 1024px) {
