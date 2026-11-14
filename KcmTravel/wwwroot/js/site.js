@@ -191,12 +191,24 @@
                 const values = (card.dataset[attr] || "").split(" ");
                 const show = f === "all" || values.includes(f);
                 card.classList.toggle("is-filtered", !show);
-                if (show) { shown++; card.classList.add("is-in"); }
+                if (show) { card.classList.add("is-in"); if (!card.classList.contains("is-param-hidden")) shown++; }
             });
             const count = $("[data-filter-count]");
             if (count) count.textContent = shown;
         });
     });
+
+    /* ---------- Static hosting: contact form goes to WhatsApp ---------- */
+    if (doc.dataset.static) {
+        $$("form[action$='/contact']").forEach(f => f.addEventListener("submit", e => {
+            e.preventDefault();
+            const name = f.elements.Name.value.trim(), msg = f.elements.Message.value.trim();
+            if (!name || !msg) { (name ? f.elements.Message : f.elements.Name).focus(); return; }
+            const wa = $("[data-chat]")?.dataset.wa || "";
+            const text = `Hi KCM Travel & Tours, this is ${name}${f.elements.Email.value ? " (" + f.elements.Email.value + ")" : ""}.\n\n${msg}`;
+            window.open(`https://wa.me/${wa}?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+        }));
+    }
 
     /* ---------- Season planner ---------- */
     const season = $("[data-season]");

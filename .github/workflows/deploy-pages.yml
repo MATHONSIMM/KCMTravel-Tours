@@ -1,0 +1,60 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BASE_PATH: /${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish ASP.NET site
+        run: dotnet publish KcmTravel/KcmTravel.csproj -c Release -o publish
+
+      - name: Start site
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+          ASPNETCORE_URLS: http://127.0.0.1:5000
+          Site__BaseUrl: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          cd publish
+          nohup dotnet KcmTravel.dll > ../server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:5000/ > /dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:5000/ > /dev/null || (cat ../server.log; exit 1)
+
+      - name: Export static pages
+        run: python3 scripts/export_static.py http://127.0.0.1:5000 publish/wwwroot _site "$BASE_PATH"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

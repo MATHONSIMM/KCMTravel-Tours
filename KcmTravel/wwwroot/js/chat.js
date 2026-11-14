@@ -13,6 +13,7 @@
     const form = root.querySelector("[data-chat-form]");
     const input = root.querySelector("[data-chat-text]");
     const wa = root.dataset.wa;
+    const BASE = document.documentElement.dataset.base || "";
     const fmt = n => "R" + Math.round(n).toLocaleString("en-ZA").replace(/,/g, " ");
 
     let catalog = null;
@@ -22,7 +23,7 @@
 
     const loadCatalog = async () => {
         if (catalog) return catalog;
-        const res = await fetch("/api/catalog");
+        const res = await fetch(BASE + "/api/catalog.json");
         catalog = await res.json();
         return catalog;
     };
@@ -182,7 +183,7 @@
             const a = document.createElement("div");
             a.className = "chat-card";
             a.innerHTML = `<img src="${t.image}" alt="" loading="lazy"><div><strong></strong><span></span><em></em>
-                <div class="chat-card-actions"><a href="/book?${q}">Book this →</a><a href="/tours/${t.slug}">Details</a></div></div>`;
+                <div class="chat-card-actions"><a href="${BASE}/book?${q}">Book this →</a><a href="${BASE}/tours/${t.slug}">Details</a></div></div>`;
             a.querySelector("strong").textContent = t.title;
             a.querySelector("span").textContent = `${t.nightsLabel} · from ${fmt(t.price)} pp`;
             a.querySelector("em").textContent = `≈ ${fmt(total)} for your group`;

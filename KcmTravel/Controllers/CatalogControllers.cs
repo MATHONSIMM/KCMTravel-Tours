@@ -51,6 +51,7 @@ public class ToursController : Controller
 public class ApiController : ControllerBase
 {
     [HttpGet("catalog")]
+    [HttpGet("catalog.json")]
     [ResponseCache(Duration = 600)]
     public IActionResult CatalogFeed() => Ok(new
     {

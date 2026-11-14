@@ -272,7 +272,7 @@ em { font-style: italic; }
 /* tour cards */
 .tour-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
 .tour-card { transition: opacity .4s, transform .4s var(--ease); }
-.tour-card.is-filtered { display: none; }
+.tour-card.is-filtered, .tour-card.is-param-hidden { display: none; }
 .tour-card-link { display: flex; flex-direction: column; height: 100%; text-decoration: none; background: var(--paper); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); transition: transform .5s var(--ease), box-shadow .5s var(--ease); }
 .section--sand .tour-card-link { background: #fff; border-color: transparent; }
 .tour-card-link:hover { transform: translateY(-6px); box-shadow: var(--shadow); }

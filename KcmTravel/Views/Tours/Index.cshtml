@@ -65,9 +65,8 @@
     </div>
 </section>
 
+<script type="application/json" id="dest-regions">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(Catalog.Destinations.ToDictionary(d => d.Slug, d => d.Region.Replace(" ", "-"))))</script>
+
 @section Scripts {
-    @if (category is not null)
-    {
-        <script src="~/js/tours-filter.js" asp-append-version="true" defer data-category="@category"></script>
-    }
+    <script src="~/js/tours-filter.js" asp-append-version="true" defer></script>
 }

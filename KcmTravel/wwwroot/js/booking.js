@@ -86,9 +86,45 @@
         for (let i = 1; i <= 5; i++) {
             if (!validate(i)) { e.preventDefault(); show(i); return; }
         }
+        if (document.documentElement.dataset.static) { e.preventDefault(); return sendViaWhatsApp(); }
         const btn = form.querySelector("button[type=submit]");
         btn.disabled = true; btn.textContent = "Sending…";
     });
+
+    /* Static hosting (GitHub Pages): no server, so the request goes to KCM on WhatsApp */
+    const sendViaWhatsApp = () => {
+        const q = quote();
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        const now = new Date();
+        const ref = "KCM-" + String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0") + "-" +
+            Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+        const f = form.elements;
+        const extras = $$("input[name=Extras]:checked").map(cb => data.extras[cb.value]?.name).filter(Boolean);
+        const msg = [
+            `Hi KCM Travel & Tours! Booking request ${ref}`,
+            `Trip: ${q.t.title}`,
+            `Start date: ${f.StartDate.value}`,
+            `Nights: ${q.nights}`,
+            `Travellers: ${num("Adults")} adults, ${num("Children")} children, ${num("Infants")} infants, ${num("Pensioners")} pensioners`,
+            `Room: ${f.Room.value}`,
+            `Extras: ${extras.join(", ") || "none"}`,
+            `Payment: ${f.Payment.value}`,
+            `Estimated total: ${fmt(q.total)}`,
+            `Name: ${f.FullName.value}`,
+            `Email: ${f.Email.value}`,
+            `Cell: ${f.Phone.value}`,
+            f.Notes.value ? `Notes: ${f.Notes.value}` : "",
+        ].filter(Boolean).join("\n");
+        const wa = document.querySelector("[data-chat]")?.dataset.wa || "";
+        const link = `https://wa.me/${wa}?text=${encodeURIComponent(msg)}`;
+        const card = steps[4];
+        card.innerHTML = "";
+        const h = document.createElement("h2"); h.textContent = "Almost done: send it on WhatsApp";
+        const p = document.createElement("p"); p.textContent = `Your reference is ${ref}. Tap the button to send your booking request to a KCM consultant on WhatsApp. They'll confirm availability within one working day.`;
+        const a = document.createElement("a"); a.className = "btn btn--primary btn--lg"; a.href = link; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Send booking on WhatsApp";
+        card.append(h, p, a);
+        window.open(link, "_blank", "noopener");
+    };
 
     /* ---------- pricing ---------- */
     const quote = () => {
@@ -194,6 +230,19 @@
 
     form.addEventListener("input", update);
     form.addEventListener("change", update);
+
+    // Prefill from the URL (?tour=&date=&adults=&children=&nights=), used by links and static hosting
+    const params = new URLSearchParams(location.search);
+    const setIf = (name, v) => { if (v !== null && v !== "" && form.elements[name]) form.elements[name].value = v; };
+    const pTour = params.get("tour");
+    if (pTour && data.tours[pTour] && !form.elements.TourSlug.value) {
+        const r = form.querySelector(`input[name=TourSlug][value="${CSS.escape(pTour)}"]`);
+        if (r) { r.checked = true; r.closest(".tour-option")?.scrollIntoView({ block: "nearest" }); }
+    }
+    if (!form.elements.StartDate.value) setIf("StartDate", params.get("date"));
+    if (params.has("adults")) setIf("Adults", params.get("adults"));
+    if (params.has("children")) setIf("Children", params.get("children"));
+    if (params.has("nights")) setIf("Nights", params.get("nights"));
 
     // Start on the first step with a server-side error, otherwise step 1
     const firstErr = form.querySelector(".input-validation-error, .field-validation-error:not(:empty)");
