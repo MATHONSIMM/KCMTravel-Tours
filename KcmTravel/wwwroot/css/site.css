@@ -147,10 +147,10 @@ em { font-style: italic; }
 @keyframes kenburns { from { transform: scale(1.14) translate3d(1.5%, 0, 0); } to { transform: scale(1.02) translate3d(-1%, -1%, 0); } }
 @keyframes kenburns-alt { from { transform: scale(1.02) translate3d(-1%, 1%, 0); } to { transform: scale(1.14) translate3d(1.5%, -.5%, 0); } }
 .hero-slide-media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8,12,10,.55) 0%, rgba(8,12,10,.1) 32%, rgba(8,12,10,.25) 55%, rgba(8,12,10,.82) 100%), linear-gradient(90deg, rgba(8,12,10,.55) 0%, rgba(8,12,10,0) 60%); }
-.hero-slide-content { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 190px; }
+.hero-slide-content { position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; padding-top: calc(var(--header-h) + 24px); padding-bottom: 190px; }
 .hero-place { display: flex; align-items: center; gap: 14px; font-size: 13px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; margin-bottom: 18px; }
 .hero-place-line { width: 46px; height: 1.5px; background: var(--gold); }
-.hero-title { font-family: var(--font-display); font-size: clamp(44px, 7.4vw, 112px); line-height: .98; font-weight: 400; letter-spacing: -.03em; max-width: 13ch; margin: 0 0 22px; font-variation-settings: "SOFT" 100, "opsz" 144; }
+.hero-title { font-family: var(--font-display); font-size: clamp(38px, min(7.4vw, 10.5vh), 112px); line-height: .98; font-weight: 400; letter-spacing: -.03em; max-width: 13ch; margin: 0 0 22px; font-variation-settings: "SOFT" 100, "opsz" 144; }
 .hero-title em { color: #f3d6a4; font-weight: 300; }
 .hero-line { font-size: clamp(17px, 1.6vw, 20px); max-width: 40ch; opacity: .9; margin-bottom: 30px; }
 .hero-cta { display: flex; align-items: center; flex-wrap: wrap; gap: 18px 26px; }
@@ -652,6 +652,26 @@ em { font-style: italic; }
     .chat-panel { height: calc(100svh - 28px); }
     .venda-collage { height: 420px; }
     .facts div { border-right: 0; border-bottom: 1px solid var(--line); }
+}
+
+/* Short screens (tablets in landscape, small laptops) */
+@media (max-height: 760px) and (min-width: 701px) {
+    .hero { min-height: 560px; }
+    .hero-slide-content { padding-bottom: 150px; }
+    .hero-place { margin-bottom: 12px; }
+    .hero-title { margin-bottom: 14px; }
+    .hero-line { font-size: 16px; margin-bottom: 20px; }
+    .hero-controls { bottom: 64px; }
+    .hero-dot-name { margin-bottom: 8px; }
+    .btn--lg { padding: 15px 26px; }
+}
+
+/* Tablets and small laptops: compact chat button, keep slide controls clear of the floating buttons */
+@media (max-width: 1280px) {
+    .chat-launcher { padding: 6px; }
+    .chat-launcher-text { display: none; }
+    .hero-arrows { display: none; }
+    .hero-controls { padding-right: calc(var(--gutter) + 84px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
