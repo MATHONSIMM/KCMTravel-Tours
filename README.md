@@ -26,7 +26,7 @@ From a terminal instead: `cd KcmTravel` then `dotnet run`, and open the URL it p
 | About, Contact, Privacy (POPIA), Booking terms | `/about`, `/contact`, `/privacy`, `/terms` |
 | SEO: sitemap and robots | `/sitemap.xml`, `/robots.txt` |
 
-The **Naledi chat assistant** (bottom right) asks about trip style, province, dates, travellers, nights and budget. It then suggests 3 trips with a price estimate for the group, and a "Book this" link that fills in the booking form for you. It can also pass everything to a consultant on WhatsApp.
+The **Kaycee chat assistant** (bottom right) asks about trip style, province, dates, travellers, nights and budget. It then suggests 3 trips with a price estimate for the group, and a "Book this" link that fills in the booking form for you. It can also pass everything to a consultant on WhatsApp.
 
 The **WhatsApp button** and footer links open WhatsApp on **076 436 0010** with a ready-made message.
 

@@ -1,4 +1,4 @@
-/* KCM trip assistant "Naledi" — guided chat that suggests trips and pre-fills the booking form.
+/* KCM trip assistant "Kaycee" — guided chat that suggests trips and pre-fills the booking form.
    Demo version: runs fully in the browser on /api/catalog. A real AI model can be connected later
    by replacing `reply()` with a call to a server endpoint. */
 (() => {
@@ -32,7 +32,7 @@
     const STEPS = [
         {
             key: "style",
-            ask: () => "Hi, I'm Naledi from KCM Travel & Tours. I'll help you find a trip in about a minute. What kind of trip are you in the mood for?",
+            ask: () => "Hi, I'm Kaycee from KCM Travel & Tours. I'll help you find a trip in about a minute. What kind of trip are you in the mood for?",
             choices: [
                 ["Safari & wildlife", "bush"], ["Mountains & views", "mountains"], ["Heritage & culture", "heritage"],
                 ["Beach & coast", "beach"], ["Couples getaway", "romance"], ["Surprise me", "any"],
@@ -200,7 +200,7 @@
 
     const offerWhatsApp = () => {
         choicesEl.innerHTML = "";
-        const summary = `Hi KCM Travel & Tours! Naledi helped me plan a trip:\n• Style: ${state.style || "-"}\n• Region: ${state.region || "-"}\n• When: ${state.date || "-"}\n• Travellers: ${state.party || "-"}${state.children ? " (+" + state.children + " kids)" : ""}\n• Nights: ${state.nights ?? "-"}\n• Budget pp: ${state.budget || "-"}\n• Liked: ${(state.picks || []).join(", ")}`;
+        const summary = `Hi KCM Travel & Tours! Kaycee helped me plan a trip:\n• Style: ${state.style || "-"}\n• Region: ${state.region || "-"}\n• When: ${state.date || "-"}\n• Travellers: ${state.party || "-"}${state.children ? " (+" + state.children + " kids)" : ""}\n• Nights: ${state.nights ?? "-"}\n• Budget pp: ${state.budget || "-"}\n• Liked: ${(state.picks || []).join(", ")}`;
         const link = document.createElement("a");
         link.className = "chat-choice"; link.target = "_blank"; link.rel = "noopener";
         link.href = `https://wa.me/${wa}?text=${encodeURIComponent(summary)}`;
@@ -252,10 +252,10 @@
     };
 
     /* ---------- persistence (best effort) ---------- */
-    const save = () => { try { sessionStorage.setItem("kcm-chat", JSON.stringify({ state, step, html: log.innerHTML })); } catch { /* storage unavailable */ } };
+    const save = () => { try { sessionStorage.setItem("kcm-chat-v2", JSON.stringify({ state, step, html: log.innerHTML })); } catch { /* storage unavailable */ } };
     const restore = () => {
         try {
-            const raw = sessionStorage.getItem("kcm-chat");
+            const raw = sessionStorage.getItem("kcm-chat-v2");
             if (!raw) return false;
             const saved = JSON.parse(raw);
             state = saved.state || {}; step = saved.step || 0; log.innerHTML = saved.html || "";
@@ -267,7 +267,7 @@
 
     const restart = () => {
         state = {}; step = 0; log.innerHTML = ""; choicesEl.innerHTML = "";
-        try { sessionStorage.removeItem("kcm-chat"); } catch { }
+        try { sessionStorage.removeItem("kcm-chat-v2"); } catch { }
         askNext();
     };
 
