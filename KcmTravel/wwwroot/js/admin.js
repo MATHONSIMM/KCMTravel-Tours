@@ -1,0 +1,471 @@
+/* KCM admin dashboard. Reads live data from the pilot backend (Google Sheet via Apps Script).
+   Charts are small hand-built SVGs (no external libraries). */
+(() => {
+    "use strict";
+    window.addEventListener("DOMContentLoaded", () => {
+        const K = window.KCM;
+        const root = document.querySelector("[data-admin]");
+        if (!K || !root) return;
+        const $ = (s, c = document) => c.querySelector(s);
+        const $$ = (s, c = document) => Array.from(c.querySelectorAll(s));
+        const esc = K.esc, R = K.fmtR;
+        let body = $("[data-adm-body]");
+        const tip = $("[data-tip]");
+        const fmtDate = s => s ? new Date(s).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "";
+        const fmtWhen = s => s ? new Date(s).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+        const C = { s1: "#a8481f", s2: "#0a7ea4", s3: "#237a2a", s4: "#c98a1b" };
+        const STATUS_TONE = { Pending: "warn", "Needs info": "info", Approved: "good", Rejected: "bad", Uploading: "muted" };
+        const STATUS_COLOR = { Pending: "#c98a1b", "Needs info": "#0a7ea4", Approved: "#237a2a", Rejected: "#b42318", Uploading: "#9aa39e" };
+        const BOOKING_STATUSES = ["New", "Contacted", "Confirmed", "Paid", "Completed", "Cancelled"];
+        const TITLES = { overview: "Overview", applications: "Partner applications", partners: "Approved partners", bookings: "Booking requests", messages: "Messages", users: "Users & access", activity: "Activity log" };
+
+        let me = null, sample = false;
+        const cache = {};
+
+        /* ---------- data access (live or sample) ---------- */
+        async function get(action, payload) {
+            if (sample) return SAMPLE[action]?.(payload);
+            return K.call(action, payload);
+        }
+
+        /* ---------- boot ---------- */
+        async function boot() {
+            if (!K.configured) return gate("setup");
+            const user = K.session.user();
+            if (!user) return gate("signin");
+            me = await K.session.refresh(true) || user;
+            if (!me || !me.isStaff) return gate("noaccess");
+            route();
+        }
+
+        function gate(kind) {
+            root.classList.add("adm--gate");
+            $("[data-adm-title]").textContent = kind === "noaccess" ? "No admin access" : "Admin dashboard";
+            const preview = `<button class="btn btn--ghost" type="button" data-sample>Preview with sample data</button>`;
+            if (kind === "setup") body.innerHTML = `<div class="adm-card adm-gate"><h2>Connect your Google Sheet</h2>
+                <p>The dashboard reads from the pilot database in your Google Drive. It isn't connected yet: deploy the Apps Script backend and add its URL to the site settings (see <code>backend/SETUP.md</code>).</p>
+                <div class="btn-row">${preview}</div></div>`;
+            if (kind === "signin") {
+                body.innerHTML = `<div class="adm-card adm-gate"><h2>Sign in to continue</h2><p>Only KCM team members with admin or viewer access can open the dashboard.</p><div data-mount></div><div class="btn-row" style="margin-top:18px">${preview}</div></div>`;
+                K.mountSignin($("[data-mount]", body), () => location.reload());
+            }
+            if (kind === "noaccess") body.innerHTML = `<div class="adm-card adm-gate"><h2>You don't have admin access</h2><p>You're signed in as <strong>${esc(K.session.user()?.email)}</strong>. Ask the KCM owner to give your email admin or viewer access.</p>
+                <div class="btn-row"><a class="btn btn--primary" href="${K.base}/account">Go to my account</a>${preview}</div></div>`;
+        }
+
+        root.addEventListener("click", e => { if (e.target.closest("[data-sample]")) { sample = true; me = SAMPLE.me(); root.classList.remove("adm--gate"); $("[data-sample-pill]").hidden = false; route(); } });
+        $("[data-refresh]").addEventListener("click", () => { Object.keys(cache).forEach(k => delete cache[k]); route(); });
+        window.addEventListener("hashchange", route);
+
+        function route() {
+            if (!me) return;
+            const view = (location.hash.slice(1) || "overview").split("/")[0];
+            const fn = VIEWS[view] || VIEWS.overview;
+            $$("[data-view]").forEach(a => a.classList.toggle("is-active", a.dataset.view === (VIEWS[view] ? view : "overview")));
+            $("[data-adm-title]").textContent = TITLES[view] || TITLES.overview;
+            $("[data-adm-eyebrow]").textContent = `${me.name || me.email} · ${me.role}`;
+            const fresh = body.cloneNode(false); body.replaceWith(fresh); body = fresh; // drop listeners from the previous view
+            body.innerHTML = `<div class="adm-card"><p>Loading…</p></div>`;
+            fn().catch(err => { body.innerHTML = `<div class="adm-card"><p class="form-error">${esc(err.message)}</p></div>`; });
+        }
+
+        async function cached(action) { return cache[action] ||= await get(action); }
+        function badge(status) { return `<span class="status status--${STATUS_TONE[status] || "muted"}">${esc(status === "Uploading" ? "Not submitted" : status)}</span>`; }
+        function empty(title, text) { return `<div class="adm-empty"><h3>${title}</h3><p>${text}</p></div>`; }
+
+        /* =================== VIEWS =================== */
+        const VIEWS = {
+            async overview() {
+                const d = await get("dashboard");
+                cache.dashboard = d;
+                setBadges(d.kpis);
+                if (d.sheetUrl) $("[data-adm-sheet]").innerHTML = `<a class="adm-sheet-link" href="${esc(d.sheetUrl)}" target="_blank" rel="noopener">Open the Google Sheet ↗</a>`;
+                const k = d.kpis;
+                body.innerHTML = `
+                    <div class="kpis">
+                        ${kpi("Waiting for review", k.pending, k.needsInfo ? `${k.needsInfo} waiting on partner` : "applications", "#applications")}
+                        ${kpi("Approved partners", k.approved, `of ${k.applications} applications`, "#partners")}
+                        ${kpi("Booking requests", k.bookings, `${k.newBookings} new`, "#bookings")}
+                        ${kpi("Estimated booking value", R(k.bookingValue), "excl. cancelled", "#bookings")}
+                        ${kpi("Team & partners", k.users, `${k.staff} with admin access`, "#users")}
+                    </div>
+                    <div class="adm-grid">
+                        <div class="adm-card adm-span-2"><div class="card-head"><h2>Activity per week</h2><p>Partner applications and booking requests, last 12 weeks</p></div><div class="chart" data-chart="weekly"></div></div>
+                        <div class="adm-card"><div class="card-head"><h2>Applications by status</h2><p>${k.applications} submitted</p></div><div data-chart="status"></div></div>
+                        <div class="adm-card"><div class="card-head"><h2>Partners by type</h2><p>All submitted applications</p></div><div data-chart="type"></div></div>
+                        <div class="adm-card"><div class="card-head"><h2>Where partners are</h2><p>Applications by province</p></div><div data-chart="province"></div></div>
+                        <div class="adm-card"><div class="card-head"><h2>Booking value by trip</h2><p>Estimated, all statuses</p></div><div data-chart="tour"></div></div>
+                        <div class="adm-card"><div class="card-head"><h2>Booking pipeline</h2><p>Requests by status</p></div><div data-chart="pipeline"></div></div>
+                        <div class="adm-card adm-span-2"><div class="card-head"><h2>Recent activity</h2><a class="arrow-link" href="#activity">See all</a></div>${feed(d.recent)}</div>
+                    </div>`;
+                lineChart($("[data-chart=weekly]"), d.weekly.map(w => fmtDate(w.week).replace(/ \d{4}$/, "")), [
+                    { name: "Applications", color: C.s1, values: d.weekly.map(w => w.applications) },
+                    { name: "Bookings", color: C.s2, values: d.weekly.map(w => w.bookings) },
+                ]);
+                segBar($("[data-chart=status]"), ["Pending", "Needs info", "Approved", "Rejected"].map(s => ({ label: s, value: d.byStatus[s] || 0, color: STATUS_COLOR[s] })));
+                hBars($("[data-chart=type]"), toItems(d.byType));
+                hBars($("[data-chart=province]"), toItems(d.byProvince));
+                hBars($("[data-chart=tour]"), toItems(d.valueByTour).slice(0, 6), { format: R });
+                hBars($("[data-chart=pipeline]"), BOOKING_STATUSES.map(s => ({ label: s, value: d.bookingsByStatus[s] || 0 })), { keepOrder: true });
+            },
+
+            async applications() {
+                const list = await get("listApplications");
+                const counts = list.reduce((a, x) => (a[x.status] = (a[x.status] || 0) + 1, a), {});
+                const tabs = ["Pending", "Needs info", "Approved", "Rejected", "All"];
+                let tab = sessionStorage.getItem("adm-app-tab") || "Pending";
+                let q = "";
+                body.innerHTML = `
+                    <div class="adm-card">
+                        <div class="toolbar">
+                            <div class="chips" role="tablist">${tabs.map(t => `<button type="button" class="chip" data-tab="${t}">${t}${t !== "All" ? ` <b>${counts[t] || 0}</b>` : ""}</button>`).join("")}</div>
+                            <input class="search" type="search" placeholder="Search business, email, town…" aria-label="Search applications" data-q>
+                        </div>
+                        <div data-list></div>
+                    </div>`;
+                const draw = () => {
+                    $$("[data-tab]", body).forEach(b => b.classList.toggle("is-active", b.dataset.tab === tab));
+                    const rows = list.filter(a => (tab === "All" ? a.status !== "Uploading" : a.status === tab) && (!q || [a.businessName, a.email, a.city, a.province, a.contactName, a.id].join(" ").toLowerCase().includes(q)));
+                    $("[data-list]", body).innerHTML = rows.length ? `<div class="table-wrap"><table class="table">
+                        <thead><tr><th>Business</th><th>Type</th><th>Location</th><th>Submitted</th><th>Photos</th><th>Status</th></tr></thead>
+                        <tbody>${rows.map(a => `<tr data-open="${esc(a.id)}" tabindex="0"><td><strong>${esc(a.businessName)}</strong><span>${esc(a.contactName)} · ${esc(a.email)}</span></td>
+                        <td>${esc(a.partnerTypeLabel)}<span>${esc(a.summary)}</span></td><td>${esc(a.city)}<span>${esc(a.province)}</span></td>
+                        <td>${fmtDate(a.created)}</td><td>${a.photoCount}</td><td>${badge(a.status)}</td></tr>`).join("")}</tbody></table></div>`
+                        : empty("Nothing here", tab === "Pending" ? "No applications are waiting for review. Nice work." : "No applications match.");
+                };
+                body.addEventListener("click", e => { const t = e.target.closest("[data-tab]"); if (t) { tab = t.dataset.tab; sessionStorage.setItem("adm-app-tab", tab); draw(); } });
+                $("[data-q]", body).addEventListener("input", e => { q = e.target.value.trim().toLowerCase(); draw(); });
+                draw();
+            },
+
+            async partners() {
+                const list = (await get("listApplications")).filter(a => a.status === "Approved");
+                const types = [...new Set(list.map(a => a.partnerTypeLabel))];
+                body.innerHTML = `<div class="adm-card">
+                    <div class="toolbar"><div class="chips">${["All", ...types].map((t, i) => `<button type="button" class="chip ${i ? "" : "is-active"}" data-ptype="${esc(t)}">${esc(t)}</button>`).join("")}</div><p class="muted">${list.length} approved partner${list.length === 1 ? "" : "s"}</p></div>
+                    ${list.length ? `<div class="partner-grid">${list.map(a => `<button type="button" class="partner-card" data-open="${esc(a.id)}" data-ptype-of="${esc(a.partnerTypeLabel)}">
+                        <span class="partner-type">${esc(a.partnerTypeLabel)}</span><strong>${esc(a.businessName)}</strong><span>${esc(a.summary || a.services)}</span>
+                        <span class="muted">${esc(a.city)}, ${esc(a.province)} · approved ${fmtDate(a.reviewedAt)}</span></button>`).join("")}</div>`
+                        : empty("No approved partners yet", "Approve applications to build your partner network.")}</div>`;
+                body.addEventListener("click", e => {
+                    const b = e.target.closest("[data-ptype]"); if (!b) return;
+                    $$("[data-ptype]", body).forEach(x => x.classList.toggle("is-active", x === b));
+                    $$("[data-ptype-of]", body).forEach(c => { c.hidden = b.dataset.ptype !== "All" && c.dataset.ptypeOf !== b.dataset.ptype; });
+                });
+            },
+
+            async bookings() {
+                const list = await get("listBookings");
+                let status = "All", q = "";
+                body.innerHTML = `<div class="adm-card">
+                    <div class="toolbar"><div class="chips">${["All", ...BOOKING_STATUSES].map(s => `<button type="button" class="chip" data-bstatus="${s}">${s}</button>`).join("")}</div>
+                    <div class="toolbar-right"><input class="search" type="search" placeholder="Search name, trip, reference…" aria-label="Search bookings" data-q><button class="btn btn--ghost btn--sm" type="button" data-csv>Download CSV</button></div></div>
+                    <div data-list></div></div>`;
+                const draw = () => {
+                    $$("[data-bstatus]", body).forEach(b => b.classList.toggle("is-active", b.dataset.bstatus === status));
+                    const rows = list.filter(b => (status === "All" || b.status === status) && (!q || [b.reference, b.name, b.tour, b.email, b.phone].join(" ").toLowerCase().includes(q)));
+                    const total = rows.filter(b => b.status !== "Cancelled").reduce((s, b) => s + b.total, 0);
+                    $("[data-list]", body).innerHTML = rows.length ? `<p class="muted">${rows.length} request${rows.length === 1 ? "" : "s"} · ${R(total)} estimated</p><div class="table-wrap"><table class="table">
+                        <thead><tr><th>Reference</th><th>Guest</th><th>Trip</th><th>Travel date</th><th>Guests</th><th class="num">Estimate</th><th>Status</th></tr></thead>
+                        <tbody>${rows.map(b => `<tr><td><strong>${esc(b.reference)}</strong><span>${fmtWhen(b.created)}</span></td>
+                            <td>${esc(b.name)}<span><a href="tel:${esc(b.phone)}">${esc(b.phone)}</a> · <a href="mailto:${esc(b.email)}">${esc(b.email)}</a></span></td>
+                            <td>${esc(b.tour)}<span>${b.nights ? b.nights + " nights · " : ""}${esc(b.room || "")}${b.extras ? " · " + esc(b.extras) : ""}</span></td>
+                            <td>${fmtDate(b.startDate)}</td><td>${b.travellers}</td><td class="num">${R(b.total)}</td>
+                            <td>${me.canEdit ? `<select class="status-select" data-booking="${esc(b.reference)}" aria-label="Status for ${esc(b.reference)}">${BOOKING_STATUSES.map(s => `<option ${s === b.status ? "selected" : ""}>${s}</option>`).join("")}</select>` : esc(b.status)}</td></tr>`).join("")}</tbody></table></div>`
+                        : empty("No booking requests", "Bookings made on the website appear here.");
+                };
+                body.addEventListener("click", e => {
+                    const b = e.target.closest("[data-bstatus]"); if (b) { status = b.dataset.bstatus; draw(); }
+                    if (e.target.closest("[data-csv]")) downloadCsv("kcm-bookings.csv", list, ["reference", "created", "status", "name", "email", "phone", "tour", "startDate", "nights", "travellers", "room", "extras", "payment", "total", "notes"]);
+                });
+                body.addEventListener("change", async e => {
+                    const sel = e.target.closest("[data-booking]"); if (!sel) return;
+                    sel.disabled = true;
+                    try { await get("updateBooking", { reference: sel.dataset.booking, status: sel.value }); const row = list.find(x => x.reference === sel.dataset.booking); if (row) row.status = sel.value; toast("Booking updated"); }
+                    catch (err) { toast(err.message, true); }
+                    sel.disabled = false;
+                });
+                $("[data-q]", body).addEventListener("input", e => { q = e.target.value.trim().toLowerCase(); draw(); });
+                draw();
+            },
+
+            async messages() {
+                const list = await get("listMessages");
+                body.innerHTML = `<div class="adm-card">${list.length ? `<ul class="msg-list">${list.map(m => `<li><div><strong>${esc(m.name)}</strong> <span class="muted">${fmtWhen(m.created)}</span></div>
+                    <p>${esc(m.message)}</p><p class="muted">${m.email ? `<a href="mailto:${esc(m.email)}">${esc(m.email)}</a>` : ""} ${m.phone ? ` · <a href="tel:${esc(m.phone)}">${esc(m.phone)}</a>` : ""}</p></li>`).join("")}</ul>`
+                    : empty("No messages yet", "Messages sent from the contact page appear here.")}</div>`;
+            },
+
+            async users() {
+                const list = await get("listUsers");
+                const staff = list.filter(u => u.role !== "partner"), partners = list.filter(u => u.role === "partner");
+                const roleOpts = r => (me.role === "owner" ? ["admin", "viewer", "partner"] : ["viewer", "partner"]).map(x => `<option ${x === r ? "selected" : ""}>${x}</option>`).join("");
+                const row = u => {
+                    const locked = u.role === "owner" || u.email === me.email || (u.role === "admin" && me.role !== "owner") || !me.canEdit;
+                    return `<tr><td><strong>${esc(u.name || "—")}</strong><span>${esc(u.email)}</span></td>
+                        <td>${locked ? `<span class="role-chip">${esc(u.role)}</span>` : `<select class="status-select" data-role="${esc(u.email)}" aria-label="Role for ${esc(u.email)}">${roleOpts(u.role)}</select>`}</td>
+                        <td>${locked ? esc(u.status) : `<select class="status-select" data-ustatus="${esc(u.email)}" aria-label="Status for ${esc(u.email)}"><option ${u.status === "active" ? "selected" : ""}>active</option><option ${u.status === "disabled" ? "selected" : ""}>disabled</option></select>`}</td>
+                        <td>${u.lastLogin ? fmtWhen(u.lastLogin) : `<span class="muted">${u.provider === "invited" ? "Invited, not signed in yet" : "—"}</span>`}</td></tr>`;
+                };
+                body.innerHTML = `
+                    <div class="adm-grid">
+                        <div class="adm-card adm-span-2">
+                            <div class="card-head"><h2>KCM team</h2><p>People who can open this dashboard</p></div>
+                            <div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>${staff.map(row).join("")}</tbody></table></div>
+                        </div>
+                        <div class="adm-card">
+                            <div class="card-head"><h2>Give someone access</h2><p>They sign in with this email to get access.</p></div>
+                            ${me.canEdit ? `<form class="invite" data-invite novalidate>
+                                <div class="field"><label for="inv-email">Email *</label><input id="inv-email" name="email" type="email" required placeholder="name@example.com"></div>
+                                <div class="field"><label for="inv-name">Name</label><input id="inv-name" name="name"></div>
+                                <div class="field"><label for="inv-role">Access level</label><select id="inv-role" name="role">${me.role === "owner" ? `<option value="admin">Admin: full access, can review and manage users</option>` : ""}<option value="viewer" selected>Viewer: can see everything, change nothing</option></select></div>
+                                <button class="btn btn--primary btn--block" type="submit">Give access</button>
+                            </form>` : `<p class="muted">Only owners and admins can give access.</p>`}
+                            <dl class="roles">
+                                <div><dt>Owner</dt><dd>Everything, including adding and removing admins.</dd></div>
+                                <div><dt>Admin</dt><dd>Review applications, update bookings, add viewers.</dd></div>
+                                <div><dt>Viewer</dt><dd>Read-only access to the whole dashboard.</dd></div>
+                                <div><dt>Partner</dt><dd>Sees only their own applications.</dd></div>
+                            </dl>
+                        </div>
+                        <div class="adm-card adm-span-3">
+                            <div class="card-head"><h2>Partner accounts</h2><p>${partners.length} signed-up partner${partners.length === 1 ? "" : "s"}</p></div>
+                            ${partners.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>${partners.map(row).join("")}</tbody></table></div>` : empty("No partner accounts yet", "Partners appear here after they confirm their email.")}
+                        </div>
+                    </div>`;
+                const save = async (email, patch) => {
+                    const u = list.find(x => x.email === email) || {};
+                    try { await get("saveUser", { email, name: u.name, role: patch.role || u.role, status: patch.status || u.status }); Object.assign(u, patch); toast("Access updated"); }
+                    catch (err) { toast(err.message, true); route(); }
+                };
+                body.addEventListener("change", e => {
+                    const r = e.target.closest("[data-role]"); if (r) save(r.dataset.role, { role: r.value });
+                    const s = e.target.closest("[data-ustatus]"); if (s) save(s.dataset.ustatus, { status: s.value });
+                });
+                $("[data-invite]", body)?.addEventListener("submit", async e => {
+                    e.preventDefault();
+                    const f = e.target, email = f.email.value.trim().toLowerCase();
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { toast("Please enter a valid email.", true); return; }
+                    const btn = f.querySelector("button"); btn.disabled = true;
+                    try { await get("saveUser", { email, name: f.name.value.trim(), role: f.role.value, status: "active" }); toast(`Access given to ${email}`); route(); }
+                    catch (err) { toast(err.message, true); btn.disabled = false; }
+                });
+            },
+
+            async activity() {
+                const list = await get("activity");
+                body.innerHTML = `<div class="adm-card">${list.length ? feed(list) : empty("No activity yet", "Sign-ins, applications and reviews are logged here.")}</div>`;
+            },
+        };
+
+        /* ---------- application drawer ---------- */
+        const drawer = $("[data-drawer]"), dbody = $("[data-drawer-body]");
+        document.addEventListener("click", e => {
+            const open = e.target.closest("[data-open]");
+            if (open && root.contains(open)) openApp(open.dataset.open);
+            if (e.target.closest("[data-drawer-close]")) closeDrawer();
+        });
+        document.addEventListener("keydown", e => {
+            if (e.key === "Enter" && e.target.matches("tr[data-open]")) openApp(e.target.dataset.open);
+            if (e.key === "Escape") { closeDrawer(); closeLightbox(); }
+        });
+        function closeDrawer() { drawer.hidden = true; document.body.classList.remove("adm-locked"); }
+
+        async function openApp(id) {
+            drawer.hidden = false; document.body.classList.add("adm-locked");
+            dbody.innerHTML = "<p>Loading…</p>";
+            try {
+                const a = await get("getApplication", { id });
+                const t = K.TYPES[a.partnerType] || { fields: [] };
+                const have = new Set(a.photos.map(p => p.label));
+                const missing = (a.required || []).filter(l => !have.has(l));
+                const detailRows = t.fields.map(f => [f.label, [].concat(a.details?.[f.key] ?? "").join(", ")]).filter(r => r[1]);
+                dbody.innerHTML = `
+                    <p class="eyebrow">${esc(a.partnerTypeLabel)} · ${esc(a.id)}</p>
+                    <h2 id="drawer-title">${esc(a.businessName)}</h2>
+                    <p>${badge(a.status)} <span class="muted">Submitted ${fmtDate(a.created)}${a.reviewedBy ? ` · reviewed by ${esc(a.reviewedBy)} on ${fmtDate(a.reviewedAt)}` : ""}</span></p>
+                    ${a.reviewNote ? `<blockquote class="review-note">${esc(a.reviewNote)}</blockquote>` : ""}
+                    <h3>Photos ${missing.length ? `<span class="status status--warn">Missing: ${missing.map(esc).join(", ")}</span>` : ""}</h3>
+                    <div class="thumb-grid">${a.photos.map(p => `<figure class="thumb" data-file="${esc(p.fileId)}" data-label="${esc(p.label)}"><button type="button" class="thumb-img" aria-label="Enlarge ${esc(p.label)} photo"></button><figcaption>${esc(p.label)}</figcaption></figure>`).join("") || "<p class='muted'>No photos uploaded.</p>"}</div>
+                    <h3>Contact</h3>
+                    <dl class="kv"><div><dt>Name</dt><dd>${esc(a.contactName)}</dd></div><div><dt>Email</dt><dd><a href="mailto:${esc(a.email)}">${esc(a.email)}</a></dd></div>
+                    <div><dt>Phone</dt><dd><a href="tel:${esc(a.phone)}">${esc(a.phone)}</a> · <a href="https://wa.me/${esc(String(a.phone).replace(/\D/g, "").replace(/^0/, "27"))}" target="_blank" rel="noopener">WhatsApp</a></dd></div>
+                    <div><dt>Location</dt><dd>${esc(a.city)}, ${esc(a.province)}</dd></div></dl>
+                    <h3>Business</h3>
+                    <dl class="kv"><div><dt>Services</dt><dd>${esc(a.services)}</dd></div><div><dt>Reg. number</dt><dd>${esc(a.regNumber || "—")}</dd></div>
+                    <div><dt>Years</dt><dd>${esc(a.years || "—")}</dd></div><div><dt>Website</dt><dd>${esc(a.website || "—")}</dd></div></dl>
+                    <p class="desc">${esc(a.description)}</p>
+                    ${detailRows.length ? `<h3>${esc(t.detailsTitle || "Details")}</h3><dl class="kv">${detailRows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
+                    ${me.canEdit && a.status !== "Uploading" ? `<div class="review-box">
+                        <h3>Decision</h3>
+                        <label class="field"><span class="field-legend">Note to the partner (required for "needs info" and "reject")</span><textarea data-note maxlength="1000" placeholder="e.g. Please add a clearer photo of the rear seats.">${a.status === "Approved" ? "" : ""}</textarea></label>
+                        <div class="btn-row">
+                            <button class="btn btn--approve" type="button" data-decide="approve">Approve</button>
+                            <button class="btn btn--ghost" type="button" data-decide="needs_info">Ask for more info</button>
+                            <button class="btn btn--reject" type="button" data-decide="reject">Reject</button>
+                        </div>
+                        <p class="muted">The partner gets an email with your decision.</p>
+                    </div>` : ""}`;
+                $$(".thumb[data-file]", dbody).forEach(loadThumb);
+                $$("[data-decide]", dbody).forEach(b => b.addEventListener("click", async () => {
+                    const note = $("[data-note]", dbody).value.trim();
+                    if (b.dataset.decide !== "approve" && !note) { toast("Please add a note for the partner.", true); $("[data-note]", dbody).focus(); return; }
+                    const labels = { approve: "Approve this partner and email them?", needs_info: "Ask the partner for more information?", reject: "Reject this application and email the partner?" };
+                    if (!confirm(labels[b.dataset.decide])) return;
+                    $$("[data-decide]", dbody).forEach(x => x.disabled = true);
+                    try { await get("reviewApplication", { id, decision: b.dataset.decide, note }); toast("Decision saved and partner emailed"); delete cache.dashboard; closeDrawer(); route(); }
+                    catch (err) { toast(err.message, true); $$("[data-decide]", dbody).forEach(x => x.disabled = false); }
+                }));
+            } catch (err) { dbody.innerHTML = `<p class="form-error">${esc(err.message)}</p>`; }
+        }
+
+        const photoCache = {};
+        async function loadThumb(fig) {
+            const holder = $(".thumb-img", fig);
+            try {
+                const r = photoCache[fig.dataset.file] ||= await get("getPhoto", { fileId: fig.dataset.file });
+                holder.innerHTML = `<img src="${r.dataUrl}" alt="${esc(fig.dataset.label || "")} photo">`;
+                holder.addEventListener("click", () => openLightbox(r.dataUrl, fig.dataset.label));
+            } catch { holder.textContent = "Couldn't load"; }
+        }
+        const lb = $("[data-lightbox]");
+        function openLightbox(src, cap) { $("[data-lightbox-img]").src = src; $("[data-lightbox-cap]").textContent = cap || ""; lb.hidden = false; }
+        function closeLightbox() { lb.hidden = true; }
+        lb.addEventListener("click", e => { if (e.target === lb || e.target.closest("[data-lightbox-close]")) closeLightbox(); });
+
+        /* ---------- small UI helpers ---------- */
+        function kpi(label, value, sub, href) { return `<a class="kpi" href="${href}"><span class="kpi-label">${label}</span><strong class="kpi-value">${value}</strong><span class="kpi-sub">${sub}</span></a>`; }
+        function setBadges(k) { $$("[data-badge]").forEach(b => { const v = k[b.dataset.badge] || 0; b.textContent = v; b.hidden = !v; }); }
+        const ACTION_TEXT = {
+            sign_in: "signed in", application_started: "started an application", application_submitted: "submitted an application", application_resubmitted: "resubmitted an application",
+            application_approve: "approved", application_reject: "rejected", application_needs_info: "asked for more info on", booking_request: "requested a booking", booking_status: "updated booking",
+            user_invited: "gave access to", user_updated: "changed access for", setup: "set up the database",
+        };
+        function feed(items) {
+            if (!items?.length) return empty("No activity yet", "Things will show up here as people use the site.");
+            return `<ul class="feed">${items.map(a => `<li><span class="feed-dot feed-dot--${(a.action || "").split("_")[0]}"></span><div><p><strong>${esc(a.actor)}</strong> ${esc(ACTION_TEXT[a.action] || a.action)} <strong>${esc(a.action === "sign_in" ? "" : a.target)}</strong>${a.details && !["sign_in"].includes(a.action) ? ` <span class="muted">${esc(a.details)}</span>` : ""}</p><time>${fmtWhen(a.time)}</time></div></li>`).join("")}</ul>`;
+        }
+        function toItems(obj) { return Object.entries(obj || {}).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value); }
+        function toast(msg, bad) {
+            const t = document.createElement("div"); t.className = "toast" + (bad ? " toast--bad" : ""); t.setAttribute("role", "status"); t.textContent = msg;
+            document.body.appendChild(t); setTimeout(() => t.classList.add("is-in"), 10); setTimeout(() => { t.classList.remove("is-in"); setTimeout(() => t.remove(), 300); }, 3200);
+        }
+        function downloadCsv(name, rows, cols) {
+            const q = v => { let s = String(v ?? ""); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+            const csv = [cols.join(","), ...rows.map(r => cols.map(c => q(r[c])).join(","))].join("\n");
+            const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        }
+
+        /* =================== CHARTS (SVG) =================== */
+        function showTip(html, x, y) { tip.innerHTML = html; tip.hidden = false; const w = tip.offsetWidth; tip.style.left = Math.min(window.innerWidth - w - 8, Math.max(8, x - w / 2)) + "px"; tip.style.top = (y - tip.offsetHeight - 12) + "px"; }
+        function hideTip() { tip.hidden = true; }
+
+        function hBars(el, items, opt = {}) {
+            if (!items.length || items.every(i => !i.value)) { el.innerHTML = `<p class="chart-empty">No data yet</p>`; return; }
+            const max = Math.max(...items.map(i => i.value)) || 1, fmt = opt.format || (v => v);
+            el.innerHTML = `<ul class="hbars">${items.map(i => `<li data-tipv="${esc(i.label)}: ${esc(fmt(i.value))}"><span class="hbar-label">${esc(i.label)}</span>
+                <span class="hbar-track"><span class="hbar-fill" style="width:${Math.max(i.value ? 2 : 0, (i.value / max) * 100)}%"></span></span><span class="hbar-val">${esc(fmt(i.value))}</span></li>`).join("")}</ul>`;
+            requestAnimationFrame(() => el.querySelector(".hbars")?.classList.add("is-in"));
+        }
+
+        function segBar(el, items) {
+            const total = items.reduce((s, i) => s + i.value, 0);
+            if (!total) { el.innerHTML = `<p class="chart-empty">No applications yet</p>`; return; }
+            el.innerHTML = `<div class="segbar">${items.filter(i => i.value).map(i => `<span style="flex:${i.value};background:${i.color}" data-tipv="${esc(i.label)}: ${i.value} (${Math.round(i.value / total * 100)}%)"></span>`).join("")}</div>
+                <ul class="seg-legend">${items.map(i => `<li><i style="background:${i.color}"></i>${esc(i.label)}<strong>${i.value}</strong></li>`).join("")}</ul>`;
+        }
+
+        function lineChart(el, labels, series) {
+            const W = 720, H = 240, P = { l: 34, r: 92, t: 14, b: 28 };
+            const max = Math.max(1, ...series.flatMap(s => s.values));
+            const niceMax = Math.ceil(max / (max > 10 ? 5 : 1)) * (max > 10 ? 5 : 1);
+            const x = i => P.l + (i * (W - P.l - P.r)) / Math.max(1, labels.length - 1);
+            const y = v => P.t + (H - P.t - P.b) * (1 - v / niceMax);
+            const ticks = [0, niceMax / 2, niceMax].map(v => Math.round(v));
+            const grid = ticks.map(v => `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${P.l - 8}" y="${y(v) + 4}" class="axis" text-anchor="end">${v}</text>`).join("");
+            const xl = labels.map((l, i) => (i % 2 === 0 || i === labels.length - 1) ? `<text x="${x(i)}" y="${H - 8}" class="axis" text-anchor="middle">${esc(l)}</text>` : "").join("");
+            // end labels: keep at least 15px apart so equal values don't overlap
+            const last = labels.length - 1;
+            const ly = series.map((s, k) => ({ k, y: y(s.values[last]) })).sort((a, b) => a.y - b.y);
+            for (let j = 1; j < ly.length; j++) if (ly[j].y - ly[j - 1].y < 15) ly[j].y = ly[j - 1].y + 15;
+            const labelY = {}; ly.forEach(o => { labelY[o.k] = o.y; });
+            const paths = series.map((s, k) => {
+                const d = s.values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+                return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" class="line-path"/>
+                    <circle cx="${x(last)}" cy="${y(s.values[last])}" r="4" fill="${s.color}" stroke="#fff" stroke-width="2"/>
+                    <text x="${x(last) + 10}" y="${labelY[k] + 4}" class="line-label">${esc(s.name)}</text>`;
+            }).join("");
+            el.innerHTML = `<div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>
+                <svg viewBox="0 0 ${W} ${H}" class="linechart" role="img" aria-label="${esc(series.map(s => s.name + " per week").join(" and "))}">${grid}${xl}${paths}
+                <line class="crosshair" x1="0" x2="0" y1="${P.t}" y2="${H - P.b}" style="display:none"/><rect class="hit" x="${P.l}" y="${P.t}" width="${W - P.l - P.r}" height="${H - P.t - P.b}" fill="transparent"/></svg>
+                <details class="chart-table"><summary>View as table</summary><table class="table"><thead><tr><th>Week of</th>${series.map(s => `<th class="num">${esc(s.name)}</th>`).join("")}</tr></thead><tbody>${labels.map((l, i) => `<tr><td>${esc(l)}</td>${series.map(s => `<td class="num">${s.values[i]}</td>`).join("")}</tr>`).join("")}</tbody></table></details>`;
+            const svg = el.querySelector("svg"), hit = svg.querySelector(".hit"), cross = svg.querySelector(".crosshair");
+            hit.addEventListener("mousemove", e => {
+                const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) * (W / r.width);
+                const i = Math.max(0, Math.min(labels.length - 1, Math.round((sx - P.l) / ((W - P.l - P.r) / Math.max(1, labels.length - 1)))));
+                cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.style.display = "";
+                showTip(`<strong>Week of ${esc(labels[i])}</strong>${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)} <b>${s.values[i]}</b></span>`).join("")}`, r.left + x(i) * (r.width / W), r.top + window.scrollY - window.scrollY + P.t);
+            });
+            hit.addEventListener("mouseleave", () => { cross.style.display = "none"; hideTip(); });
+        }
+        root.addEventListener("mousemove", e => { const t = e.target.closest("[data-tipv]"); if (t) { const r = t.getBoundingClientRect(); showTip(esc(t.dataset.tipv), e.clientX, r.top); } });
+        root.addEventListener("mouseout", e => { if (e.target.closest("[data-tipv]")) hideTip(); });
+
+        /* =================== SAMPLE DATA (preview only) =================== */
+        const SAMPLE = (() => {
+            const now = Date.now(), day = 86400000;
+            const ago = n => new Date(now - n * day).toISOString();
+            const apps = [
+                ["P-2611-7QKD", "Lowveld Executive Transfers", "vehicle", "Mbombela", "Mpumalanga", "Pending", "Toyota · Fortuner 2.8 GD-6 · 2022 · 7 seats · Automatic", 7, 1],
+                ["P-2611-M3XA", "Blyde View Guesthouse", "accommodation", "Graskop", "Mpumalanga", "Pending", "Guesthouse · 8 rooms · sleeps 18 · 4 stars · from R1450", 6, 2],
+                ["P-2611-T8NB", "Sabie River Guides", "guide", "Hazyview", "Mpumalanga", "Approved", "FGASA Level 2 · English, siSwati · Kruger", 3, 6],
+                ["P-2611-H2RC", "Venda Heritage Trails", "tour_operator", "Thohoyandou", "Limpopo", "Approved", "4 vehicles · Venda cultural tours", 4, 9],
+                ["P-2610-K9PW", "Cape Coastal Shuttles", "vehicle", "Cape Town", "Western Cape", "Needs info", "Mercedes-Benz · V-Class · 2019 · 7 seats", 5, 14],
+                ["P-2610-A4LZ", "Marula Lodge", "accommodation", "White River", "Mpumalanga", "Approved", "Lodge · 12 rooms · sleeps 30 · 4 stars", 7, 18],
+                ["P-2610-J6YU", "Sky High Balloons", "activity", "Hazyview", "Mpumalanga", "Pending", "Sunrise balloon flight · up to 16 people", 3, 3],
+                ["P-2610-D7FS", "Quick Rides SA", "vehicle", "Johannesburg", "Gauteng", "Rejected", "Hyundai · i20 · 2011 · 4 seats", 7, 21],
+                ["P-2610-E3WQ", "Umhlanga Beach Suites", "accommodation", "Umhlanga", "KwaZulu-Natal", "Approved", "Self-catering · 6 units · sleeps 20", 5, 27],
+                ["P-2609-G5TT", "Panorama Photo Tours", "other", "Sabie", "Mpumalanga", "Pending", "Tour photography", 2, 4],
+            ].map(([id, b, t, c, p, s, sum, ph, d]) => ({ id, businessName: b, partnerType: t, partnerTypeLabel: K.TYPES[t].label, city: c, province: p, status: s, summary: sum, photoCount: ph, created: ago(d), contactName: "Sample contact", email: "partner@example.com", phone: "082 000 0000", services: K.TYPES[t].services.slice(0, 2).join(", "), reviewedAt: s === "Approved" ? ago(d - 2) : "", reviewedBy: s === "Approved" ? "admin@example.com" : "", reviewNote: s === "Needs info" ? "Please add a clearer photo of the rear seats." : s === "Rejected" ? "The vehicle doesn't meet our premium standard yet." : "", required: K.TYPES[t].required }));
+            const tours = ["Kruger & Panorama Route: 3-Day Classic", "Kruger Full-Day Open-Vehicle Safari", "Greater Kruger Private Lodge: 4-Day Luxury", "Cape Town Highlights: 4 Nights", "Panorama Route & God's Window Day Tour", "Venda Sacred Sites: 3-Day Heritage Route"];
+            const bookings = Array.from({ length: 22 }, (_, i) => {
+                const t = tours[i % tours.length], adults = 1 + (i % 4), total = [6950, 1650, 18900, 12400, 1250, 4650][i % 6] * adults;
+                return { reference: `KCM-2611-${(1000 + i * 37).toString(36).toUpperCase()}`, created: ago(Math.floor(i * 3.7)), tour: t, startDate: ago(-10 - i * 2), nights: [2, 0, 3, 4, 0, 2][i % 6], travellers: adults + (i % 3 === 0 ? 2 : 0), room: "double", extras: i % 4 === 0 ? "Sunset or night game drive" : "", payment: "deposit", total, name: ["Thandi M.", "Sipho N.", "Megan R.", "Lerato K.", "Pieter V."][i % 5], email: "guest@example.com", phone: "082 000 0000", status: BOOKING_STATUSES[i % 6 === 5 ? 5 : i % 5], notes: "" };
+            });
+            const weekly = Array.from({ length: 12 }, (_, i) => ({ week: ago((11 - i) * 7), applications: [0, 1, 0, 2, 1, 3, 2, 4, 3, 5, 4, 6][i], bookings: [1, 2, 2, 3, 2, 4, 5, 4, 6, 7, 6, 9][i] }));
+            const count = (l, k) => l.reduce((a, x) => (a[x[k]] = (a[x[k]] || 0) + 1, a), {});
+            const users = [
+                { email: "owner@example.com", name: "KCM Owner", role: "owner", status: "active", lastLogin: ago(0), provider: "google" },
+                { email: "ops@example.com", name: "Operations", role: "admin", status: "active", lastLogin: ago(1), provider: "email" },
+                { email: "finance@example.com", name: "Finance", role: "viewer", status: "active", lastLogin: "", provider: "invited" },
+                ...apps.slice(0, 6).map(a => ({ email: a.businessName.toLowerCase().replace(/\W+/g, ".") + "@example.com", name: a.businessName, role: "partner", status: "active", lastLogin: a.created, provider: "email" })),
+            ];
+            const recent = [
+                { time: ago(0.1), actor: "partner@example.com", action: "application_submitted", target: "P-2611-7QKD", details: "Lowveld Executive Transfers" },
+                { time: ago(0.4), actor: "ops@example.com", action: "booking_status", target: "KCM-2611-RS", details: "Confirmed" },
+                { time: ago(1), actor: "owner@example.com", action: "application_approve", target: "P-2611-T8NB", details: "" },
+                { time: ago(2), actor: "guest@example.com", action: "booking_request", target: "KCM-2611-SJ", details: "Kruger Full-Day Open-Vehicle Safari" },
+                { time: ago(3), actor: "owner@example.com", action: "user_invited", target: "finance@example.com", details: "viewer / active" },
+            ];
+            const reject = () => Promise.reject(new K.ApiError("This is sample data, so changes aren't saved. Connect the Google Sheet to use the real dashboard."));
+            return {
+                me: () => ({ email: "owner@example.com", name: "Sample owner", role: "owner", isStaff: true, canEdit: true }),
+                dashboard: async () => ({
+                    kpis: { pending: 4, needsInfo: 1, approved: 4, applications: apps.length, bookings: bookings.length, newBookings: bookings.filter(b => b.status === "New").length, bookingValue: bookings.filter(b => b.status !== "Cancelled").reduce((s, b) => s + b.total, 0), users: users.length, staff: 3 },
+                    byStatus: count(apps, "status"), byType: count(apps, "partnerTypeLabel"), byProvince: count(apps, "province"), bookingsByStatus: count(bookings, "status"),
+                    valueByTour: bookings.reduce((a, b) => (a[b.tour] = (a[b.tour] || 0) + b.total, a), {}), weekly, recent, sheetUrl: "",
+                }),
+                listApplications: async () => apps,
+                getApplication: async ({ id }) => { const a = apps.find(x => x.id === id); return { ...a, description: "Sample application used to preview the dashboard.", regNumber: "2024/123456/07", years: "3–5 years", website: "", details: {}, photos: [] }; },
+                listBookings: async () => bookings,
+                listMessages: async () => [{ created: ago(1), name: "Nomsa D.", email: "nomsa@example.com", phone: "071 000 0000", message: "Hi, we're a church group of 45 looking at Kruger in March. Can you quote?" }],
+                listUsers: async () => users,
+                activity: async () => recent,
+                updateBooking: reject, saveUser: reject, reviewApplication: reject, getPhoto: reject,
+            };
+        })();
+
+        K.session.onChange(u => { if (!sample && (!u || !u.isStaff) && me) location.reload(); });
+        boot();
+    });
+})();

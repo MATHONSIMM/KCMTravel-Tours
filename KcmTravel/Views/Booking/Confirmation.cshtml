@@ -8,6 +8,14 @@
     var waText = $"Hi KCM Travel & Tours, I've just sent booking request {Model.Reference} for the {tour.Title} starting {r.StartDate:d MMM yyyy}.";
 }
 @section Head { <meta name="robots" content="noindex" /> }
+@section Scripts {
+    <script type="application/json" id="booking-sync">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new {
+        reference = Model.Reference, tour = tour.Title, startDate = r.StartDate?.ToString("yyyy-MM-dd"), nights = Model.Quote.Nights,
+        adults = r.Adults, children = r.Children, infants = r.Infants, pensioners = r.Pensioners, room = r.Room, extras = r.Extras,
+        payment = r.Payment, total = Model.Quote.Total, name = r.FullName, email = r.Email, phone = r.Phone, notes = r.Notes, source = "website"
+    }))</script>
+    <script src="~/js/booking-sync.js" asp-append-version="true" defer></script>
+}
 
 <div class="booking-wrap">
     <div class="container confirm">

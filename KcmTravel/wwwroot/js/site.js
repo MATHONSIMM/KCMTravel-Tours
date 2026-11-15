@@ -198,12 +198,20 @@
         });
     });
 
+    /* ---------- Server hosting: copy contact messages to the pilot backend too ---------- */
+    if (!doc.dataset.static) {
+        $$("form[action$='/contact']").forEach(f => f.addEventListener("submit", () => {
+            if (!f.elements.Website?.value) window.KCM?.beacon("submitMessage", { message: { name: f.elements.Name.value, email: f.elements.Email.value, phone: f.elements.Phone.value, message: f.elements.Message.value } });
+        }));
+    }
+
     /* ---------- Static hosting: contact form goes to WhatsApp ---------- */
     if (doc.dataset.static) {
         $$("form[action$='/contact']").forEach(f => f.addEventListener("submit", e => {
             e.preventDefault();
             const name = f.elements.Name.value.trim(), msg = f.elements.Message.value.trim();
             if (!name || !msg) { (name ? f.elements.Message : f.elements.Name).focus(); return; }
+            window.KCM?.beacon("submitMessage", { message: { name, email: f.elements.Email.value, phone: f.elements.Phone.value, message: msg } });
             const wa = $("[data-chat]")?.dataset.wa || "";
             const text = `Hi KCM Travel & Tours, this is ${name}${f.elements.Email.value ? " (" + f.elements.Email.value + ")" : ""}.\n\n${msg}`;
             window.open(`https://wa.me/${wa}?text=${encodeURIComponent(text)}`, "_blank", "noopener");

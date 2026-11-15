@@ -76,7 +76,7 @@ public class SeoController : Controller
 
     [HttpGet("/robots.txt")]
     public ContentResult Robots() => Content(
-        $"User-agent: *\nAllow: /\nDisallow: /book/confirmation/\nDisallow: /api/\n\nSitemap: {_site.BaseUrl.TrimEnd('/')}/sitemap.xml\n", "text/plain");
+        $"User-agent: *\nAllow: /\nDisallow: /book/confirmation/\nDisallow: /api/\nDisallow: /admin\nDisallow: /account\n\nSitemap: {_site.BaseUrl.TrimEnd('/')}/sitemap.xml\n", "text/plain");
 
     [HttpGet("/sitemap.xml")]
     [ResponseCache(Duration = 3600)]
@@ -87,7 +87,7 @@ public class SeoController : Controller
         var urls = new List<(string Loc, string Priority)>
         {
             ("/", "1.0"), ("/tours", "0.9"), ("/destinations", "0.9"), ("/book", "0.8"),
-            ("/about", "0.6"), ("/contact", "0.6"), ("/privacy", "0.2"), ("/terms", "0.2"),
+            ("/about", "0.6"), ("/contact", "0.6"), ("/partners", "0.7"), ("/privacy", "0.2"), ("/terms", "0.2"),
         };
         urls.AddRange(Catalog.Destinations.Select(d => ($"/destinations/{d.Slug}", "0.8")));
         urls.AddRange(Catalog.Tours.Select(t => ($"/tours/{t.Slug}", "0.8")));

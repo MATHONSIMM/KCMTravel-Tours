@@ -20,7 +20,7 @@ def rebase(text, kind):
         text = re.sub(r'url\((["\']?)/(?!/)', rf'url(\1{base}/', text)
     if kind == "html":
         text = re.sub(r'(\s(?:href|src|action|srcset|imagesrcset)=")/(?!/)', rf'\1{base}/', text)
-        text = text.replace('<html lang="en-ZA" data-base="">', f'<html lang="en-ZA" data-base="{base}" data-static="1">')
+        text = re.sub(r'(<html\b[^>]*?)\sdata-base=""', rf'\1 data-base="{base}" data-static="1"', text, count=1)
     if kind in ("html", "json"):
         text = text.replace('"/images/', f'"{base}/images/')
     if kind == "manifest":
@@ -41,6 +41,7 @@ sitemap = fetch("/sitemap.xml")
 ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 locs = [l.text for l in ET.fromstring(sitemap).findall("s:url/s:loc", ns)]
 paths = sorted({re.sub(r"^https?://[^/]+", "", l)[len(base):] or "/" for l in locs})
+paths += [p for p in ("/account", "/admin") if p not in paths]  # private pages (not in the sitemap)
 
 for path in paths:
     html = rebase(fetch(path), "html")

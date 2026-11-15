@@ -42,7 +42,8 @@ app.UseStatusCodePagesWithReExecute("/error/{0}");
 app.UseHttpsRedirection();
 app.UseResponseCompression();
 
-// Security headers
+// Security headers (the pilot backend's origin is allowed for fetch calls)
+var apiOrigin = Uri.TryCreate(app.Configuration["Site:ApiUrl"], UriKind.Absolute, out var apiUri) ? " " + apiUri.GetLeftPart(UriPartial.Authority) : "";
 app.Use(async (ctx, next) =>
 {
     var h = ctx.Response.Headers;
@@ -51,9 +52,10 @@ app.Use(async (ctx, next) =>
     h["X-Frame-Options"] = "SAMEORIGIN";
     h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
     h["Content-Security-Policy"] =
-        "default-src 'self'; img-src 'self' data: https://images.unsplash.com; " +
-        "style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; " +
-        "frame-src https://www.google.com https://maps.google.com; connect-src 'self'; " +
+        "default-src 'self'; img-src 'self' data: blob: https://images.unsplash.com https://*.googleusercontent.com; " +
+        "style-src 'self' 'unsafe-inline' https://accounts.google.com; script-src 'self' https://accounts.google.com; font-src 'self'; " +
+        "frame-src https://www.google.com https://maps.google.com https://accounts.google.com; " +
+        "connect-src 'self' https://script.google.com https://script.googleusercontent.com https://accounts.google.com" + apiOrigin + "; " +
         "form-action 'self'; base-uri 'self'; frame-ancestors 'self'";
     await next();
 });

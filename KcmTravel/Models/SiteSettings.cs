@@ -21,6 +21,11 @@ public class SiteSettings
     public bool ShowSampleLabels { get; set; } = true;
     public bool ShowReviews { get; set; }
 
+    /// <summary>Google Apps Script web app URL (the pilot backend). Empty = sign-in and partner sign-up show a "coming soon" notice.</summary>
+    public string ApiUrl { get; set; } = "";
+    /// <summary>Google OAuth Client ID for "Sign in with Google". Optional: the email code sign-in works without it.</summary>
+    public string GoogleClientId { get; set; } = "";
+
     public string WhatsAppLink(string text) =>
         $"https://wa.me/{WhatsApp}?text={Uri.EscapeDataString(text)}";
 }

@@ -1,0 +1,151 @@
+@{ var site = SiteOptions.Value; }
+
+<template id="tpl-signin">
+    <div class="signin" data-signin>
+        <div class="signin-google" data-google-wrap hidden>
+            <div data-google-btn></div>
+            <p class="signin-or"><span>or use your email</span></p>
+        </div>
+        <form class="signin-step" data-step-email novalidate>
+            <div class="field">
+                <label>Email address</label>
+                <input type="email" name="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required />
+            </div>
+            <button class="btn btn--primary btn--block" type="submit">Email me a sign-in code</button>
+            <p class="field-hint">We'll send a 6-digit code to confirm it's really you. No password needed.</p>
+        </form>
+        <form class="signin-step" data-step-code novalidate hidden>
+            <p class="signin-sent">We sent a code to <strong data-sent-to></strong>. Check your inbox (and spam folder).</p>
+            <div class="field">
+                <label>6-digit code</label>
+                <input class="code-input" type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" required />
+            </div>
+            <button class="btn btn--primary btn--block" type="submit">Verify &amp; continue</button>
+            <p class="signin-links"><button type="button" class="link-btn" data-change-email>Use a different email</button> · <button type="button" class="link-btn" data-resend>Resend code</button></p>
+        </form>
+        <p class="form-error" role="alert" data-error hidden></p>
+    </div>
+</template>
+
+<!-- ============ SIGN IN ============ -->
+<dialog class="modal" id="signin-dialog" aria-labelledby="signin-title">
+    <button class="modal-close" type="button" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4-6.3-6.3-6.3 6.3-1.4-1.4L9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3z"/></svg>
+    </button>
+    <div class="modal-inner">
+        <img class="modal-logo" src="/images/brand/kcm-logo.svg" alt="" width="64" height="48" />
+        <h2 class="modal-title" id="signin-title">Sign in</h2>
+        <p class="modal-lead">For KCM partners and the KCM team.</p>
+        <div class="notice notice--soft" data-api-missing hidden>Partner accounts are being set up. In the meantime, contact us on <a href="@site.WhatsAppLink("Hi KCM, I'd like to become a partner.")" target="_blank" rel="noopener">WhatsApp</a>.</div>
+        <div data-signin-mount></div>
+        <p class="modal-foot">New partner? <button type="button" class="link-btn" data-open-register>Register your business</button></p>
+    </div>
+</dialog>
+
+<!-- ============ REGISTER ============ -->
+<dialog class="modal modal--wide" id="register-dialog" aria-labelledby="register-title">
+    <button class="modal-close" type="button" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4-6.3-6.3-6.3 6.3-1.4-1.4L9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3z"/></svg>
+    </button>
+    <div class="modal-inner">
+        <p class="eyebrow">Partner programme</p>
+        <h2 class="modal-title" id="register-title">Become a KCM partner</h2>
+        <ol class="reg-progress" data-reg-progress aria-label="Registration steps">
+            <li>Account</li><li>Partner type</li><li>Business</li><li>Details</li><li>Photos</li><li>Submit</li>
+        </ol>
+        <div class="notice notice--soft" data-api-missing hidden>Online partner registration opens soon. Until then, send us your details on <a href="@site.WhatsAppLink("Hi KCM, I'd like to register as a partner.")" target="_blank" rel="noopener">WhatsApp</a>.</div>
+
+        <form class="reg-form" data-reg-form novalidate>
+            <!-- 0: account -->
+            <section class="reg-step" data-rstep="0">
+                <h3>First, confirm your email</h3>
+                <p class="reg-lead">We work with a small number of carefully chosen partners: vehicle owners, guesthouses, lodges, guides and small agencies who meet a premium standard. Every application, including the photos, is reviewed by our team.</p>
+                <div data-reg-signin></div>
+                <div class="reg-signed" data-reg-signed hidden>
+                    <p>Signed in as <strong data-reg-email></strong>.</p>
+                    <button class="btn btn--primary" type="button" data-reg-next>Continue</button>
+                </div>
+            </section>
+
+            <!-- 1: type -->
+            <section class="reg-step" data-rstep="1" hidden>
+                <h3>What would you like to offer?</h3>
+                <div class="type-grid" data-type-grid role="radiogroup" aria-label="Partner type"></div>
+            </section>
+
+            <!-- 2: business -->
+            <section class="reg-step" data-rstep="2" hidden>
+                <h3>About your business</h3>
+                <div class="field-row">
+                    <div class="field"><label for="r-contact">Your full name *</label><input id="r-contact" name="contactName" autocomplete="name" required /></div>
+                    <div class="field"><label for="r-phone">Cell / WhatsApp *</label><input id="r-phone" name="phone" type="tel" autocomplete="tel" required placeholder="e.g. 082 123 4567" /></div>
+                </div>
+                <div class="field-row">
+                    <div class="field"><label for="r-business">Business or trading name *</label><input id="r-business" name="businessName" required /></div>
+                    <div class="field"><label for="r-reg">Company / CIPC reg. number</label><input id="r-reg" name="regNumber" placeholder="Optional" /></div>
+                </div>
+                <div class="field-row">
+                    <div class="field"><label for="r-province">Province *</label>
+                        <select id="r-province" name="province" required>
+                            <option value="">Choose…</option>
+                            <option>Mpumalanga</option><option>Limpopo</option><option>Gauteng</option><option>KwaZulu-Natal</option><option>Western Cape</option>
+                            <option>Eastern Cape</option><option>North West</option><option>Free State</option><option>Northern Cape</option>
+                        </select>
+                    </div>
+                    <div class="field"><label for="r-city">Town / city *</label><input id="r-city" name="city" required placeholder="e.g. Mbombela" /></div>
+                </div>
+                <div class="field-row">
+                    <div class="field"><label for="r-years">Years in business</label>
+                        <select id="r-years" name="years"><option value="">Choose…</option><option>Just starting</option><option>1–2 years</option><option>3–5 years</option><option>6–10 years</option><option>10+ years</option></select>
+                    </div>
+                    <div class="field"><label for="r-web">Website or social page</label><input id="r-web" name="website" placeholder="Optional" /></div>
+                </div>
+                <fieldset class="field" data-services-wrap>
+                    <legend class="field-legend">Services you can offer *</legend>
+                    <div class="check-grid" data-services></div>
+                </fieldset>
+                <div class="field"><label for="r-desc">Tell us about your business *</label><textarea id="r-desc" name="description" required maxlength="2000" placeholder="What makes your service premium? Where do you operate? Who are your typical guests?"></textarea></div>
+            </section>
+
+            <!-- 3: details -->
+            <section class="reg-step" data-rstep="3" hidden>
+                <h3 data-details-title>Details</h3>
+                <div class="details-grid" data-details></div>
+            </section>
+
+            <!-- 4: photos -->
+            <section class="reg-step" data-rstep="4" hidden>
+                <h3>Photos</h3>
+                <p class="reg-lead" data-photo-lead>Clear, recent photos in good light. Photos are private and only seen by the KCM review team.</p>
+                <div class="photo-grid" data-photo-grid></div>
+                <p class="field-hint">JPG, PNG or WebP. Large photos are resized on your device before upload to save data.</p>
+            </section>
+
+            <!-- 5: review -->
+            <section class="reg-step" data-rstep="5" hidden>
+                <h3>Check and submit</h3>
+                <dl class="facts" data-reg-review></dl>
+                <label class="check field"><input type="checkbox" name="accurate" /><span>The information and photos are accurate, current and belong to my business.</span></label>
+                <label class="check field"><input type="checkbox" name="consent" /><span>I agree that KCM Travel &amp; Tours may store and review my details and photos to assess my application, as described in the <a href="/privacy" target="_blank">privacy notice</a> (POPIA).</span></label>
+                <div class="upload-progress" data-upload-progress hidden>
+                    <div class="upload-bar"><span data-upload-bar></span></div>
+                    <p data-upload-text>Uploading…</p>
+                </div>
+            </section>
+
+            <!-- done -->
+            <section class="reg-step reg-done" data-rstep="6" hidden>
+                <div class="confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="white" stroke-width="3"/></svg></div>
+                <h3>Application received</h3>
+                <p>Your reference is <strong data-reg-ref></strong>. We've emailed you a copy. Our team reviews every application and usually replies within 3 working days.</p>
+                <a class="btn btn--primary" href="/account">Go to my account</a>
+            </section>
+
+            <p class="form-error" role="alert" data-reg-error hidden></p>
+            <div class="reg-nav" data-reg-nav hidden>
+                <button class="btn btn--ghost" type="button" data-reg-back>Back</button>
+                <button class="btn btn--primary" type="button" data-reg-next>Next</button>
+            </div>
+        </form>
+    </div>
+</dialog>

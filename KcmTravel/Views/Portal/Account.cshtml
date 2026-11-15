@@ -1,0 +1,21 @@
+@{
+    ViewData["Title"] = "My Account";
+    ViewData["Description"] = "Your KCM Travel & Tours partner account: application status and photos.";
+}
+@section Head { <meta name="robots" content="noindex" /> }
+
+<div class="booking-wrap account-wrap">
+    <div class="container">
+        <div class="booking-head">
+            <p class="eyebrow">My account</p>
+            <h1>Your <em>partner account.</em></h1>
+        </div>
+        <div data-account-root aria-live="polite">
+            <div class="step-card"><p>Loading…</p></div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/account.js" asp-append-version="true" defer></script>
+}

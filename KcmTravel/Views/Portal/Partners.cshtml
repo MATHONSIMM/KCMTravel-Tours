@@ -1,0 +1,86 @@
+@{
+    var site = SiteOptions.Value;
+    ViewData["Title"] = "Partner with KCM: Vehicles, Lodges & Guides";
+    ViewData["Description"] = "List your vehicle, guesthouse, lodge, tours or guiding services with KCM Travel & Tours in Mbombela. Apply online; every partner is reviewed for a premium standard.";
+    ViewData["HeroHeader"] = true;
+    ViewData["OgImage"] = Catalog.P.Zebras.Sized(1200);
+    var types = new[]
+    {
+        ("Vehicle owners", "Well-kept cars, SUVs, minibuses and coaches for airport transfers, tours and hire. We ask for photos from every angle, inside and out.", "M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11m-14 0h14a2 2 0 0 1 2 2v4h-2m-14 0H3v-4a2 2 0 0 1 2-2m0 6v2m14-2v2"),
+        ("Hotels, lodges & B&Bs", "Guesthouses, lodges, B&Bs and self-catering stays near Kruger, the Panorama Route and beyond.", "M3 18V7m0 8h18m0 3v-6a3 3 0 0 0-3-3h-7v6M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"),
+        ("Tour operators & agencies", "Small agencies and operators who want more bookings for their tours, safaris and trips.", "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zm0 0v14m6-12v14"),
+        ("Registered guides", "FGASA field guides and culture or site guides who bring places to life.", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-7 8a7 7 0 0 1 14 0"),
+        ("Activity providers", "Balloon flights, adventure, water and cultural experiences, run safely.", "M12 3v4m0 10v4M3 12h4m10 0h4M6 6l2.5 2.5m7 7L18 18M6 18l2.5-2.5m7-7L18 6"),
+        ("Other services", "Catering, photography, events and other services travellers need.", "M12 5v14M5 12h14"),
+    };
+}
+
+@section JsonLd {
+    @JsonLd.Script(JsonLd.Node("FAQPage", ("mainEntity", new object[] {
+        JsonLd.Obj("Question", ("name", "Who can partner with KCM Travel & Tours?"), ("acceptedAnswer", JsonLd.Obj("Answer", ("text", "Vehicle owners, accommodation providers, tour operators and small agencies, registered guides and activity providers who meet our premium standard.")))),
+        JsonLd.Obj("Question", ("name", "How long does approval take?"), ("acceptedAnswer", JsonLd.Obj("Answer", ("text", "We usually review applications within 3 working days and email you the outcome.")))),
+        JsonLd.Obj("Question", ("name", "Does it cost anything to apply?"), ("acceptedAnswer", JsonLd.Obj("Answer", ("text", "No. Applying is free.")))),
+    })))
+}
+
+<partial name="_PageHero" model="@(("Partner programme", "Grow with <em>KCM Travel &amp; Tours.</em>", "Have a premium vehicle, a beautiful guesthouse or a great tour? Partner with us and reach more travellers across South Africa.", Catalog.P.Zebras))" />
+
+<section class="section">
+    <div class="container">
+        <div class="split-head">
+            <div>
+                <p class="section-label reveal"><span>01</span> Who can partner</p>
+                <h2 class="section-title reveal">We work with people who care <em>about the details.</em></h2>
+            </div>
+            <div class="btn-row reveal">
+                <button class="btn btn--primary btn--lg" type="button" data-open-register>Register your business</button>
+                <button class="btn btn--ghost" type="button" data-open-signin>I already applied</button>
+            </div>
+        </div>
+        <div class="value-grid partner-types">
+            @foreach (var (title, text, icon) in types)
+            {
+                <div class="value reveal">
+                    <svg class="value-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="@icon" /></svg>
+                    <h3>@title</h3>
+                    <p>@text</p>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+<section class="section section--sand">
+    <div class="container">
+        <p class="section-label reveal"><span>02</span> How it works</p>
+        <h2 class="section-title reveal">From application to first booking <em>in four steps.</em></h2>
+        <ol class="steps">
+            <li class="reveal"><span class="step-num">1</span><h3>Confirm your email</h3><p>Sign in with Google or a 6-digit code sent to your email. No passwords to remember.</p></li>
+            <li class="reveal"><span class="step-num">2</span><h3>Tell us about your service</h3><p>Answer a few questions about your business, then upload clear photos. Vehicles need every angle, inside and out.</p></li>
+            <li class="reveal"><span class="step-num">3</span><h3>We review it</h3><p>Our team checks every application against our premium standard, usually within 3 working days.</p></li>
+            <li class="reveal"><span class="step-num">4</span><h3>Start working together</h3><p>Once you're approved we email you, confirm your banking details and start sending you guests.</p></li>
+        </ol>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container two-col">
+        <div>
+            <p class="section-label reveal"><span>03</span> Our standard</p>
+            <h2 class="section-title reveal">Premium means <em>no surprises</em> for our guests.</h2>
+        </div>
+        <div>
+            <ul class="tick-list reveal">
+                <li>Vehicles are clean, roadworthy, insured and free of visible damage</li>
+                <li>Rooms are spotless, with reliable water, power and Wi-Fi</li>
+                <li>Guides are registered, and activities have the right safety cover</li>
+                <li>Photos are real, recent and show exactly what guests will get</li>
+                <li>You reply quickly and treat every guest like a VIP</li>
+            </ul>
+            <div class="btn-row reveal">
+                <button class="btn btn--primary" type="button" data-open-register>Apply now, it's free</button>
+                <a class="arrow-link" href="@site.WhatsAppLink("Hi KCM, I have a question about becoming a partner.")" target="_blank" rel="noopener">Ask us on WhatsApp <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5l7 7-7 7M20 12H4" fill="none" stroke="currentColor" stroke-width="2"/></svg></a>
+            </div>
+        </div>
+    </div>
+</section>

@@ -115,6 +115,11 @@
             `Cell: ${f.Phone.value}`,
             f.Notes.value ? `Notes: ${f.Notes.value}` : "",
         ].filter(Boolean).join("\n");
+        window.KCM?.beacon("submitBooking", { booking: {
+            reference: ref, tour: q.t.title, startDate: f.StartDate.value, nights: q.nights, adults: num("Adults"), children: num("Children"),
+            infants: num("Infants"), pensioners: num("Pensioners"), room: f.Room.value, extras, payment: f.Payment.value, total: q.total,
+            name: f.FullName.value, email: f.Email.value, phone: f.Phone.value, notes: f.Notes.value, source: "website",
+        } });
         const wa = document.querySelector("[data-chat]")?.dataset.wa || "";
         const link = `https://wa.me/${wa}?text=${encodeURIComponent(msg)}`;
         const card = steps[4];
