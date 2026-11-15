@@ -76,7 +76,7 @@ public class SeoController : Controller
 
     [HttpGet("/robots.txt")]
     public ContentResult Robots() => Content(
-        $"User-agent: *\nAllow: /\nDisallow: /book/confirmation/\nDisallow: /api/\nDisallow: /admin\nDisallow: /account\n\nSitemap: {_site.BaseUrl.TrimEnd('/')}/sitemap.xml\n", "text/plain");
+        $"User-agent: *\nAllow: /\nDisallow: /book/confirmation/\nDisallow: /api/\nDisallow: /admin\nDisallow: /account\nDisallow: /rate\n\nSitemap: {_site.BaseUrl.TrimEnd('/')}/sitemap.xml\n", "text/plain");
 
     [HttpGet("/sitemap.xml")]
     [ResponseCache(Duration = 3600)]

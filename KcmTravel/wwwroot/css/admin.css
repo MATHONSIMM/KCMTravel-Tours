@@ -29,7 +29,10 @@
 .card-head p { margin: 0; font-size: 13px; color: var(--ink-soft); }
 
 /* KPIs */
-.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
+.kpis--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.is-hidden-rating { opacity: .5; }
+.adm .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .kpi { display: flex; flex-direction: column; gap: 4px; background: #fff; border-radius: 18px; padding: 20px; text-decoration: none; box-shadow: 0 10px 30px -22px rgba(14,21,18,.35); transition: transform .3s var(--ease); }
 .kpi:hover { transform: translateY(-3px); }
 .kpi-label { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
@@ -139,14 +142,29 @@
     .adm-span-3 { grid-column: 1 / -1; }
 }
 @media (max-width: 900px) {
-    .adm { grid-template-columns: 1fr; }
+    .adm { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
     .adm-side { position: sticky; top: var(--header-h); height: auto; padding: 10px; z-index: 50; }
     .adm-nav { flex-direction: row; overflow-x: auto; scrollbar-width: none; }
     .adm-nav a { white-space: nowrap; padding: 9px 12px; font-size: 14px; }
     .adm-side-foot { display: none; }
     .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .adm-grid { grid-template-columns: 1fr; }
+    .adm-grid { grid-template-columns: minmax(0, 1fr); }
     .adm-span-2, .adm-span-3 { grid-column: auto; }
+    .adm-card { padding: 18px; }
+    .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+    .chips .chip { flex-shrink: 0; }
+    .toolbar > * { max-width: 100%; }
+    .adm .field-row { grid-template-columns: 1fr 1fr; }
     .search { min-width: 0; width: 100%; }
     .kv { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 700px) {
+    .adm .table thead { display: none; }
+    .adm .table, .adm .table tbody { display: block; }
+    .adm .table tr { display: block; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .adm .table td { display: block; border: 0; padding: 2px 0; text-align: left; white-space: normal; }
+    .adm .table td:first-child { font-size: 15px; }
+    .adm .table td .status-select { margin-top: 6px; }
+    .adm .table-wrap { margin: 0; overflow: visible; }
 }

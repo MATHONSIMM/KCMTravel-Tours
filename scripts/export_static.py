@@ -41,7 +41,7 @@ sitemap = fetch("/sitemap.xml")
 ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
 locs = [l.text for l in ET.fromstring(sitemap).findall("s:url/s:loc", ns)]
 paths = sorted({re.sub(r"^https?://[^/]+", "", l)[len(base):] or "/" for l in locs})
-paths += [p for p in ("/account", "/admin") if p not in paths]  # private pages (not in the sitemap)
+paths += [p for p in ("/account", "/admin", "/rate") if p not in paths]  # private pages (not in the sitemap)
 
 for path in paths:
     html = rebase(fetch(path), "html")

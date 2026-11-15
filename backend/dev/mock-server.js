@@ -92,7 +92,7 @@ const context = {
         base64Decode: s => toSigned(Buffer.from(s, "base64")),
         base64Encode: bytes => Buffer.from(bytes.map(b => b & 255)).toString("base64"),
         newBlob: (bytes, type, name) => ({ getBytes: () => bytes, getContentType: () => type, getName: () => name }),
-        formatDate: (d, tz, fmt) => { const y = String(d.getFullYear()).slice(2), m = String(d.getMonth() + 1).padStart(2, "0"); return fmt.replace("yy", y).replace("MM", m); },
+        formatDate: (d, tz, fmt) => { const Y = String(d.getFullYear()), m = String(d.getMonth() + 1).padStart(2, "0"); return fmt.replace("yyyy", Y).replace("yy", Y.slice(2)).replace("MM", m); },
     },
     UrlFetchApp: {
         fetch: url => {

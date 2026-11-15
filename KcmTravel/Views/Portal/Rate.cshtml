@@ -1,0 +1,17 @@
+@{
+    ViewData["Title"] = "Rate Your Trip";
+    ViewData["Description"] = "Tell us how your KCM Travel & Tours trip went.";
+}
+@section Head { <meta name="robots" content="noindex" /> }
+
+<div class="booking-wrap">
+    <div class="container" style="max-width: 640px">
+        <div class="step-card rate-card" data-rate-root aria-live="polite">
+            <p>Loading…</p>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/rate.js" asp-append-version="true" defer></script>
+}

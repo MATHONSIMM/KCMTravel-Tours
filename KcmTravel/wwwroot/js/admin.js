@@ -14,10 +14,13 @@
         const fmtDate = s => s ? new Date(s).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "";
         const fmtWhen = s => s ? new Date(s).toLocaleString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
         const C = { s1: "#a8481f", s2: "#0a7ea4", s3: "#237a2a", s4: "#c98a1b" };
-        const STATUS_TONE = { Pending: "warn", "Needs info": "info", Approved: "good", Rejected: "bad", Uploading: "muted" };
-        const STATUS_COLOR = { Pending: "#c98a1b", "Needs info": "#0a7ea4", Approved: "#237a2a", Rejected: "#b42318", Uploading: "#9aa39e" };
+        const STATUS_TONE = { Pending: "info", "In review": "warn", "Needs info": "info", Approved: "good", Rejected: "bad", Uploading: "muted" };
+        const STATUS_LABEL = { Pending: "Submitted", Uploading: "Draft" };
+        const TIERS = ["Premium", "Premium Plus", "Signature"];
+        const PAYOUT_STATUSES = ["Pending", "Approved", "Paid", "On hold"];
+        const STATUS_COLOR = { Pending: "#6b736e", "In review": "#c98a1b", "Needs info": "#0a7ea4", Approved: "#237a2a", Rejected: "#b42318", Uploading: "#9aa39e" };
         const BOOKING_STATUSES = ["New", "Contacted", "Confirmed", "Paid", "Completed", "Cancelled"];
-        const TITLES = { overview: "Overview", applications: "Partner applications", partners: "Approved partners", bookings: "Booking requests", messages: "Messages", users: "Users & access", activity: "Activity log" };
+        const TITLES = { overview: "Overview", applications: "Partner applications", partners: "Approved partners", bookings: "Booking requests", payouts: "Trips & payouts", ratings: "Guest ratings", messages: "Messages", users: "Users & access", activity: "Activity log" };
 
         let me = null, sample = false;
         const cache = {};
@@ -39,6 +42,7 @@
         }
 
         function gate(kind) {
+            if (new URLSearchParams(location.search).has("preview")) { sample = true; me = SAMPLE.me(); $("[data-sample-pill]").hidden = false; return route(); }
             root.classList.add("adm--gate");
             $("[data-adm-title]").textContent = kind === "noaccess" ? "No admin access" : "Admin dashboard";
             const preview = `<button class="btn btn--ghost" type="button" data-sample>Preview with sample data</button>`;
@@ -70,7 +74,7 @@
         }
 
         async function cached(action) { return cache[action] ||= await get(action); }
-        function badge(status) { return `<span class="status status--${STATUS_TONE[status] || "muted"}">${esc(status === "Uploading" ? "Not submitted" : status)}</span>`; }
+        function badge(status) { return `<span class="status status--${STATUS_TONE[status] || "muted"}">${esc(STATUS_LABEL[status] || status)}</span>`; }
         function empty(title, text) { return `<div class="adm-empty"><h3>${title}</h3><p>${text}</p></div>`; }
 
         /* =================== VIEWS =================== */
@@ -83,11 +87,12 @@
                 const k = d.kpis;
                 body.innerHTML = `
                     <div class="kpis">
-                        ${kpi("Waiting for review", k.pending, k.needsInfo ? `${k.needsInfo} waiting on partner` : "applications", "#applications")}
+                        ${kpi("Waiting for review", k.pending, `${k.inReview || 0} in review${k.needsInfo ? ` · ${k.needsInfo} waiting on partner` : ""}`, "#applications")}
                         ${kpi("Approved partners", k.approved, `of ${k.applications} applications`, "#partners")}
                         ${kpi("Booking requests", k.bookings, `${k.newBookings} new`, "#bookings")}
                         ${kpi("Estimated booking value", R(k.bookingValue), "excl. cancelled", "#bookings")}
-                        ${kpi("Team & partners", k.users, `${k.staff} with admin access`, "#users")}
+                        ${kpi("Payouts to partners", R(k.payoutsPending || 0), `pending · ${k.trips || 0} trips logged`, "#payouts")}
+                        ${kpi("Guest rating", k.ratings ? (k.avgRating || 0).toFixed(1) + " ★" : "—", `${k.ratings || 0} ratings · ${k.users} users`, "#ratings")}
                     </div>
                     <div class="adm-grid">
                         <div class="adm-card adm-span-2"><div class="card-head"><h2>Activity per week</h2><p>Partner applications and booking requests, last 12 weeks</p></div><div class="chart" data-chart="weekly"></div></div>
@@ -102,7 +107,7 @@
                     { name: "Applications", color: C.s1, values: d.weekly.map(w => w.applications) },
                     { name: "Bookings", color: C.s2, values: d.weekly.map(w => w.bookings) },
                 ]);
-                segBar($("[data-chart=status]"), ["Pending", "Needs info", "Approved", "Rejected"].map(s => ({ label: s, value: d.byStatus[s] || 0, color: STATUS_COLOR[s] })));
+                segBar($("[data-chart=status]"), ["Pending", "In review", "Needs info", "Approved", "Rejected"].map(s => ({ label: STATUS_LABEL[s] || s, value: d.byStatus[s] || 0, color: STATUS_COLOR[s] })));
                 hBars($("[data-chart=type]"), toItems(d.byType));
                 hBars($("[data-chart=province]"), toItems(d.byProvince));
                 hBars($("[data-chart=tour]"), toItems(d.valueByTour).slice(0, 6), { format: R });
@@ -112,13 +117,13 @@
             async applications() {
                 const list = await get("listApplications");
                 const counts = list.reduce((a, x) => (a[x.status] = (a[x.status] || 0) + 1, a), {});
-                const tabs = ["Pending", "Needs info", "Approved", "Rejected", "All"];
+                const tabs = ["Pending", "In review", "Needs info", "Approved", "Rejected", "All"];
                 let tab = sessionStorage.getItem("adm-app-tab") || "Pending";
                 let q = "";
                 body.innerHTML = `
                     <div class="adm-card">
                         <div class="toolbar">
-                            <div class="chips" role="tablist">${tabs.map(t => `<button type="button" class="chip" data-tab="${t}">${t}${t !== "All" ? ` <b>${counts[t] || 0}</b>` : ""}</button>`).join("")}</div>
+                            <div class="chips" role="tablist">${tabs.map(t => `<button type="button" class="chip" data-tab="${t}">${STATUS_LABEL[t] || t}${t !== "All" ? ` <b>${counts[t] || 0}</b>` : ""}</button>`).join("")}</div>
                             <input class="search" type="search" placeholder="Search business, email, town…" aria-label="Search applications" data-q>
                         </div>
                         <div data-list></div>
@@ -131,7 +136,7 @@
                         <tbody>${rows.map(a => `<tr data-open="${esc(a.id)}" tabindex="0"><td><strong>${esc(a.businessName)}</strong><span>${esc(a.contactName)} · ${esc(a.email)}</span></td>
                         <td>${esc(a.partnerTypeLabel)}<span>${esc(a.summary)}</span></td><td>${esc(a.city)}<span>${esc(a.province)}</span></td>
                         <td>${fmtDate(a.created)}</td><td>${a.photoCount}</td><td>${badge(a.status)}</td></tr>`).join("")}</tbody></table></div>`
-                        : empty("Nothing here", tab === "Pending" ? "No applications are waiting for review. Nice work." : "No applications match.");
+                        : empty("Nothing here", tab === "Pending" ? "No new applications. Nice work." : "No applications match.");
                 };
                 body.addEventListener("click", e => { const t = e.target.closest("[data-tab]"); if (t) { tab = t.dataset.tab; sessionStorage.setItem("adm-app-tab", tab); draw(); } });
                 $("[data-q]", body).addEventListener("input", e => { q = e.target.value.trim().toLowerCase(); draw(); });
@@ -144,7 +149,7 @@
                 body.innerHTML = `<div class="adm-card">
                     <div class="toolbar"><div class="chips">${["All", ...types].map((t, i) => `<button type="button" class="chip ${i ? "" : "is-active"}" data-ptype="${esc(t)}">${esc(t)}</button>`).join("")}</div><p class="muted">${list.length} approved partner${list.length === 1 ? "" : "s"}</p></div>
                     ${list.length ? `<div class="partner-grid">${list.map(a => `<button type="button" class="partner-card" data-open="${esc(a.id)}" data-ptype-of="${esc(a.partnerTypeLabel)}">
-                        <span class="partner-type">${esc(a.partnerTypeLabel)}</span><strong>${esc(a.businessName)}</strong><span>${esc(a.summary || a.services)}</span>
+                        <span class="partner-type">${esc(a.partnerTypeLabel)}${a.tier ? ` · <span class="tier">${esc(a.tier)}</span>` : ""}</span><strong>${esc(a.businessName)}</strong><span>${esc(a.summary || a.services)}</span>
                         <span class="muted">${esc(a.city)}, ${esc(a.province)} · approved ${fmtDate(a.reviewedAt)}</span></button>`).join("")}</div>`
                         : empty("No approved partners yet", "Approve applications to build your partner network.")}</div>`;
                 body.addEventListener("click", e => {
@@ -187,6 +192,112 @@
                 });
                 $("[data-q]", body).addEventListener("input", e => { q = e.target.value.trim().toLowerCase(); draw(); });
                 draw();
+            },
+
+            async payouts() {
+                const [jobs, apps] = await Promise.all([get("listJobs"), get("listApplications")]);
+                const approved = apps.filter(a => a.status === "Approved");
+                let filter = "All";
+                const totals = (list, k) => list.reduce((s, j) => s + j[k], 0);
+                const byPartner = {};
+                jobs.forEach(j => { const p = byPartner[j.partnerId] ||= { name: j.business, trips: 0, gross: 0, payout: 0, pending: 0 }; p.trips++; p.gross += j.gross; p.payout += j.payout; if (j.payoutStatus !== "Paid") p.pending += j.payout; });
+                body.innerHTML = `
+                    <div class="kpis kpis--4">
+                        ${kpi("Trips logged", jobs.length, `${totals(jobs, "guests")} guests`, "#payouts")}
+                        ${kpi("Trip value", R(totals(jobs, "gross")), "all partners", "#payouts")}
+                        ${kpi("KCM commission", R(totals(jobs, "gross") - totals(jobs, "payout")), "earned on trips", "#payouts")}
+                        ${kpi("Owed to partners", R(totals(jobs.filter(j => j.payoutStatus !== "Paid"), "payout")), "not yet paid", "#payouts")}
+                    </div>
+                    <div class="adm-grid">
+                        <div class="adm-card adm-span-2">
+                            <div class="toolbar"><div class="chips">${["All", ...PAYOUT_STATUSES].map((s, i) => `<button type="button" class="chip ${i ? "" : "is-active"}" data-pstatus="${s}">${s}</button>`).join("")}</div>
+                                <button class="btn btn--ghost btn--sm" type="button" data-csv>Download CSV</button></div>
+                            <div data-list></div>
+                        </div>
+                        <div class="adm-card">
+                            <div class="card-head"><h2>Log a trip</h2><p>Payout = trip value − commission</p></div>
+                            ${me.canEdit ? (approved.length ? `<form class="invite" data-job novalidate>
+                                <div class="field"><label for="jb-p">Partner *</label><select id="jb-p" name="partnerId" required>${approved.map(a => `<option value="${esc(a.id)}">${esc(a.businessName)}</option>`).join("")}</select></div>
+                                <div class="field"><label for="jb-s">Service *</label><input id="jb-s" name="service" required placeholder="e.g. KMIA airport transfer"></div>
+                                <div class="field-row"><div class="field"><label for="jb-d">Date *</label><input id="jb-d" name="date" type="date" required value="${new Date().toISOString().slice(0, 10)}"></div>
+                                <div class="field"><label for="jb-b">Booking ref</label><input id="jb-b" name="bookingRef" placeholder="KCM-…"></div></div>
+                                <div class="field-row"><div class="field"><label for="jb-g">Guests</label><input id="jb-g" name="guests" type="number" min="0" value="2"></div>
+                                <div class="field"><label for="jb-v">Trip value (R) *</label><input id="jb-v" name="gross" type="number" min="1" required></div></div>
+                                <div class="field"><label for="jb-c">KCM commission (%)</label><input id="jb-c" name="commissionPct" type="number" min="0" max="100" value="15"></div>
+                                <p class="muted" data-payout-preview></p>
+                                <button class="btn btn--primary btn--block" type="submit">Save trip</button>
+                            </form>` : `<p class="muted">Approve a partner first.</p>`) : `<p class="muted">Viewers can't log trips.</p>`}
+                        </div>
+                        <div class="adm-card adm-span-3">
+                            <div class="card-head"><h2>By partner</h2><p>What each partner has earned</p></div>
+                            ${Object.keys(byPartner).length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Partner</th><th class="num">Trips</th><th class="num">Trip value</th><th class="num">Payout</th><th class="num">Owed</th></tr></thead><tbody>
+                                ${Object.values(byPartner).sort((a, b) => b.gross - a.gross).map(p => `<tr><td><strong>${esc(p.name)}</strong></td><td class="num">${p.trips}</td><td class="num">${R(p.gross)}</td><td class="num">${R(p.payout)}</td><td class="num">${R(p.pending)}</td></tr>`).join("")}</tbody></table></div>` : empty("No trips yet", "Log trips as partners complete them.")}
+                        </div>
+                    </div>`;
+                const draw = () => {
+                    $$("[data-pstatus]", body).forEach(b => b.classList.toggle("is-active", b.dataset.pstatus === filter));
+                    const rows = jobs.filter(j => filter === "All" || j.payoutStatus === filter);
+                    $("[data-list]", body).innerHTML = rows.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Trip</th><th>Partner</th><th class="num">Value</th><th class="num">Payout</th><th>Status</th><th></th></tr></thead><tbody>
+                        ${rows.map(j => `<tr><td><strong>${esc(j.service)}</strong><span>${fmtDate(j.date)} · ${esc(j.id)}${j.bookingRef ? " · " + esc(j.bookingRef) : ""} · ${j.guests} guests</span></td><td>${esc(j.business)}</td>
+                        <td class="num">${R(j.gross)}<span>${j.commissionPct}%</span></td><td class="num"><strong>${R(j.payout)}</strong></td>
+                        <td>${me.canEdit ? `<select class="status-select" data-payout="${esc(j.id)}" aria-label="Payout status">${PAYOUT_STATUSES.map(s => `<option ${s === j.payoutStatus ? "selected" : ""}>${s}</option>`).join("")}</select>` : esc(j.payoutStatus)}${j.paidOn ? `<span>paid ${fmtDate(j.paidOn)}</span>` : ""}</td>
+                        <td>${j.bookingRef ? `<button type="button" class="btn btn--ghost btn--sm" data-ratelink="${esc(j.partnerId)}|${esc(j.bookingRef)}">Rating link</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
+                        : empty("No trips", filter === "All" ? "Log the first trip on the right." : "Nothing with this status.");
+                };
+                const f = $("[data-job]", body);
+                const prev = () => { if (!f) return; const g = +f.gross.value || 0, c = +f.commissionPct.value || 0; $("[data-payout-preview]", body).textContent = g ? `Partner receives ${R(Math.round(g * (1 - c / 100)))} · KCM keeps ${R(Math.round(g * c / 100))}` : ""; };
+                f?.addEventListener("input", prev);
+                f?.addEventListener("submit", async e => {
+                    e.preventDefault();
+                    if (!f.service.value.trim() || !(+f.gross.value > 0)) { toast("Please add the service and trip value.", true); return; }
+                    const btn = f.querySelector("button"); btn.disabled = true;
+                    try { const r = await get("saveJob", { job: { partnerId: f.partnerId.value, service: f.service.value.trim(), date: f.date.value, bookingRef: f.bookingRef.value.trim(), guests: +f.guests.value || 0, gross: +f.gross.value, commissionPct: +f.commissionPct.value } }); toast(`Trip saved · partner payout ${R(r.payout)}`); route(); }
+                    catch (err) { toast(err.message, true); btn.disabled = false; }
+                });
+                body.addEventListener("click", async e => {
+                    const c = e.target.closest("[data-pstatus]"); if (c) { filter = c.dataset.pstatus; draw(); }
+                    if (e.target.closest("[data-csv]")) downloadCsv("kcm-trips-payouts.csv", jobs, ["date", "id", "business", "partnerId", "bookingRef", "service", "guests", "gross", "commissionPct", "payout", "payoutStatus", "paidOn"]);
+                    const rl = e.target.closest("[data-ratelink]");
+                    if (rl) {
+                        const [p, ref] = rl.dataset.ratelink.split("|");
+                        const link = `${location.origin}${K.base}/rate?ref=${encodeURIComponent(ref)}&p=${encodeURIComponent(p)}`;
+                        try { await navigator.clipboard.writeText(link); toast("Rating link copied. Send it to the guest on WhatsApp."); } catch { prompt("Copy this rating link for the guest:", link); }
+                    }
+                });
+                body.addEventListener("change", async e => {
+                    const sel = e.target.closest("[data-payout]"); if (!sel) return;
+                    sel.disabled = true;
+                    try { await get("setPayoutStatus", { id: sel.dataset.payout, status: sel.value }); const j = jobs.find(x => x.id === sel.dataset.payout); if (j) j.payoutStatus = sel.value; toast(sel.value === "Paid" ? "Marked paid. Partner emailed." : "Payout updated"); }
+                    catch (err) { toast(err.message, true); }
+                    sel.disabled = false;
+                });
+                prev(); draw();
+            },
+
+            async ratings() {
+                const list = await get("listRatings");
+                const pub = list.filter(r => r.status !== "Hidden");
+                const avg = pub.length ? pub.reduce((s, r) => s + r.stars, 0) / pub.length : 0;
+                const per = {};
+                pub.forEach(r => { const p = per[r.partnerId] ||= { name: r.business, n: 0, sum: 0 }; p.n++; p.sum += r.stars; });
+                const starRow = n => `<span class="stars-row">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= Math.round(n) ? "on" : ""}">★</i>`).join("")}</span>`;
+                body.innerHTML = `
+                    <div class="adm-grid">
+                        <div class="adm-card"><div class="card-head"><h2>Average guest rating</h2><p>${pub.length} published</p></div><p class="rating-big">${pub.length ? avg.toFixed(1) : "—"}</p>${starRow(avg)}
+                            <p class="muted" style="margin-top:14px">Guests rate partners through a link you send after each trip (Trips &amp; payouts → Rating link).</p></div>
+                        <div class="adm-card adm-span-2"><div class="card-head"><h2>By partner</h2></div>
+                            ${Object.keys(per).length ? `<ul class="hbars is-in">${Object.values(per).sort((a, b) => b.sum / b.n - a.sum / a.n).map(p => `<li data-tipv="${esc(p.name)}: ${(p.sum / p.n).toFixed(1)} from ${p.n}"><span class="hbar-label">${esc(p.name)}</span><span class="hbar-track"><span class="hbar-fill" style="width:${p.sum / p.n / 5 * 100}%;background:#c98a1b"></span></span><span class="hbar-val">${(p.sum / p.n).toFixed(1)} ★</span></li>`).join("")}</ul>` : `<p class="chart-empty">No ratings yet</p>`}</div>
+                        <div class="adm-card adm-span-3"><div class="card-head"><h2>All ratings</h2><p>Hide anything abusive or unfair: hidden ratings aren't shown to partners or counted.</p></div>
+                            ${list.length ? `<ul class="msg-list">${list.map(r => `<li class="${r.status === "Hidden" ? "is-hidden-rating" : ""}"><div>${starRow(r.stars)} <strong>${esc(r.business)}</strong> <span class="muted">· ${esc(r.guest)} · ${fmtDate(r.created)}${r.bookingRef ? " · " + esc(r.bookingRef) : ""}</span></div>
+                                <p>${r.comment ? esc(r.comment) : "<span class='muted'>No comment</span>"}</p>
+                                ${me.canEdit ? `<button type="button" class="btn btn--ghost btn--sm" data-rating="${esc(r.id)}" data-to="${r.status === "Hidden" ? "Published" : "Hidden"}">${r.status === "Hidden" ? "Show again" : "Hide"}</button>` : ""}</li>`).join("")}</ul>` : empty("No ratings yet", "Send guests a rating link after their trip.")}</div>
+                    </div>`;
+                body.addEventListener("click", async e => {
+                    const b = e.target.closest("[data-rating]"); if (!b) return;
+                    b.disabled = true;
+                    try { await get("setRatingStatus", { id: b.dataset.rating, status: b.dataset.to }); toast("Rating updated"); route(); }
+                    catch (err) { toast(err.message, true); b.disabled = false; }
+                });
             },
 
             async messages() {
@@ -283,7 +394,7 @@
                 dbody.innerHTML = `
                     <p class="eyebrow">${esc(a.partnerTypeLabel)} · ${esc(a.id)}</p>
                     <h2 id="drawer-title">${esc(a.businessName)}</h2>
-                    <p>${badge(a.status)} <span class="muted">Submitted ${fmtDate(a.created)}${a.reviewedBy ? ` · reviewed by ${esc(a.reviewedBy)} on ${fmtDate(a.reviewedAt)}` : ""}</span></p>
+                    <p>${badge(a.status)}${a.tier ? ` <span class="tier">${esc(a.tier)}</span>` : ""} <span class="muted">Submitted ${fmtDate(a.created)}${a.reviewedBy ? ` · reviewed by ${esc(a.reviewedBy)} on ${fmtDate(a.reviewedAt)}` : ""}</span></p>
                     ${a.reviewNote ? `<blockquote class="review-note">${esc(a.reviewNote)}</blockquote>` : ""}
                     <h3>Photos ${missing.length ? `<span class="status status--warn">Missing: ${missing.map(esc).join(", ")}</span>` : ""}</h3>
                     <div class="thumb-grid">${a.photos.map(p => `<figure class="thumb" data-file="${esc(p.fileId)}" data-label="${esc(p.label)}"><button type="button" class="thumb-img" aria-label="Enlarge ${esc(p.label)} photo"></button><figcaption>${esc(p.label)}</figcaption></figure>`).join("") || "<p class='muted'>No photos uploaded.</p>"}</div>
@@ -299,6 +410,7 @@
                     ${me.canEdit && a.status !== "Uploading" ? `<div class="review-box">
                         <h3>Decision</h3>
                         <label class="field"><span class="field-legend">Note to the partner (required for "needs info" and "reject")</span><textarea data-note maxlength="1000" placeholder="e.g. Please add a clearer photo of the rear seats.">${a.status === "Approved" ? "" : ""}</textarea></label>
+                        <label class="field"><span class="field-legend">Standard if approved</span><select data-tier class="status-select">${TIERS.map(t => `<option ${t === (a.tier || "Premium") ? "selected" : ""}>${t}</option>`).join("")}</select></label>
                         <div class="btn-row">
                             <button class="btn btn--approve" type="button" data-decide="approve">Approve</button>
                             <button class="btn btn--ghost" type="button" data-decide="needs_info">Ask for more info</button>
@@ -313,7 +425,7 @@
                     const labels = { approve: "Approve this partner and email them?", needs_info: "Ask the partner for more information?", reject: "Reject this application and email the partner?" };
                     if (!confirm(labels[b.dataset.decide])) return;
                     $$("[data-decide]", dbody).forEach(x => x.disabled = true);
-                    try { await get("reviewApplication", { id, decision: b.dataset.decide, note }); toast("Decision saved and partner emailed"); delete cache.dashboard; closeDrawer(); route(); }
+                    try { await get("reviewApplication", { id, decision: b.dataset.decide, note, tier: $("[data-tier]", dbody)?.value }); toast("Decision saved and partner emailed"); delete cache.dashboard; closeDrawer(); route(); }
                     catch (err) { toast(err.message, true); $$("[data-decide]", dbody).forEach(x => x.disabled = false); }
                 }));
             } catch (err) { dbody.innerHTML = `<p class="form-error">${esc(err.message)}</p>`; }
@@ -417,16 +529,16 @@
             const ago = n => new Date(now - n * day).toISOString();
             const apps = [
                 ["P-2611-7QKD", "Lowveld Executive Transfers", "vehicle", "Mbombela", "Mpumalanga", "Pending", "Toyota · Fortuner 2.8 GD-6 · 2022 · 7 seats · Automatic", 7, 1],
-                ["P-2611-M3XA", "Blyde View Guesthouse", "accommodation", "Graskop", "Mpumalanga", "Pending", "Guesthouse · 8 rooms · sleeps 18 · 4 stars · from R1450", 6, 2],
+                ["P-2611-M3XA", "Blyde View Guesthouse", "accommodation", "Graskop", "Mpumalanga", "In review", "Guesthouse · 8 rooms · sleeps 18 · 4 stars · from R1450", 6, 2],
                 ["P-2611-T8NB", "Sabie River Guides", "guide", "Hazyview", "Mpumalanga", "Approved", "FGASA Level 2 · English, siSwati · Kruger", 3, 6],
                 ["P-2611-H2RC", "Venda Heritage Trails", "tour_operator", "Thohoyandou", "Limpopo", "Approved", "4 vehicles · Venda cultural tours", 4, 9],
                 ["P-2610-K9PW", "Cape Coastal Shuttles", "vehicle", "Cape Town", "Western Cape", "Needs info", "Mercedes-Benz · V-Class · 2019 · 7 seats", 5, 14],
                 ["P-2610-A4LZ", "Marula Lodge", "accommodation", "White River", "Mpumalanga", "Approved", "Lodge · 12 rooms · sleeps 30 · 4 stars", 7, 18],
-                ["P-2610-J6YU", "Sky High Balloons", "activity", "Hazyview", "Mpumalanga", "Pending", "Sunrise balloon flight · up to 16 people", 3, 3],
+                ["P-2610-J6YU", "Sky High Balloons", "activity", "Hazyview", "Mpumalanga", "In review", "Sunrise balloon flight · up to 16 people", 3, 3],
                 ["P-2610-D7FS", "Quick Rides SA", "vehicle", "Johannesburg", "Gauteng", "Rejected", "Hyundai · i20 · 2011 · 4 seats", 7, 21],
                 ["P-2610-E3WQ", "Umhlanga Beach Suites", "accommodation", "Umhlanga", "KwaZulu-Natal", "Approved", "Self-catering · 6 units · sleeps 20", 5, 27],
                 ["P-2609-G5TT", "Panorama Photo Tours", "other", "Sabie", "Mpumalanga", "Pending", "Tour photography", 2, 4],
-            ].map(([id, b, t, c, p, s, sum, ph, d]) => ({ id, businessName: b, partnerType: t, partnerTypeLabel: K.TYPES[t].label, city: c, province: p, status: s, summary: sum, photoCount: ph, created: ago(d), contactName: "Sample contact", email: "partner@example.com", phone: "082 000 0000", services: K.TYPES[t].services.slice(0, 2).join(", "), reviewedAt: s === "Approved" ? ago(d - 2) : "", reviewedBy: s === "Approved" ? "admin@example.com" : "", reviewNote: s === "Needs info" ? "Please add a clearer photo of the rear seats." : s === "Rejected" ? "The vehicle doesn't meet our premium standard yet." : "", required: K.TYPES[t].required }));
+            ].map(([id, b, t, c, p, s, sum, ph, d]) => ({ id, businessName: b, partnerType: t, partnerTypeLabel: K.TYPES[t].label, city: c, province: p, status: s, summary: sum, photoCount: ph, created: ago(d), contactName: "Sample contact", email: "partner@example.com", phone: "082 000 0000", services: K.TYPES[t].services.slice(0, 2).join(", "), reviewedAt: s === "Approved" ? ago(d - 2) : "", reviewedBy: s === "Approved" ? "admin@example.com" : "", tier: s === "Approved" ? ["Premium", "Premium Plus", "Signature"][d % 3] : "", reviewNote: s === "Needs info" ? "Please add a clearer photo of the rear seats." : s === "Rejected" ? "The vehicle doesn't meet our premium standard yet." : "", required: K.TYPES[t].required }));
             const tours = ["Kruger & Panorama Route: 3-Day Classic", "Kruger Full-Day Open-Vehicle Safari", "Greater Kruger Private Lodge: 4-Day Luxury", "Cape Town Highlights: 4 Nights", "Panorama Route & God's Window Day Tour", "Venda Sacred Sites: 3-Day Heritage Route"];
             const bookings = Array.from({ length: 22 }, (_, i) => {
                 const t = tours[i % tours.length], adults = 1 + (i % 4), total = [6950, 1650, 18900, 12400, 1250, 4650][i % 6] * adults;
@@ -447,11 +559,13 @@
                 { time: ago(2), actor: "guest@example.com", action: "booking_request", target: "KCM-2611-SJ", details: "Kruger Full-Day Open-Vehicle Safari" },
                 { time: ago(3), actor: "owner@example.com", action: "user_invited", target: "finance@example.com", details: "viewer / active" },
             ];
+            const jobs = apps.filter(a => a.status === "Approved").flatMap((a, k) => Array.from({ length: 4 + k * 2 }, (_, i) => { const gross = [1100, 3200, 2600, 4800][i % 4] * (k + 1); return { id: `J-2611-${(k * 50 + i).toString(36).toUpperCase().padStart(4, "Q")}`, date: ago(i * 6 + k), partnerId: a.id, business: a.businessName, bookingRef: bookings[(i + k) % bookings.length].reference, service: ["Airport transfer", "Kruger day trip", "Guest stay (2 nights)", "Panorama tour"][i % 4], guests: 2 + (i % 3), gross, commissionPct: 15, payout: Math.round(gross * .85), payoutStatus: PAYOUT_STATUSES[i % 4 === 3 ? 0 : i % 3 === 0 ? 2 : 1], paidOn: i % 3 === 0 ? ago(Math.max(0, i * 6 - 2)) : "" }; }));
+            const ratingsS = jobs.slice(0, 12).map((j, i) => ({ id: "R-" + i, created: j.date, partnerId: j.partnerId, business: j.business, bookingRef: j.bookingRef, guest: ["Thandi M.", "Pieter V.", "Megan R.", "Lerato K."][i % 4], stars: [5, 5, 4, 5, 3, 5][i % 6], comment: ["Spotless and on time.", "Felt like VIPs the whole way.", "Comfortable, slightly late pickup.", "Would book again!", "", "Excellent host."][i % 6], status: i === 4 ? "Hidden" : "Published" }));
             const reject = () => Promise.reject(new K.ApiError("This is sample data, so changes aren't saved. Connect the Google Sheet to use the real dashboard."));
             return {
                 me: () => ({ email: "owner@example.com", name: "Sample owner", role: "owner", isStaff: true, canEdit: true }),
                 dashboard: async () => ({
-                    kpis: { pending: 4, needsInfo: 1, approved: 4, applications: apps.length, bookings: bookings.length, newBookings: bookings.filter(b => b.status === "New").length, bookingValue: bookings.filter(b => b.status !== "Cancelled").reduce((s, b) => s + b.total, 0), users: users.length, staff: 3 },
+                    kpis: { inReview: 2, trips: jobs.length, payoutsPending: jobs.filter(j => j.payoutStatus !== "Paid").reduce((s, j) => s + j.payout, 0), avgRating: 4.6, ratings: 11, pending: 4, needsInfo: 1, approved: 4, applications: apps.length, bookings: bookings.length, newBookings: bookings.filter(b => b.status === "New").length, bookingValue: bookings.filter(b => b.status !== "Cancelled").reduce((s, b) => s + b.total, 0), users: users.length, staff: 3 },
                     byStatus: count(apps, "status"), byType: count(apps, "partnerTypeLabel"), byProvince: count(apps, "province"), bookingsByStatus: count(bookings, "status"),
                     valueByTour: bookings.reduce((a, b) => (a[b.tour] = (a[b.tour] || 0) + b.total, a), {}), weekly, recent, sheetUrl: "",
                 }),
@@ -460,6 +574,9 @@
                 listBookings: async () => bookings,
                 listMessages: async () => [{ created: ago(1), name: "Nomsa D.", email: "nomsa@example.com", phone: "071 000 0000", message: "Hi, we're a church group of 45 looking at Kruger in March. Can you quote?" }],
                 listUsers: async () => users,
+                listJobs: async () => jobs,
+                listRatings: async () => ratingsS,
+                saveJob: () => reject(), setPayoutStatus: () => reject(), setRatingStatus: () => reject(),
                 activity: async () => recent,
                 updateBooking: reject, saveUser: reject, reviewApplication: reject, getPhoto: reject,
             };

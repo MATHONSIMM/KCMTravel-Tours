@@ -8,7 +8,7 @@ While KCM is in its pilot stage, a **Google Sheet is the database**. A small Goo
 - user access levels
 - bookings and contact messages from the website
 
-The Sheet **"KCM Travel & Tours – Pilot Database"** has already been created in your Google Drive (mphikelelimm@gmail.com), with all the tabs and column headers.
+The Sheet **"KCM Travel & Tours – Pilot Database"** has already been created in your Google Drive, with all the tabs and column headers.
 
 ## 1. Add the backend script (about 5 minutes)
 
@@ -72,14 +72,18 @@ To give someone access, sign in to the website and open **Admin → Users & acce
 | Tab | Contents |
 |---|---|
 | Users | Everyone who signed in, plus their role and status |
-| Partners | Partner applications. Type-specific answers are in `Summary` (readable) and `Details` (JSON). |
+| Partners | Partner applications. Type-specific answers are in `Summary` (readable) and `Details` (JSON). `Tier` is the premium standard set on approval (Premium, Premium Plus, Signature). |
 | Photos | One row per photo. Files are in Drive → *KCM Partner Uploads (private)* |
 | Bookings | Booking requests from the website |
 | Messages | Contact form messages |
+| Jobs | Trips done by partners: trip value, KCM commission %, partner payout and payout status (Pending, Approved, Paid, On hold). Partners see only their own rows in their portal and can download a statement. |
+| Ratings | Guest ratings (1–5 stars) sent through the `/rate` link. Admins can hide a rating; hidden ones aren't shown or counted. |
 | Activity | Audit log |
 | Sessions, Codes | Hidden technical tabs. Don't edit. |
 
 Please don't rename tabs or column headers: the script relies on them.
+
+**Updating from an earlier version:** paste the new `Code.gs` and run **KCM → Setup** once more. It adds the Jobs and Ratings tabs and the Tier column without touching your data, then deploy a new version (Deploy → Manage deployments → Edit → New version).
 
 ## Limits to know (free Google account)
 

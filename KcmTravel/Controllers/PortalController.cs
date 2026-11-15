@@ -13,6 +13,9 @@ public class PortalController : Controller
     [HttpGet("/account")]
     public IActionResult Account() => View();
 
+    [HttpGet("/rate")]
+    public IActionResult Rate() => View();
+
     [HttpGet("/admin")]
     public IActionResult Admin() => View();
 }

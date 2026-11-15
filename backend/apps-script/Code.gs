@@ -17,7 +17,7 @@
 
 const APP = {
   name: 'KCM Travel & Tours',
-  version: '1.0.0',
+  version: '1.1.0',
   sessionDays: 7,
   codeMinutes: 15,
   maxPhotoBytes: 4 * 1024 * 1024,
@@ -32,11 +32,13 @@ const TABS = {
   Users: ['Email', 'Name', 'Role', 'Status', 'Provider', 'Picture', 'Created', 'LastLogin', 'InvitedBy'],
   Partners: ['ID', 'Created', 'Email', 'ContactName', 'Phone', 'BusinessName', 'PartnerType', 'Province', 'City',
     'Services', 'Description', 'RegNumber', 'Website', 'Social', 'YearsInBusiness', 'Summary', 'Details',
-    'Status', 'PhotoCount', 'DriveFolderId', 'ReviewedBy', 'ReviewedAt', 'ReviewNote', 'Updated'],
+    'Status', 'PhotoCount', 'DriveFolderId', 'ReviewedBy', 'ReviewedAt', 'ReviewNote', 'Updated', 'Tier'],
   Photos: ['ID', 'PartnerID', 'Label', 'FileID', 'FileName', 'Uploaded', 'UploadedBy'],
   Bookings: ['Reference', 'Created', 'Tour', 'StartDate', 'Nights', 'Adults', 'Children', 'Infants', 'Pensioners',
     'Room', 'Extras', 'Payment', 'EstimatedTotal', 'Name', 'Email', 'Phone', 'Notes', 'Status', 'Source'],
   Messages: ['Created', 'Name', 'Email', 'Phone', 'Message', 'Status'],
+  Jobs: ['JobID', 'Date', 'PartnerID', 'BookingRef', 'Service', 'Guests', 'Gross', 'CommissionPct', 'Payout', 'PayoutStatus', 'PaidOn', 'Notes', 'CreatedBy'],
+  Ratings: ['ID', 'Created', 'PartnerID', 'BookingRef', 'GuestName', 'Stars', 'Comment', 'Status'],
   Activity: ['Time', 'Actor', 'Action', 'Target', 'Details'],
   Sessions: ['TokenHash', 'Email', 'Created', 'Expires'],
   Codes: ['Email', 'CodeHash', 'Expires', 'Attempts'],
@@ -51,7 +53,9 @@ const PARTNER_TYPES = {
   other: { label: 'Other service', required: ['Photo of your service'] },
 };
 
-const STATUSES = ['Uploading', 'Pending', 'Needs info', 'Approved', 'Rejected'];
+const STATUSES = ['Uploading', 'Pending', 'In review', 'Needs info', 'Approved', 'Rejected'];
+const TIERS = ['Premium', 'Premium Plus', 'Signature'];
+const PAYOUT_STATUSES = ['Pending', 'Approved', 'Paid', 'On hold'];
 const BOOKING_STATUSES = ['New', 'Contacted', 'Confirmed', 'Paid', 'Completed', 'Cancelled'];
 
 /* =====================================================================
@@ -89,6 +93,8 @@ const ACTIONS = {
   googleSignIn: googleSignIn_,
   submitBooking: submitBooking_,
   submitMessage: submitMessage_,
+  ratingInfo: ratingInfo_,
+  submitRating: submitRating_,
   // signed in
   me: b => publicUser_(requireUser_(b.token)),
   signOut: signOut_,
@@ -98,6 +104,7 @@ const ACTIONS = {
   finalizeApplication: finalizeApplication_,
   myApplications: myApplications_,
   getPhoto: getPhoto_,
+  partnerDashboard: partnerDashboard_,
   // staff
   dashboard: dashboard_,
   listApplications: listApplications_,
@@ -109,6 +116,11 @@ const ACTIONS = {
   listUsers: listUsers_,
   saveUser: saveUser_,
   activity: activity_,
+  listJobs: listJobs_,
+  saveJob: saveJob_,
+  setPayoutStatus: setPayoutStatus_,
+  listRatings: listRatings_,
+  setRatingStatus: setRatingStatus_,
 };
 
 /* =====================================================================
@@ -321,7 +333,7 @@ function uploadPhoto_(b) {
   if (!app) throw userError_('Application not found.');
   const isOwner = app.row.Email === user.Email;
   if (!isOwner && EDITORS.indexOf(user.Role) === -1) throw userError_('You do not have access to this.', 'forbidden');
-  if (['Uploading', 'Pending', 'Needs info'].indexOf(app.row.Status) === -1) throw userError_('Photos can no longer be added to this application.');
+  if (['Uploading', 'Pending', 'In review', 'Needs info'].indexOf(app.row.Status) === -1) throw userError_('Photos can no longer be added to this application.');
   if (Number(app.row.PhotoCount || 0) >= APP.maxPhotosPerApplication) throw userError_('You have reached the maximum number of photos.');
 
   const m = String(b.dataUrl || '').match(/^data:(image\/(jpeg|png|webp));base64,(.+)$/);
@@ -376,6 +388,11 @@ function getApplication_(b) {
   const app = findApplication_(b.id);
   if (!app) throw userError_('Application not found.');
   if (app.row.Email !== user.Email && STAFF.indexOf(user.Role) === -1) throw userError_('You do not have access to this.', 'forbidden');
+  if (app.row.Status === 'Pending' && EDITORS.indexOf(user.Role) !== -1) {
+    setApplicationFields_(app.index, { Status: 'In review', ReviewedBy: user.Email, Updated: new Date() });
+    app.row.Status = 'In review'; app.row.ReviewedBy = user.Email;
+    log_(user.Email, 'application_opened', app.row.ID, app.row.BusinessName);
+  }
   const view = applicationView_(app.row, true);
   view.photos = photosFor_(app.row.ID).map(p => ({ id: p.ID, label: p.Label, fileId: p.FileID, uploaded: iso_(p.Uploaded) }));
   return view;
@@ -401,12 +418,15 @@ function reviewApplication_(b) {
   if (!decision) throw userError_('Invalid decision.');
   const note = safe_(b.note || '', 1000);
   if (decision !== 'Approved' && !note) throw userError_('Please add a note for the partner.');
-  setApplicationFields_(app.index, { Status: decision, ReviewedBy: actor.Email, ReviewedAt: new Date(), ReviewNote: note, Updated: new Date() });
+  const tier = decision === 'Approved' ? (TIERS.indexOf(b.tier) !== -1 ? b.tier : 'Premium') : '';
+  const fields = { Status: decision, ReviewedBy: actor.Email, ReviewedAt: new Date(), ReviewNote: note, Updated: new Date() };
+  if (tier) fields.Tier = tier;
+  setApplicationFields_(app.index, fields);
   log_(actor.Email, 'application_' + b.decision, app.row.ID, note);
 
   const p = app.row;
   const bodies = {
-    Approved: `<p>Hi ${esc_(p.ContactName)},</p><p>Good news: <strong>${esc_(p.BusinessName)}</strong> has been <strong>approved</strong> as a ${APP.name} partner (${p.ID}).</p>
+    Approved: `<p>Hi ${esc_(p.ContactName)},</p><p>Good news: <strong>${esc_(p.BusinessName)}</strong> has been <strong>approved</strong> as a ${APP.name} <strong>${tier}</strong> partner (${p.ID}).</p>
       ${note ? `<p>${esc_(note)}</p>` : ''}<p>Our team will contact you about next steps, including confirming your banking details for payments. Welcome aboard!</p>${siteLink_('/account', 'View your partner account')}`,
     Rejected: `<p>Hi ${esc_(p.ContactName)},</p><p>Thank you for applying to partner with ${APP.name}. After reviewing <strong>${esc_(p.BusinessName)}</strong> (${p.ID}), we are not able to approve the application at this time.</p>
       <p><strong>Feedback:</strong> ${esc_(note)}</p><p>You're welcome to apply again in future.</p>`,
@@ -494,13 +514,17 @@ function dashboard_(b) {
   bookings.forEach(x => { const i = weekIndex(x.Created); if (i >= 0 && i < 12) weeks[i].bookings++; });
 
   const value = bookings.filter(x => x.Status !== 'Cancelled').reduce((s, x) => s + num_(x.EstimatedTotal), 0);
+  const jobs = readTable_('Jobs');
+  const ratings = readTable_('Ratings').filter(r => r.Status !== 'Hidden');
+  const payoutsPending = jobs.filter(j => j.PayoutStatus !== 'Paid').reduce((s, j) => s + num_(j.Payout), 0);
+  const avgRating = ratings.length ? ratings.reduce((s, r) => s + num_(r.Stars), 0) / ratings.length : 0;
   const byTour = {};
   bookings.forEach(x => { byTour[x.Tour] = (byTour[x.Tour] || 0) + num_(x.EstimatedTotal); });
 
   return {
     you: publicUser_(user),
     kpis: {
-      pending: partners.filter(p => p.Status === 'Pending').length,
+      pending: partners.filter(p => p.Status === 'Pending' || p.Status === 'In review').length,
       needsInfo: partners.filter(p => p.Status === 'Needs info').length,
       approved: partners.filter(p => p.Status === 'Approved').length,
       applications: partners.length,
@@ -509,6 +533,12 @@ function dashboard_(b) {
       bookingValue: value,
       users: users.length,
       staff: users.filter(u => STAFF.indexOf(u.Role) !== -1).length,
+      inReview: partners.filter(p => p.Status === 'In review').length,
+      trips: jobs.length,
+      payoutsPending,
+      grossEarned: jobs.reduce((s, j) => s + num_(j.Gross), 0),
+      avgRating: Math.round(avgRating * 10) / 10,
+      ratings: ratings.length,
     },
     byStatus: count(partners, 'Status'),
     byType: Object.entries(count(partners, 'PartnerType')).reduce((acc, [k, v]) => { acc[(PARTNER_TYPES[k] || {}).label || k] = v; return acc; }, {}),
@@ -527,6 +557,152 @@ function activity_(b) {
 }
 
 /* =====================================================================
+ * Partner portal: trips, payouts and ratings
+ * ===================================================================== */
+
+/** Everything a partner sees about their own businesses. Never includes other partners' data. */
+function partnerDashboard_(b) {
+  const user = requireUser_(b.token);
+  const listings = readTable_('Partners').filter(p => p.Email === user.Email);
+  const ids = listings.map(p => p.ID);
+  const jobs = readTable_('Jobs').filter(j => ids.indexOf(j.PartnerID) !== -1);
+  const ratings = readTable_('Ratings').filter(r => ids.indexOf(r.PartnerID) !== -1 && r.Status !== 'Hidden');
+  const names = {}; listings.forEach(p => { names[p.ID] = p.BusinessName; });
+
+  const months = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ month: Utilities.formatDate(d, 'Africa/Johannesburg', 'yyyy-MM'), trips: 0, payout: 0 }); }
+  jobs.forEach(j => {
+    const key = Utilities.formatDate(new Date(j.Date), 'Africa/Johannesburg', 'yyyy-MM');
+    const m = months.find(x => x.month === key); if (m) { m.trips++; m.payout += num_(j.Payout); }
+  });
+
+  const stars = [0, 0, 0, 0, 0];
+  ratings.forEach(r => { const s = Math.min(5, Math.max(1, num_(r.Stars))); stars[s - 1]++; });
+  const avg = ratings.length ? ratings.reduce((s, r) => s + num_(r.Stars), 0) / ratings.length : 0;
+
+  return {
+    listings: listings.map(p => {
+      const pj = jobs.filter(j => j.PartnerID === p.ID), pr = ratings.filter(r => r.PartnerID === p.ID);
+      const v = applicationView_(p, false);
+      v.trips = pj.length; v.earned = pj.reduce((s, j) => s + num_(j.Payout), 0);
+      v.rating = pr.length ? Math.round(pr.reduce((s, r) => s + num_(r.Stars), 0) / pr.length * 10) / 10 : 0; v.ratingCount = pr.length;
+      return v;
+    }),
+    totals: {
+      trips: jobs.length,
+      guests: jobs.reduce((s, j) => s + num_(j.Guests), 0),
+      gross: jobs.reduce((s, j) => s + num_(j.Gross), 0),
+      paid: jobs.filter(j => j.PayoutStatus === 'Paid').reduce((s, j) => s + num_(j.Payout), 0),
+      pending: jobs.filter(j => j.PayoutStatus !== 'Paid').reduce((s, j) => s + num_(j.Payout), 0),
+      rating: Math.round(avg * 10) / 10, ratingCount: ratings.length,
+    },
+    months,
+    stars,
+    jobs: jobs.map(j => jobView_(j, names)).reverse(),
+    ratings: ratings.map(r => ({ created: iso_(r.Created), partnerId: r.PartnerID, business: names[r.PartnerID] || '', guest: r.GuestName, stars: num_(r.Stars), comment: r.Comment })).reverse(),
+  };
+}
+
+function jobView_(j, names) {
+  return {
+    id: j.JobID, date: iso_(j.Date), partnerId: j.PartnerID, business: names ? names[j.PartnerID] || '' : '', bookingRef: j.BookingRef, service: j.Service,
+    guests: num_(j.Guests), gross: num_(j.Gross), commissionPct: num_(j.CommissionPct), payout: num_(j.Payout), payoutStatus: j.PayoutStatus || 'Pending', paidOn: iso_(j.PaidOn), notes: j.Notes,
+  };
+}
+
+function listJobs_(b) {
+  requireRole_(b.token, STAFF);
+  const names = {}; readTable_('Partners').forEach(p => { names[p.ID] = p.BusinessName; });
+  return readTable_('Jobs').map(j => jobView_(j, names)).reverse();
+}
+
+/** Record a trip/job done by a partner. Payout = gross minus KCM commission. */
+function saveJob_(b) {
+  const actor = requireRole_(b.token, EDITORS);
+  const j = b.job || {};
+  const partner = findApplication_(j.partnerId);
+  if (!partner || partner.row.Status !== 'Approved') throw userError_('Choose an approved partner.');
+  const gross = num_(j.gross), pct = Math.min(100, Math.max(0, num_(j.commissionPct === undefined ? 15 : j.commissionPct)));
+  if (gross <= 0) throw userError_('Enter the trip value.');
+  const date = j.date ? new Date(j.date) : new Date();
+  if (isNaN(date.getTime())) throw userError_('Invalid date.');
+  const payout = Math.round(gross * (1 - pct / 100));
+  const id = 'J-' + Utilities.formatDate(new Date(), 'Africa/Johannesburg', 'yyMM') + '-' + randomCode_(4);
+  withLock_(() => sheet_('Jobs').appendRow([id, date, partner.row.ID, safe_(j.bookingRef, 30), safe_(j.service, 120), num_(j.guests), gross, pct, payout, 'Pending', '', safe_(j.notes, 300), actor.Email]));
+  log_(actor.Email, 'trip_recorded', id, partner.row.BusinessName + ' · R' + gross);
+  return { id, payout };
+}
+
+function setPayoutStatus_(b) {
+  const actor = requireRole_(b.token, EDITORS);
+  if (PAYOUT_STATUSES.indexOf(b.status) === -1) throw userError_('Invalid payout status.');
+  let job = null;
+  withLock_(() => {
+    const sh = sheet_('Jobs');
+    const rows = sh.getDataRange().getValues();
+    const idx = rows.findIndex((r, i) => i > 0 && r[0] === b.id);
+    if (idx > 0) {
+      sh.getRange(idx + 1, TABS.Jobs.indexOf('PayoutStatus') + 1).setValue(b.status);
+      sh.getRange(idx + 1, TABS.Jobs.indexOf('PaidOn') + 1).setValue(b.status === 'Paid' ? new Date() : '');
+      job = rowToObj_(TABS.Jobs, rows[idx]);
+    }
+  });
+  if (!job) throw userError_('Trip not found.');
+  log_(actor.Email, 'payout_' + String(b.status).toLowerCase().replace(/\s/g, '_'), b.id, 'R' + job.Payout);
+  if (b.status === 'Paid') {
+    const p = findApplication_(job.PartnerID);
+    if (p) sendMail_(p.row.Email, `Payout sent: R${num_(job.Payout).toLocaleString('en-ZA')} (${job.JobID})`,
+      `<p>Hi ${esc_(p.row.ContactName)},</p><p>We've paid <strong>R${num_(job.Payout).toLocaleString('en-ZA')}</strong> for ${esc_(job.Service || 'your trip')} (${job.JobID}${job.BookingRef ? ', booking ' + esc_(job.BookingRef) : ''}).</p>${siteLink_('/account#payouts', 'View your statement')}`);
+  }
+  return { status: b.status };
+}
+
+/** Public: what the rating page needs to show (no personal data). */
+function ratingInfo_(b) {
+  const p = findApplication_(String(b.partnerId || ''));
+  if (!p || p.row.Status !== 'Approved') throw userError_('This rating link is not valid.');
+  const job = readTable_('Jobs').find(j => j.PartnerID === p.row.ID && j.BookingRef === b.bookingRef);
+  if (!job) throw userError_('This rating link is not valid.');
+  const done = readTable_('Ratings').some(r => r.PartnerID === p.row.ID && r.BookingRef === b.bookingRef);
+  return { business: p.row.BusinessName, type: (PARTNER_TYPES[p.row.PartnerType] || {}).label || '', service: job.Service, alreadyRated: done };
+}
+
+/** Public: a guest rates a partner after a trip. One rating per booking per partner. */
+function submitRating_(b) {
+  if (b.website) return { saved: true };
+  publicRateLimit_();
+  const info = ratingInfo_(b);
+  if (info.alreadyRated) throw userError_('Thank you, a rating has already been received for this trip.');
+  const stars = Math.round(num_(b.stars));
+  if (stars < 1 || stars > 5) throw userError_('Please choose 1 to 5 stars.');
+  withLock_(() => sheet_('Ratings').appendRow(['R-' + randomCode_(6), new Date(), b.partnerId, safe_(b.bookingRef, 30), safe_(b.name || 'Guest', 60), stars, safe_(b.comment, 800), 'Published']));
+  log_(String(b.name || 'Guest'), 'rating', b.partnerId, stars + ' stars');
+  return { saved: true };
+}
+
+function listRatings_(b) {
+  requireRole_(b.token, STAFF);
+  const names = {}; readTable_('Partners').forEach(p => { names[p.ID] = p.BusinessName; });
+  return readTable_('Ratings').map(r => ({ id: r.ID, created: iso_(r.Created), partnerId: r.PartnerID, business: names[r.PartnerID] || r.PartnerID, bookingRef: r.BookingRef, guest: r.GuestName, stars: num_(r.Stars), comment: r.Comment, status: r.Status })).reverse();
+}
+
+function setRatingStatus_(b) {
+  const actor = requireRole_(b.token, EDITORS);
+  if (['Published', 'Hidden'].indexOf(b.status) === -1) throw userError_('Invalid status.');
+  let ok = false;
+  withLock_(() => {
+    const sh = sheet_('Ratings');
+    const rows = sh.getDataRange().getValues();
+    const idx = rows.findIndex((r, i) => i > 0 && r[0] === b.id);
+    if (idx > 0) { sh.getRange(idx + 1, TABS.Ratings.indexOf('Status') + 1).setValue(b.status); ok = true; }
+  });
+  if (!ok) throw userError_('Rating not found.');
+  log_(actor.Email, 'rating_' + b.status.toLowerCase(), b.id, '');
+  return { status: b.status };
+}
+
+/* =====================================================================
  * Helpers
  * ===================================================================== */
 
@@ -537,7 +713,7 @@ function applicationView_(p, full) {
     id: p.ID, created: iso_(p.Created), updated: iso_(p.Updated), email: p.Email, contactName: p.ContactName, phone: p.Phone,
     businessName: p.BusinessName, partnerType: p.PartnerType, partnerTypeLabel: (PARTNER_TYPES[p.PartnerType] || {}).label || p.PartnerType,
     province: p.Province, city: p.City, services: p.Services, summary: p.Summary, status: p.Status, photoCount: Number(p.PhotoCount || 0),
-    reviewedBy: p.ReviewedBy, reviewedAt: iso_(p.ReviewedAt), reviewNote: p.ReviewNote,
+    reviewedBy: p.ReviewedBy, reviewedAt: iso_(p.ReviewedAt), reviewNote: p.ReviewNote, tier: p.Tier || '',
     required: (PARTNER_TYPES[p.PartnerType] || {}).required || [],
   };
   if (full) Object.assign(v, { description: p.Description, regNumber: p.RegNumber, website: p.Website, social: p.Social, years: p.YearsInBusiness, details });
