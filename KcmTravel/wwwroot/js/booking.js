@@ -86,13 +86,14 @@
         for (let i = 1; i <= 5; i++) {
             if (!validate(i)) { e.preventDefault(); show(i); return; }
         }
-        if (document.documentElement.dataset.static) { e.preventDefault(); return sendViaWhatsApp(); }
+        // With the Google Sheet backend connected (or on the static site) the request is saved there and the team gets a WhatsApp alert.
+        if (document.documentElement.dataset.static || window.KCM?.configured) { e.preventDefault(); return sendViaWhatsApp(); }
         const btn = form.querySelector("button[type=submit]");
         btn.disabled = true; btn.textContent = "Sending…";
     });
 
-    /* Static hosting (GitHub Pages): no server, so the request goes to KCM on WhatsApp */
-    const sendViaWhatsApp = () => {
+    /* Saves the booking to the KCM Sheet (team alerted on WhatsApp + email). If the backend isn't reachable, falls back to WhatsApp. */
+    const sendViaWhatsApp = async () => {
         const q = quote();
         const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         const now = new Date();
@@ -115,20 +116,36 @@
             `Cell: ${f.Phone.value}`,
             f.Notes.value ? `Notes: ${f.Notes.value}` : "",
         ].filter(Boolean).join("\n");
-        window.KCM?.beacon("submitBooking", { booking: {
+        const booking = {
             reference: ref, tour: q.t.title, startDate: f.StartDate.value, nights: q.nights, adults: num("Adults"), children: num("Children"),
             infants: num("Infants"), pensioners: num("Pensioners"), room: f.Room.value, extras, payment: f.Payment.value, total: q.total,
             name: f.FullName.value, email: f.Email.value, phone: f.Phone.value, notes: f.Notes.value, source: "website",
-        } });
+        };
         const wa = document.querySelector("[data-chat]")?.dataset.wa || "";
         const link = `https://wa.me/${wa}?text=${encodeURIComponent(msg)}`;
         const card = steps[4];
+        const submitBtn = card.querySelector("button[type=submit], [data-submit]");
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Sending…"; }
+        let saved = false;
+        if (window.KCM?.configured) {
+            try { await window.KCM.call("submitBooking", { booking }); saved = true; }
+            catch { saved = false; }
+        }
         card.innerHTML = "";
-        const h = document.createElement("h2"); h.textContent = "Almost done: send it on WhatsApp";
-        const p = document.createElement("p"); p.textContent = `Your reference is ${ref}. Tap the button to send your booking request to a KCM consultant on WhatsApp. They'll confirm availability within one working day.`;
-        const a = document.createElement("a"); a.className = "btn btn--primary btn--lg"; a.href = link; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Send booking on WhatsApp";
+        const h = document.createElement("h2");
+        const p = document.createElement("p");
+        const a = document.createElement("a"); a.href = link; a.target = "_blank"; a.rel = "noopener";
+        if (saved) {
+            h.textContent = "Booking request received";
+            p.textContent = `Thank you! Your reference is ${ref}. Our team has been notified and a consultant will confirm availability with you within one working day, by email or on ${f.Phone.value}. Want to chat now? You can also message us on WhatsApp.`;
+            a.className = "btn btn--outline btn--lg"; a.textContent = "Chat on WhatsApp (optional)";
+        } else {
+            h.textContent = "Almost done: send it on WhatsApp";
+            p.textContent = `Your reference is ${ref}. Tap the button to send your booking request to a KCM consultant on WhatsApp. They'll confirm availability within one working day.`;
+            a.className = "btn btn--primary btn--lg"; a.textContent = "Send booking on WhatsApp";
+        }
         card.append(h, p, a);
-        window.open(link, "_blank", "noopener");
+        if (!saved) window.open(link, "_blank", "noopener");
     };
 
     /* ---------- pricing ---------- */

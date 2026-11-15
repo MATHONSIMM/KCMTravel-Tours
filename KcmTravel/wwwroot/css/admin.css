@@ -168,3 +168,6 @@
     .adm .table td .status-select { margin-top: 6px; }
     .adm .table-wrap { margin: 0; overflow: visible; }
 }
+
+.doc-admin { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 8px; }
+.doc-admin li { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #f6f3ec; border-radius: 12px; padding: 10px 12px; font-weight: 600; }

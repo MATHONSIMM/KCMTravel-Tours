@@ -192,23 +192,79 @@
         });
         log.appendChild(wrap); scroll();
         state.picks = scored.map(s => s.t.title);
+        state.estimate = scored[0]?.total || 0;
         save();
         await typing(500);
-        addMsg("Tap 'Book this' to choose dates and extras. The form is already filled in for you. Or I can pass this to a consultant on WhatsApp.");
+        addMsg("Tap 'Book this' to choose dates and extras (the form is already filled in for you), or I can send your request straight to a KCM consultant now.");
         offerWhatsApp();
     };
 
+    const summaryText = () => `• Style: ${state.style || "-"}\n• Region: ${state.region || "-"}\n• When: ${state.date || "-"}\n• Travellers: ${state.party || "-"}${state.children ? " (+" + state.children + " kids)" : ""}\n• Nights: ${state.nights ?? "-"}\n• Budget pp: ${state.budget || "-"}\n• Liked: ${(state.picks || []).join(", ") || "-"}`;
+
     const offerWhatsApp = () => {
         choicesEl.innerHTML = "";
-        const summary = `Hi KCM Travel & Tours! Kaycee helped me plan a trip:\n• Style: ${state.style || "-"}\n• Region: ${state.region || "-"}\n• When: ${state.date || "-"}\n• Travellers: ${state.party || "-"}${state.children ? " (+" + state.children + " kids)" : ""}\n• Nights: ${state.nights ?? "-"}\n• Budget pp: ${state.budget || "-"}\n• Liked: ${(state.picks || []).join(", ")}`;
-        const link = document.createElement("a");
-        link.className = "chat-choice"; link.target = "_blank"; link.rel = "noopener";
-        link.href = `https://wa.me/${wa}?text=${encodeURIComponent(summary)}`;
-        link.textContent = "Send to a consultant on WhatsApp";
+        const send = document.createElement("button");
+        send.type = "button"; send.className = "chat-choice chat-choice--primary"; send.textContent = "Send my request to KCM";
+        send.addEventListener("click", askContact);
         const again = document.createElement("button");
         again.type = "button"; again.className = "chat-choice"; again.textContent = "Start over";
         again.addEventListener("click", restart);
-        choicesEl.append(link, again);
+        choicesEl.append(send, again);
+    };
+
+    /* Collect name + cell, save the request to KCM's bookings (Sheet + WhatsApp alert to the team), then offer WhatsApp. */
+    const askContact = async () => {
+        choicesEl.innerHTML = "";
+        addMsg("Send my request to KCM", "user");
+        await typing(400);
+        addMsg("Sure! Who should our consultant contact?");
+        const f = document.createElement("form");
+        f.className = "chat-contact"; f.noValidate = true;
+        f.innerHTML = `<label>Your name<input name="name" autocomplete="name" required maxlength="60"></label>
+            <label>Cell / WhatsApp<input name="phone" type="tel" autocomplete="tel" inputmode="tel" required placeholder="e.g. 082 123 4567" maxlength="20"></label>
+            <label>Email (optional)<input name="email" type="email" autocomplete="email" maxlength="120"></label>
+            <input name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <p class="chat-contact-err" hidden></p>
+            <button type="submit" class="chat-choice chat-choice--primary">Send request</button>`;
+        log.appendChild(f); scroll();
+        f.name.focus();
+        f.addEventListener("submit", async e => {
+            e.preventDefault();
+            const err = f.querySelector(".chat-contact-err");
+            const name = f.name.value.trim(), phone = f.phone.value.trim(), email = f.email.value.trim();
+            if (!name) { err.textContent = "Please add your name."; err.hidden = false; return; }
+            if (!/^[0-9 +()-]{9,20}$/.test(phone)) { err.textContent = "Please add a valid cell number."; err.hidden = false; return; }
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { err.textContent = "Please check your email address."; err.hidden = false; return; }
+            const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "Sending…";
+            const now = new Date();
+            const ref = "KCM-" + String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0") + "-" +
+                Array.from({ length: 4 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
+            const { adults, children } = party();
+            const booking = {
+                reference: ref, tour: (state.picks && state.picks[0]) || `Trip enquiry (${state.style || "any"}, ${state.region || "anywhere"})`,
+                startDate: travelDate() || state.date || "flexible", nights: parseInt(state.nights ?? "0", 10) || 0, adults, children,
+                total: state.estimate || 0, name, phone, email, notes: "Kaycee chat\n" + summaryText(), source: "chat",
+            };
+            let saved = false;
+            try { if (window.KCM?.configured) { await window.KCM.call("submitBooking", { booking, website: f.website.value }); saved = true; } }
+            catch { /* still offer WhatsApp below */ }
+            f.remove();
+            addMsg(`${name}, ${phone}${email ? ", " + email : ""}`, "user");
+            await typing(500);
+            addMsg(saved
+                ? `Done! Your request ${ref} has been sent to our team, and a consultant will contact you on ${phone}, usually within one working day. You can also chat to us on WhatsApp now.`
+                : `Thanks ${name.split(" ")[0]}! Your reference is ${ref}. Tap below to send it to a consultant on WhatsApp.`);
+            choicesEl.innerHTML = "";
+            const link = document.createElement("a");
+            link.className = "chat-choice" + (saved ? "" : " chat-choice--primary"); link.target = "_blank"; link.rel = "noopener";
+            link.href = `https://wa.me/${wa}?text=${encodeURIComponent(`Hi KCM Travel & Tours! My trip request ${ref} (from Kaycee):\n${summaryText()}\nName: ${name}\nCell: ${phone}`)}`;
+            link.textContent = "Chat on WhatsApp";
+            const again = document.createElement("button");
+            again.type = "button"; again.className = "chat-choice"; again.textContent = "Plan another trip";
+            again.addEventListener("click", restart);
+            choicesEl.append(link, again);
+            state.sent = ref; save();
+        });
     };
 
     /* ---------- free text ---------- */

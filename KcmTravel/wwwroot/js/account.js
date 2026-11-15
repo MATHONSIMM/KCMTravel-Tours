@@ -109,7 +109,7 @@
                         ${l.reviewNote ? `<blockquote class="review-note"><strong>Note from KCM:</strong> ${esc(l.reviewNote)}</blockquote>` : ""}
                         ${l.status === "Approved" ? `<div class="listing-stats"><div><strong>${l.trips}</strong><span>trips</span></div><div><strong>${R(l.earned)}</strong><span>earned</span></div><div><strong>${l.ratingCount ? l.rating.toFixed(1) + " ★" : "—"}</strong><span>${l.ratingCount} rating${l.ratingCount === 1 ? "" : "s"}</span></div></div>` : ""}
                         <div class="standard"><p class="field-legend">KCM premium standard</p><ul>
-                            <li class="${l.photoCount >= (l.required || []).length ? "ok" : ""}">All required photos (${l.photoCount}/${(l.required || []).length})</li>
+                            <li class="${l.photoCount >= (l.required || []).length + (l.requiredDocuments || []).length ? "ok" : ""}">Photos and ownership documents uploaded</li>
                             <li class="${["In review", "Needs info", "Approved", "Rejected"].includes(l.status) ? "ok" : ""}">Reviewed by the KCM team</li>
                             <li class="${l.status === "Approved" ? "ok" : ""}">Meets the premium standard${l.tier ? ` (${esc(l.tier)})` : ""}</li>
                             <li class="${l.ratingCount && l.rating >= 4 ? "ok" : ""}">Guest rating of 4★ or higher</li>
@@ -203,9 +203,17 @@
                 const canEdit = ["Needs info", "Uploading"].includes(a.status);
                 const have = new Set(a.photos.map(p => p.label));
                 const missing = (a.required || []).filter(l => !have.has(l));
+                const docs = a.documents || [], haveDocs = new Set(docs.map(x => x.label));
+                const missingDocs = (a.requiredDocuments || []).filter(l => !haveDocs.has(l));
+                const docLabels = [...new Set([...missingDocs, ...(t.documents || []).map(x => x.label), ...(t.optionalDocs || []).map(x => x.label)])];
                 box.dataset.loaded = "1";
                 box.innerHTML = `${missing.length ? `<p class="notice notice--soft">Missing required photos: <strong>${missing.map(esc).join(", ")}</strong></p>` : ""}
+                    ${missingDocs.length ? `<p class="notice notice--soft">Missing documents: <strong>${missingDocs.map(esc).join(", ")}</strong></p>` : ""}
                     <div class="thumb-grid">${a.photos.map(p => `<figure class="thumb" data-file="${esc(p.fileId)}"><div class="thumb-img"></div><figcaption>${esc(p.label)}</figcaption></figure>`).join("") || "<p class='muted'>No photos yet.</p>"}</div>
+                    <p class="field-legend" style="margin-top:14px">Documents (private)</p>
+                    <ul class="doc-mini">${docs.map(x => `<li>✓ ${esc(x.label)}</li>`).join("") || "<li class='muted'>No documents yet.</li>"}</ul>
+                    ${canEdit ? `<div class="add-photo"><label class="field"><span class="field-legend">Add a document</span><select data-add-doc-label>${docLabels.map(l => `<option>${esc(l)}</option>`).join("")}</select></label>
+                        <label class="btn btn--outline btn--sm file-btn">Choose PDF or photo<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" data-add-doc hidden></label><span class="muted" data-add-doc-status></span></div>` : ""}
                     ${canEdit ? `<div class="add-photo"><label class="field"><span class="field-legend">Add a photo</span><select data-add-label>${[...new Set([...missing, ...(t.required || []), ...(t.optional || []), "Extra photo"])].map(l => `<option>${esc(l)}</option>`).join("")}</select></label>
                         <label class="btn btn--outline btn--sm file-btn">Choose photo<input type="file" accept="image/jpeg,image/png,image/webp" data-add-file hidden></label><span class="muted" data-add-status></span></div>` : ""}`;
                 $$("[data-file]", box).forEach(loadThumb);
@@ -231,6 +239,19 @@
         });
         root.addEventListener("change", async e => {
             if (e.target.closest("[data-period]")) { $("[data-jobs]").innerHTML = jobsTable(periodJobs()); return; }
+            const dinput = e.target.closest("[data-add-doc]");
+            if (dinput && dinput.files[0]) {
+                const card = dinput.closest("[data-app]"), st = $("[data-add-doc-status]", card);
+                if (preview) { st.textContent = "Preview only"; return; }
+                st.textContent = "Uploading…";
+                try {
+                    const dataUrl = await K.readDocument(dinput.files[0]);
+                    await K.call("uploadPhoto", { id: card.dataset.app, label: $("[data-add-doc-label]", card).value, dataUrl, kind: "document" });
+                    st.textContent = "Uploaded ✓";
+                    const box = $("[data-detail]", card); delete box.dataset.loaded; box.hidden = true; loadDetail(card, card.dataset.app);
+                } catch (ex) { st.textContent = ex.message; }
+                dinput.value = ""; return;
+            }
             const input = e.target.closest("[data-add-file]");
             if (!input || !input.files[0]) return;
             const card = input.closest("[data-app]"), status = $("[data-add-status]", card);
@@ -262,7 +283,7 @@
             return {
                 me: () => ({ email: "thabo@example.com", name: "Thabo Nkosi", role: "partner", isStaff: false }),
                 partnerDashboard: async () => ({ listings, totals: t, months, stars: [0, 0, 0, 2, 7], jobs, ratings }),
-                getApplication: async ({ id }) => ({ ...listings.find(l => l.id === id), photos: [] }),
+                getApplication: async ({ id }) => ({ ...listings.find(l => l.id === id), photos: [], documents: [], requiredDocuments: K.TYPES[listings.find(l => l.id === id).partnerType].documents.map(x => x.label) }),
                 getPhoto: async () => { throw new Error("preview"); },
             };
         })();

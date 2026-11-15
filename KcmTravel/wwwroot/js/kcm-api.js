@@ -31,7 +31,7 @@
         let data;
         try { data = await res.json(); } catch { throw new ApiError("The server sent an unexpected reply. Please try again.", "bad_response"); }
         if (!data.ok) {
-            if (data.code === "auth") { store.clear(); emit(); }
+            if (data.code === "auth" || (data.code === "pending" && s?.token)) { store.clear(); emit(); }
             throw new ApiError(data.error || "Something went wrong.", data.code);
         }
         return data.data;
@@ -82,6 +82,15 @@
             services: ["Airport transfers", "Chauffeur-driven trips", "Self-drive hire", "Tours & day trips", "Group shuttles", "Weddings & events"],
             required: ["Front", "Rear", "Left side", "Right side", "Dashboard & front seats", "Rear seats", "Boot"],
             optional: ["Odometer", "Engine", "Extra photo"],
+            documents: [
+                { label: "Vehicle registration certificate", hint: "The NaTIS registration certificate (RC1) showing you or your company as the owner." },
+                { label: "ID or driver's licence", hint: "Of the person or director named on the registration certificate." },
+            ],
+            optionalDocs: [
+                { label: "Vehicle insurance", hint: "Current insurance schedule." },
+                { label: "Roadworthy certificate", hint: "If you have a recent one." },
+                { label: "Operating licence or PrDP", hint: "For paid passenger transport." },
+            ],
             detailsTitle: "About the vehicle",
             fields: [
                 { key: "make", label: "Make", req: 1, ph: "e.g. Toyota" },
@@ -105,6 +114,15 @@
             services: ["Bed & breakfast", "Self-catering", "Dinner / full board", "Conference venue", "Wedding venue", "Game drives"],
             required: ["Exterior", "Bedroom", "Bathroom", "Lounge or common area"],
             optional: ["Pool or garden", "View", "Breakfast", "Extra photo"],
+            documents: [
+                { label: "Proof of ownership or lease", hint: "Title deed, municipal rates bill in your name, or a signed lease that allows guest accommodation." },
+                { label: "ID of owner or director", hint: "Of the person named on the proof of ownership." },
+            ],
+            optionalDocs: [
+                { label: "Business registration (CIPC)", hint: "If you trade as a company." },
+                { label: "Grading certificate (TGCSA)", hint: "If your property is star graded." },
+                { label: "Municipal business licence", hint: "If your municipality issued one." },
+            ],
             detailsTitle: "About the property",
             fields: [
                 { key: "propertyType", label: "Property type", req: 1, opts: ["Hotel", "Lodge", "B&B", "Guesthouse", "Self-catering", "Tented camp"] },
@@ -121,6 +139,8 @@
             services: ["Day tours", "Multi-day packages", "Safaris", "School & church groups", "Corporate travel", "International trips"],
             required: ["Logo", "Vehicle or fleet"],
             optional: ["Team or office", "Tour photo", "Extra photo"],
+            documents: [{ label: "Business registration (CIPC)", hint: "Your company registration certificate." }],
+            optionalDocs: [{ label: "Operating licence", hint: "Tourism transport operating licence." }, { label: "SATSA or ASATA membership", hint: "Membership certificate." }, { label: "Public liability insurance", hint: "Current schedule." }],
             detailsTitle: "About your operation",
             fields: [
                 { key: "tourTypes", label: "Main tours you run", req: 1, ph: "e.g. Kruger day safaris, Panorama Route" },
@@ -134,8 +154,10 @@
         guide: {
             label: "Tour guide", blurb: "Registered field, culture and site guides.", icon: "user",
             services: ["Game drives", "Walking safaris", "Cultural tours", "City tours", "Birding", "Hiking"],
-            required: ["Profile photo", "Guide certificate"],
+            required: ["Profile photo"],
             optional: ["On tour", "Extra photo"],
+            documents: [{ label: "Guide registration certificate", hint: "Your Department of Tourism guide registration (or FGASA certificate)." }],
+            optionalDocs: [{ label: "First aid certificate", hint: "If you have one." }],
             detailsTitle: "About you as a guide",
             fields: [
                 { key: "guideLevel", label: "Qualification", req: 1, opts: ["FGASA Level 1", "FGASA Level 2", "FGASA Level 3", "Culture / site guide", "Provincial registration", "Other"] },
@@ -151,6 +173,8 @@
             services: ["Adventure", "Water activities", "Air activities", "Cultural experiences", "Kids activities", "Wellness"],
             required: ["Activity photo", "Safety equipment"],
             optional: ["Venue", "Extra photo"],
+            documents: [{ label: "Business registration or ID", hint: "CIPC certificate, or your ID if you trade in your own name." }],
+            optionalDocs: [{ label: "Public liability insurance", hint: "Current schedule." }, { label: "Safety certification", hint: "Any operator or safety certificate." }],
             detailsTitle: "About the activity",
             fields: [
                 { key: "activityType", label: "Activity", req: 1, ph: "e.g. Sunrise hot-air balloon flight" },
@@ -166,6 +190,8 @@
             services: ["Catering", "Photography", "Event planning", "Translation", "Other"],
             required: ["Photo of your service"],
             optional: ["Extra photo", "Extra photo 2"],
+            documents: [{ label: "Business registration or ID", hint: "CIPC certificate, or your ID if you trade in your own name." }],
+            optionalDocs: [{ label: "Supporting document", hint: "Any licence or certificate that supports your application." }],
             detailsTitle: "About the service",
             fields: [
                 { key: "serviceType", label: "What do you offer?", req: 1 },
@@ -214,5 +240,18 @@
     const fmtR = n => "R" + Math.round(Number(n) || 0).toLocaleString("en-ZA").replace(/[, ]/g, " ");
     const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-    window.KCM = { configured: !!API, googleClientId: GCID, base: BASE, call, beacon, session, TYPES, resizeImage, loadGoogle, fmtR, esc, ApiError };
+    /** Documents: PDFs are sent as-is (max 6 MB); photos of documents are resized but kept sharp enough to read. */
+    function readDocument(file) {
+        if (/^image\//i.test(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name)) return resizeImage(file, 2200, 0.85);
+        return new Promise((resolve, reject) => {
+            if (!(file.type === "application/pdf" || /\.pdf$/i.test(file.name))) { reject(new ApiError("Please upload a PDF, or a clear photo of the document.")); return; }
+            if (file.size > 6 * 1024 * 1024) { reject(new ApiError("That PDF is larger than 6 MB. Please use a smaller scan or a photo.")); return; }
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result).replace(/^data:[^;]*;/, "data:application/pdf;"));
+            r.onerror = () => reject(new ApiError("That file couldn't be read."));
+            r.readAsDataURL(file);
+        });
+    }
+
+    window.KCM = { configured: !!API, googleClientId: GCID, base: BASE, call, beacon, session, TYPES, resizeImage, readDocument, loadGoogle, fmtR, esc, ApiError };
 })();

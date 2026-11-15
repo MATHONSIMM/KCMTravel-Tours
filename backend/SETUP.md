@@ -41,7 +41,33 @@ Push to `main` and GitHub Pages redeploys with sign-in and registration switched
 
 > **After changing Code.gs later:** go to **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. The URL stays the same.
 
-## 3. (Optional) "Continue with Google" button
+## 3. Switch on WhatsApp alerts (about 3 minutes)
+
+Every new partner application, booking (website form and Kaycee chat) and contact message sends a WhatsApp message to the KCM team, with a link straight to the right page in the admin dashboard. The pilot uses **CallMeBot**, a free service for alerts to your own number.
+
+For **each phone** that should get alerts:
+
+1. Save **+34 644 71 81 99** in that phone's contacts (name it "CallMeBot").
+2. Send it this WhatsApp message: `I allow callmebot to send me messages`
+3. You'll get a reply with your **API key** (a number).
+4. In the Google Sheet, open **KCM → WhatsApp alerts…** and enter `number, apikey`, for example `0764360010, 1234567`. A test message is sent straight away.
+
+Repeat for other admins' phones. Type `clear` in the same box to remove all numbers. Emails still go out as well, so nothing is missed if WhatsApp is down.
+
+> Later, for messages to partners and guests on WhatsApp (not only the KCM team), move to the official WhatsApp Business Cloud API from Meta. Only the `whatsapp_` function in `Code.gs` needs to change.
+
+## Passwords and sign-in
+
+- **Partners** choose their password on the registration form. They can only sign in **after you approve** them (or if you asked them for more info). Before that, sign-in shows "your application is still being reviewed".
+- **You and other admins**: the first time, click **Sign in → Forgot or set password**, enter your email, then the 6-digit code from your inbox and your new password.
+- Passwords are never stored in the Sheet: only a salted, hashed version (the `PasswordHash` and `PasswordSalt` columns in **Users**). Don't edit those columns.
+- Forgotten passwords: anyone can reset theirs with **Forgot or set password**.
+
+## Ownership documents
+
+Applicants upload proof that the vehicle or property is theirs (for example the vehicle registration certificate and ID, or a title deed, rates bill or lease and ID). Documents are saved privately in the same Drive folder as the photos (file names start with `DOC`) and appear in the **Photos** tab with `Kind` = `document`. In the dashboard they're under **Ownership documents** in each application, with an **Open** button. Check that the names match before approving.
+
+## 4. (Optional) "Continue with Google" button
 
 The email-code sign-in works without this step. To add the Google button:
 
@@ -71,10 +97,10 @@ To give someone access, sign in to the website and open **Admin → Users & acce
 
 | Tab | Contents |
 |---|---|
-| Users | Everyone who signed in, plus their role and status |
+| Users | Everyone with an account, their role and status (`pending` = registered partner waiting for approval). Password columns hold hashes only. |
 | Partners | Partner applications. Type-specific answers are in `Summary` (readable) and `Details` (JSON). `Tier` is the premium standard set on approval (Premium, Premium Plus, Signature). |
-| Photos | One row per photo. Files are in Drive → *KCM Partner Uploads (private)* |
-| Bookings | Booking requests from the website |
+| Photos | One row per photo or document (`Kind` = photo or document). Files are in Drive → *KCM Partner Uploads (private)* |
+| Bookings | Booking requests from the website form (`Source` = website) and Kaycee chat (`Source` = chat) |
 | Messages | Contact form messages |
 | Jobs | Trips done by partners: trip value, KCM commission %, partner payout and payout status (Pending, Approved, Paid, On hold). Partners see only their own rows in their portal and can download a statement. |
 | Ratings | Guest ratings (1–5 stars) sent through the `/rate` link. Admins can hide a rating; hidden ones aren't shown or counted. |
@@ -83,7 +109,7 @@ To give someone access, sign in to the website and open **Admin → Users & acce
 
 Please don't rename tabs or column headers: the script relies on them.
 
-**Updating from an earlier version:** paste the new `Code.gs` and run **KCM → Setup** once more. It adds the Jobs and Ratings tabs and the Tier column without touching your data, then deploy a new version (Deploy → Manage deployments → Edit → New version).
+**Updating from an earlier version:** paste the new `Code.gs` and run **KCM → Setup** once more. It adds any new tabs and columns (Jobs, Ratings, Tier, passwords, document Kind) without touching your data, then deploy a new version (Deploy → Manage deployments → Edit → New version).
 
 ## Limits to know (free Google account)
 

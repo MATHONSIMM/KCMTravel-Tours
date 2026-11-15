@@ -17,11 +17,13 @@
 
 const APP = {
   name: 'KCM Travel & Tours',
-  version: '1.1.0',
+  version: '1.2.0',
   sessionDays: 7,
   codeMinutes: 15,
   maxPhotoBytes: 4 * 1024 * 1024,
-  maxPhotosPerApplication: 24,
+  maxDocBytes: 6 * 1024 * 1024,
+  passwordRounds: 1000,
+  maxPhotosPerApplication: 30,
 };
 
 const ROLES = ['owner', 'admin', 'viewer', 'partner'];
@@ -29,11 +31,11 @@ const STAFF = ['owner', 'admin', 'viewer'];
 const EDITORS = ['owner', 'admin'];
 
 const TABS = {
-  Users: ['Email', 'Name', 'Role', 'Status', 'Provider', 'Picture', 'Created', 'LastLogin', 'InvitedBy'],
+  Users: ['Email', 'Name', 'Role', 'Status', 'Provider', 'Picture', 'Created', 'LastLogin', 'InvitedBy', 'PasswordHash', 'PasswordSalt'],
   Partners: ['ID', 'Created', 'Email', 'ContactName', 'Phone', 'BusinessName', 'PartnerType', 'Province', 'City',
     'Services', 'Description', 'RegNumber', 'Website', 'Social', 'YearsInBusiness', 'Summary', 'Details',
     'Status', 'PhotoCount', 'DriveFolderId', 'ReviewedBy', 'ReviewedAt', 'ReviewNote', 'Updated', 'Tier'],
-  Photos: ['ID', 'PartnerID', 'Label', 'FileID', 'FileName', 'Uploaded', 'UploadedBy'],
+  Photos: ['ID', 'PartnerID', 'Label', 'FileID', 'FileName', 'Uploaded', 'UploadedBy', 'Kind'],
   Bookings: ['Reference', 'Created', 'Tour', 'StartDate', 'Nights', 'Adults', 'Children', 'Infants', 'Pensioners',
     'Room', 'Extras', 'Payment', 'EstimatedTotal', 'Name', 'Email', 'Phone', 'Notes', 'Status', 'Source'],
   Messages: ['Created', 'Name', 'Email', 'Phone', 'Message', 'Status'],
@@ -44,13 +46,16 @@ const TABS = {
   Codes: ['Email', 'CodeHash', 'Expires', 'Attempts'],
 };
 
+/** required = photos; documents = proof the business/asset belongs to the applicant (private, staff-only). */
 const PARTNER_TYPES = {
-  vehicle: { label: 'Vehicle owner (car hire & transfers)', required: ['Front', 'Rear', 'Left side', 'Right side', 'Dashboard & front seats', 'Rear seats', 'Boot'] },
-  accommodation: { label: 'Accommodation (hotel, lodge, B&B, guesthouse)', required: ['Exterior', 'Bedroom', 'Bathroom', 'Lounge or common area'] },
-  tour_operator: { label: 'Tour operator or travel agency', required: ['Logo', 'Vehicle or fleet'] },
-  guide: { label: 'Tour guide', required: ['Profile photo', 'Guide certificate'] },
-  activity: { label: 'Activity provider', required: ['Activity photo', 'Safety equipment'] },
-  other: { label: 'Other service', required: ['Photo of your service'] },
+  vehicle: { label: 'Vehicle owner (car hire & transfers)', required: ['Front', 'Rear', 'Left side', 'Right side', 'Dashboard & front seats', 'Rear seats', 'Boot'],
+    documents: ['Vehicle registration certificate', 'ID or driver\'s licence'] },
+  accommodation: { label: 'Accommodation (hotel, lodge, B&B, guesthouse)', required: ['Exterior', 'Bedroom', 'Bathroom', 'Lounge or common area'],
+    documents: ['Proof of ownership or lease', 'ID of owner or director'] },
+  tour_operator: { label: 'Tour operator or travel agency', required: ['Logo', 'Vehicle or fleet'], documents: ['Business registration (CIPC)'] },
+  guide: { label: 'Tour guide', required: ['Profile photo'], documents: ['Guide registration certificate'] },
+  activity: { label: 'Activity provider', required: ['Activity photo', 'Safety equipment'], documents: ['Business registration or ID'] },
+  other: { label: 'Other service', required: ['Photo of your service'], documents: ['Business registration or ID'] },
 };
 
 const STATUSES = ['Uploading', 'Pending', 'In review', 'Needs info', 'Approved', 'Rejected'];
@@ -89,6 +94,9 @@ const ACTIONS = {
   // public
   ping: () => ({ name: APP.name, version: APP.version, googleSignIn: !!prop_('GOOGLE_CLIENT_ID') }),
   requestCode: requestCode_,
+  signIn: signIn_,
+  resetPassword: resetPassword_,
+  registerPartner: registerPartner_,
   verifyCode: verifyCode_,
   googleSignIn: googleSignIn_,
   submitBooking: submitBooking_,
@@ -149,7 +157,12 @@ function requestCode_(b) {
 
 function verifyCode_(b) {
   const email = cleanEmail_(b.email);
-  const code = String(b.code || '').replace(/\D/g, '');
+  verifyCodeOnly_(email, b.code);
+  return startSession_(email, { provider: 'email', name: b.name });
+}
+
+function verifyCodeOnly_(email, rawCode) {
+  const code = String(rawCode || '').replace(/\D/g, '');
   let ok = false;
   withLock_(() => {
     const sh = sheet_('Codes');
@@ -165,7 +178,6 @@ function verifyCode_(b) {
     }
   });
   if (!ok) throw userError_('That code is wrong or has expired. Please request a new one.');
-  return startSession_(email, { provider: 'email', name: b.name });
 }
 
 function googleSignIn_(b) {
@@ -181,9 +193,81 @@ function googleSignIn_(b) {
   return startSession_(cleanEmail_(info.email), { provider: 'google', name: info.name, picture: info.picture });
 }
 
+/* ---------- passwords ---------- */
+function pepper_() {
+  const props = PropertiesService.getScriptProperties();
+  let p = props.getProperty('PASSWORD_PEPPER');
+  if (!p) { p = Utilities.getUuid() + Utilities.getUuid(); props.setProperty('PASSWORD_PEPPER', p); }
+  return p;
+}
+function hashPassword_(password, salt) {
+  let h = salt + ':' + password + ':' + pepper_();
+  for (let i = 0; i < APP.passwordRounds; i++) h = hash_(h + ':' + salt);
+  return h;
+}
+function checkPassword_(password) {
+  const pw = String(password || '');
+  if (pw.length < 8 || pw.length > 100) throw userError_('Your password must be at least 8 characters.');
+  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) throw userError_('Use letters and at least one number in your password.');
+  return pw;
+}
+function setPassword_(email, password) {
+  const salt = Utilities.getUuid().replace(/-/g, '');
+  const hashed = hashPassword_(password, salt);
+  withLock_(() => {
+    const sh = sheet_('Users');
+    const rows = sh.getDataRange().getValues();
+    const idx = rows.findIndex((r, i) => i > 0 && r[0] === email);
+    if (idx > 0) sh.getRange(idx + 1, TABS.Users.indexOf('PasswordHash') + 1, 1, 2).setValues([[hashed, salt]]);
+  });
+}
+function loginRateLimit_(email) {
+  const cache = CacheService.getScriptCache();
+  const key = 'login-rate:' + email;
+  const n = Number(cache.get(key) || 0);
+  if (n >= 8) throw userError_('Too many sign-in attempts. Please wait 15 minutes, or reset your password.');
+  cache.put(key, String(n + 1), 15 * 60);
+}
+
+/** Email + password sign-in. Partners can only sign in once an application has been approved (or we asked them for more info). */
+function signIn_(b) {
+  const email = cleanEmail_(b.email);
+  loginRateLimit_(email);
+  const user = findUser_(email);
+  const wrong = userError_('That email or password is incorrect.');
+  if (!user || !user.PasswordHash) {
+    if (user && STAFF.indexOf(user.Role) !== -1) throw userError_('You haven\'t set a password yet. Tap "Forgot or set password" to create one.');
+    throw wrong;
+  }
+  if (hashPassword_(String(b.password || ''), String(user.PasswordSalt)) !== user.PasswordHash) throw wrong;
+  CacheService.getScriptCache().remove('login-rate:' + email);
+  return startSession_(email, { provider: 'password' });
+}
+
+/** Forgot / first-time password: verify the emailed code, then save the new password and sign in. */
+function resetPassword_(b) {
+  const email = cleanEmail_(b.email);
+  const password = checkPassword_(b.password);
+  verifyCodeOnly_(email, b.code);
+  if (!findUser_(email)) throw userError_('We couldn\'t find an account for that email. New partners: please register first.');
+  setPassword_(email, password);
+  log_(email, 'password_set', email, '');
+  return startSession_(email, { provider: 'password' });
+}
+
+/** Who may open a session. Pending partners get a clear status message instead of a session. */
+function accessGate_(user) {
+  if (user.Status === 'disabled') throw userError_('This account has been disabled. Please contact KCM Travel & Tours.');
+  if (user.Role !== 'partner' || user.Status === 'active') return;
+  const apps = readTable_('Partners').filter(p => p.Email === user.Email);
+  if (apps.some(p => p.Status === 'Approved' || p.Status === 'Needs info')) return;
+  if (apps.length && apps.every(p => p.Status === 'Rejected')) throw userError_('Your application was not approved. Please check your email for feedback, or contact us on WhatsApp.', 'pending');
+  throw userError_('Thanks! Your application is still being reviewed. You can sign in as soon as it\'s approved, and we\'ll email you then.', 'pending');
+}
+
 function startSession_(email, opts) {
   const user = upsertUser_(email, opts);
-  if (user.Status === 'disabled') throw userError_('This account has been disabled. Please contact KCM Travel & Tours.');
+  if (!opts.registering) accessGate_(user);
   const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
   withLock_(() => {
     const sh = sheet_('Sessions');
@@ -201,7 +285,8 @@ function signOut_(b) {
   return { signedOut: true };
 }
 
-function requireUser_(token) {
+/** allowPending: a newly registered partner may finish uploading and submit before approval, nothing else. */
+function requireUser_(token, allowPending) {
   if (!token) throw userError_('Please sign in.', 'auth');
   const h = hash_(String(token));
   const cache = CacheService.getScriptCache();
@@ -215,6 +300,7 @@ function requireUser_(token) {
   }
   const user = findUser_(email);
   if (!user || user.Status === 'disabled') throw userError_('Please sign in.', 'auth');
+  if (user.Status === 'pending' && !allowPending) accessGate_(user);
   return user;
 }
 
@@ -243,7 +329,7 @@ function upsertUser_(email, opts) {
     const now = new Date();
     if (idx === -1) {
       const role = email === owner ? 'owner' : 'partner';
-      const row = [email, safe_(opts.name || ''), role, 'active', opts.provider || '', safe_(opts.picture || ''), now, now, ''];
+      const row = [email, safe_(opts.name || ''), role, opts.status || 'active', opts.provider || '', safe_(opts.picture || ''), now, now, '', '', ''];
       sh.appendRow(row);
       result = rowToObj_(TABS.Users, row);
     } else {
@@ -287,7 +373,7 @@ function saveUser_(b) {
     const rows = sh.getDataRange().getValues();
     const idx = rows.findIndex((r, i) => i > 0 && r[0] === email);
     if (idx === -1) {
-      sh.appendRow([email, safe_(b.name || ''), role, status, 'invited', '', new Date(), '', actor.Email]);
+      sh.appendRow([email, safe_(b.name || ''), role, status, 'invited', '', new Date(), '', actor.Email, '', '']);
     } else {
       sh.getRange(idx + 1, 3, 1, 2).setValues([[role, status]]);
       if (b.name) sh.getRange(idx + 1, 2).setValue(safe_(b.name));
@@ -297,7 +383,7 @@ function saveUser_(b) {
   if (!target && STAFF.indexOf(role) !== -1) {
     sendMail_(email, `You've been given access to ${APP.name}`,
       `<p>Hi${b.name ? ' ' + esc_(b.name) : ''},</p><p>${esc_(actor.Name || actor.Email)} has given you <strong>${role}</strong> access to the ${APP.name} admin dashboard.</p>
-       <p>Go to the website, click <strong>Sign in</strong> and use this email address (${esc_(email)}).</p>${siteLink_('/admin', 'Open the admin dashboard')}`);
+       <p>Go to the website, click <strong>Sign in</strong>, then <strong>Forgot or set password</strong> to create your password with this email address (${esc_(email)}).</p>${siteLink_('/admin', 'Open the admin dashboard')}`);
   }
   return { saved: true };
 }
@@ -306,9 +392,29 @@ function saveUser_(b) {
  * Partner applications
  * ===================================================================== */
 
+/** Public: new partner fills in the whole form, chooses a password and submits. Creates a pending account + the application. */
+function registerPartner_(b) {
+  if (b.website) throw userError_('Something went wrong. Please try again.'); // honeypot
+  publicRateLimit_();
+  const a = b.account || {};
+  const email = cleanEmail_(a.email);
+  const password = checkPassword_(a.password);
+  const owner = String(prop_('OWNER_EMAIL') || '').toLowerCase();
+  if (email === owner || findUser_(email)) throw userError_('This email is already registered. Please sign in to add another business, or use "Forgot or set password".', 'exists');
+  const name = safe_(a.name || (b.application || {}).contactName || '');
+  upsertUser_(email, { name, provider: 'password', status: 'pending' });
+  setPassword_(email, password);
+  const session = startSession_(email, { provider: 'password', registering: true });
+  const app = createApplication_(findUser_(email), b.application || {});
+  log_(email, 'partner_registered', app.id, name);
+  return Object.assign(app, { token: session.token });
+}
+
 function submitApplication_(b) {
-  const user = requireUser_(b.token);
-  const d = b.application || {};
+  return createApplication_(requireUser_(b.token), b.application || {});
+}
+
+function createApplication_(user, d) {
   const type = String(d.partnerType || '');
   if (!PARTNER_TYPES[type]) throw userError_('Please choose what kind of partner you are.');
   const need = ['contactName', 'phone', 'businessName', 'province', 'city', 'description'];
@@ -324,49 +430,56 @@ function submitApplication_(b) {
   withLock_(() => sheet_('Partners').appendRow(row));
   if (!user.Name && d.contactName) upsertUser_(user.Email, { name: d.contactName });
   log_(user.Email, 'application_started', id, PARTNER_TYPES[type].label);
-  return { id, required: PARTNER_TYPES[type].required };
+  return { id, required: PARTNER_TYPES[type].required, documents: PARTNER_TYPES[type].documents };
 }
 
 function uploadPhoto_(b) {
-  const user = requireUser_(b.token);
+  const user = requireUser_(b.token, true);
   const app = findApplication_(b.id);
   if (!app) throw userError_('Application not found.');
   const isOwner = app.row.Email === user.Email;
   if (!isOwner && EDITORS.indexOf(user.Role) === -1) throw userError_('You do not have access to this.', 'forbidden');
   if (['Uploading', 'Pending', 'In review', 'Needs info'].indexOf(app.row.Status) === -1) throw userError_('Photos can no longer be added to this application.');
-  if (Number(app.row.PhotoCount || 0) >= APP.maxPhotosPerApplication) throw userError_('You have reached the maximum number of photos.');
+  if (Number(app.row.PhotoCount || 0) >= APP.maxPhotosPerApplication) throw userError_('You have reached the maximum number of files.');
 
-  const m = String(b.dataUrl || '').match(/^data:(image\/(jpeg|png|webp));base64,(.+)$/);
-  if (!m) throw userError_('Please upload a JPG, PNG or WebP image.');
-  const bytes = Utilities.base64Decode(m[3]);
-  if (bytes.length > APP.maxPhotoBytes) throw userError_('That photo is too large. Please use a smaller image.');
-  const label = safe_(b.label || 'Photo', 60);
-  const ext = m[2] === 'jpeg' ? 'jpg' : m[2];
-  const name = label.replace(/[^\w &-]/g, '') + '.' + ext;
+  const isDoc = b.kind === 'document';
+  const m = String(b.dataUrl || '').match(isDoc ? /^data:(image\/(jpeg|png|webp)|application\/(pdf));base64,(.+)$/ : /^data:(image\/(jpeg|png|webp));base64,(.+)$/);
+  if (!m) throw userError_(isDoc ? 'Please upload the document as a PDF or a photo (JPG or PNG).' : 'Please upload a JPG, PNG or WebP image.');
+  const bytes = Utilities.base64Decode(m[m.length - 1]);
+  if (bytes.length > (isDoc ? APP.maxDocBytes : APP.maxPhotoBytes)) throw userError_(isDoc ? 'That document is too large (max 6 MB).' : 'That photo is too large. Please use a smaller image.');
+  const label = safe_(b.label || (isDoc ? 'Document' : 'Photo'), 60);
+  const ext = m[3] === 'pdf' ? 'pdf' : m[2] === 'jpeg' ? 'jpg' : m[2];
+  const name = (isDoc ? 'DOC ' : '') + label.replace(/[^\w &-]/g, '') + '.' + ext;
   const file = DriveApp.getFolderById(app.row.DriveFolderId).createFile(Utilities.newBlob(bytes, m[1], name));
   const photoId = 'F-' + randomCode_(8);
   withLock_(() => {
-    sheet_('Photos').appendRow([photoId, app.row.ID, label, file.getId(), name, new Date(), user.Email]);
+    sheet_('Photos').appendRow([photoId, app.row.ID, label, file.getId(), name, new Date(), user.Email, isDoc ? 'document' : 'photo']);
     const fresh = findApplication_(b.id);
     sheet_('Partners').getRange(fresh.index, TABS.Partners.indexOf('PhotoCount') + 1).setValue(Number(fresh.row.PhotoCount || 0) + 1);
   });
-  return { photoId, label };
+  return { photoId, label, kind: isDoc ? 'document' : 'photo' };
 }
 
 function finalizeApplication_(b) {
-  const user = requireUser_(b.token);
+  const user = requireUser_(b.token, true);
   const app = findApplication_(b.id);
   if (!app || app.row.Email !== user.Email) throw userError_('Application not found.');
-  const labels = photosFor_(app.row.ID).map(p => p.Label);
-  const missing = PARTNER_TYPES[app.row.PartnerType].required.filter(r => labels.indexOf(r) === -1);
+  const files = photosFor_(app.row.ID);
+  const labels = files.filter(p => p.Kind !== 'document').map(p => p.Label);
+  const docs = files.filter(p => p.Kind === 'document').map(p => p.Label);
+  const t = PARTNER_TYPES[app.row.PartnerType];
+  const missing = t.required.filter(r => labels.indexOf(r) === -1);
   if (missing.length) throw userError_('Please add these photos first: ' + missing.join(', '));
+  const missingDocs = (t.documents || []).filter(r => docs.indexOf(r) === -1);
+  if (missingDocs.length) throw userError_('Please add these documents first: ' + missingDocs.join(', '));
   const wasNeedsInfo = app.row.Status === 'Needs info';
   setApplicationFields_(app.index, { Status: 'Pending', Updated: new Date() });
   log_(user.Email, wasNeedsInfo ? 'application_resubmitted' : 'application_submitted', app.row.ID, app.row.BusinessName);
 
   sendMail_(user.Email, `We've received your partner application (${app.row.ID})`,
     `<p>Hi ${esc_(app.row.ContactName)},</p><p>Thank you for applying to partner with ${APP.name}. Your application <strong>${app.row.ID}</strong> for <strong>${esc_(app.row.BusinessName)}</strong> is now with our team.</p>
-     <p>We review every partner carefully, including the photos, and usually reply within 3 working days. We'll email you as soon as there's an update.</p>${siteLink_('/account', 'Check your application')}`);
+     <p>We review every partner carefully, including the photos and documents, and usually reply within 3 working days. Once you're approved you can sign in with this email address and the password you chose.</p>`);
+  whatsapp_(`${wasNeedsInfo ? '🔁 Partner application updated' : '🆕 New partner application'} (${app.row.ID})\n${app.row.BusinessName}\n${t.label}\n${app.row.City}, ${app.row.Province}\nContact: ${app.row.ContactName} · ${app.row.Phone}\n${files.length} photos & documents\n\nReview it: ${siteUrl_('/admin#applications/' + app.row.ID)}`);
   staffEmails_(['owner', 'admin']).forEach(to => sendMail_(to, `New partner application: ${app.row.BusinessName}`,
     `<p>A new ${esc_(PARTNER_TYPES[app.row.PartnerType].label.toLowerCase())} application is waiting for review.</p>
      <p><strong>${esc_(app.row.BusinessName)}</strong> · ${esc_(app.row.City)}, ${esc_(app.row.Province)}<br>${esc_(app.row.Summary)}</p>${siteLink_('/admin#applications', 'Review it in the dashboard')}`));
@@ -394,7 +507,9 @@ function getApplication_(b) {
     log_(user.Email, 'application_opened', app.row.ID, app.row.BusinessName);
   }
   const view = applicationView_(app.row, true);
-  view.photos = photosFor_(app.row.ID).map(p => ({ id: p.ID, label: p.Label, fileId: p.FileID, uploaded: iso_(p.Uploaded) }));
+  const files = photosFor_(app.row.ID).map(p => ({ id: p.ID, label: p.Label, fileId: p.FileID, uploaded: iso_(p.Uploaded), kind: p.Kind || 'photo', name: p.FileName }));
+  view.photos = files.filter(f => f.kind !== 'document');
+  view.documents = files.filter(f => f.kind === 'document');
   return view;
 }
 
@@ -422,16 +537,18 @@ function reviewApplication_(b) {
   const fields = { Status: decision, ReviewedBy: actor.Email, ReviewedAt: new Date(), ReviewNote: note, Updated: new Date() };
   if (tier) fields.Tier = tier;
   setApplicationFields_(app.index, fields);
+  if (decision === 'Approved') activateUser_(app.row.Email);
   log_(actor.Email, 'application_' + b.decision, app.row.ID, note);
 
   const p = app.row;
   const bodies = {
     Approved: `<p>Hi ${esc_(p.ContactName)},</p><p>Good news: <strong>${esc_(p.BusinessName)}</strong> has been <strong>approved</strong> as a ${APP.name} <strong>${tier}</strong> partner (${p.ID}).</p>
-      ${note ? `<p>${esc_(note)}</p>` : ''}<p>Our team will contact you about next steps, including confirming your banking details for payments. Welcome aboard!</p>${siteLink_('/account', 'View your partner account')}`,
+      ${note ? `<p>${esc_(note)}</p>` : ''}<p>You can now <strong>sign in with your email address and the password you chose</strong> when you registered to see your partner portal: your listings, trips, payouts, statements and guest ratings.</p>
+      <p>Our team will contact you about next steps, including confirming your banking details for payments. Welcome aboard!</p>${siteLink_('/account', 'Sign in to your partner portal')}`,
     Rejected: `<p>Hi ${esc_(p.ContactName)},</p><p>Thank you for applying to partner with ${APP.name}. After reviewing <strong>${esc_(p.BusinessName)}</strong> (${p.ID}), we are not able to approve the application at this time.</p>
       <p><strong>Feedback:</strong> ${esc_(note)}</p><p>You're welcome to apply again in future.</p>`,
     'Needs info': `<p>Hi ${esc_(p.ContactName)},</p><p>We're reviewing <strong>${esc_(p.BusinessName)}</strong> (${p.ID}) and need a little more from you:</p>
-      <p><strong>${esc_(note)}</strong></p><p>Sign in to your account to add photos or details, then resubmit.</p>${siteLink_('/account', 'Update your application')}`,
+      <p><strong>${esc_(note)}</strong></p><p>Sign in with your email and password to add the photos or documents, then resubmit.</p>${siteLink_('/account', 'Update your application')}`,
   };
   const subjects = { Approved: `You're approved! Welcome to ${APP.name}`, Rejected: `Update on your ${APP.name} application`, 'Needs info': `We need a bit more information (${p.ID})` };
   sendMail_(p.Email, subjects[decision], bodies[decision]);
@@ -446,14 +563,16 @@ function submitBooking_(b) {
   if (b.website) return { saved: true }; // honeypot
   publicRateLimit_();
   const d = b.booking || {};
-  if (!d.reference || !d.tour || !d.email) throw userError_('Missing booking details.');
+  if (!d.reference || !d.tour || !(d.email || d.phone)) throw userError_('Please add your email or cell number.');
   const row = [safe_(d.reference, 30), new Date(), safe_(d.tour), safe_(d.startDate), num_(d.nights), num_(d.adults), num_(d.children), num_(d.infants), num_(d.pensioners),
     safe_(d.room), safe_((d.extras || []).join(', ')), safe_(d.payment), num_(d.total), safe_(d.name), safe_(d.email), safe_(d.phone), safe_(d.notes, 600), 'New', safe_(d.source || 'website')];
   withLock_(() => sheet_('Bookings').appendRow(row));
   log_(String(d.email), 'booking_request', d.reference, d.tour);
   staffEmails_(['owner', 'admin']).forEach(to => sendMail_(to, `New booking request ${d.reference}: ${d.tour}`,
     `<p><strong>${esc_(d.name)}</strong> (${esc_(d.phone)}, ${esc_(d.email)}) requested <strong>${esc_(d.tour)}</strong> from ${esc_(d.startDate)} for ${num_(d.adults) + num_(d.children) + num_(d.pensioners)} travellers. Estimate: R${num_(d.total).toLocaleString('en-ZA')}.</p>${siteLink_('/admin#bookings', 'Open bookings')}`));
-  return { saved: true };
+  const travellers = num_(d.adults) + num_(d.children) + num_(d.pensioners) + num_(d.infants);
+  whatsapp_(`🧳 New booking ${d.reference}${d.source === 'chat' ? ' (via Kaycee chat)' : ''}\n${d.tour}\nWhen: ${d.startDate || 'flexible'}${d.nights ? ' · ' + num_(d.nights) + ' nights' : ''}\nTravellers: ${travellers || '-'}\n${num_(d.total) ? 'Estimate: R' + num_(d.total).toLocaleString('en-ZA') + '\n' : ''}${d.name || ''} · ${d.phone || ''}${d.email ? ' · ' + d.email : ''}${d.notes ? '\nNotes: ' + String(d.notes).slice(0, 300) : ''}\n\nOpen: ${siteUrl_('/admin#bookings')}`);
+  return { saved: true, reference: d.reference };
 }
 
 function submitMessage_(b) {
@@ -462,6 +581,7 @@ function submitMessage_(b) {
   const d = b.message || {};
   if (!d.name || !d.message) throw userError_('Missing message details.');
   withLock_(() => sheet_('Messages').appendRow([new Date(), safe_(d.name), safe_(d.email), safe_(d.phone), safe_(d.message, 1500), 'New']));
+  whatsapp_(`✉️ New website message from ${d.name}${d.phone ? ' · ' + d.phone : ''}\n${String(d.message).slice(0, 400)}\n\nOpen: ${siteUrl_('/admin#messages')}`);
   return { saved: true };
 }
 
@@ -715,6 +835,7 @@ function applicationView_(p, full) {
     province: p.Province, city: p.City, services: p.Services, summary: p.Summary, status: p.Status, photoCount: Number(p.PhotoCount || 0),
     reviewedBy: p.ReviewedBy, reviewedAt: iso_(p.ReviewedAt), reviewNote: p.ReviewNote, tier: p.Tier || '',
     required: (PARTNER_TYPES[p.PartnerType] || {}).required || [],
+    requiredDocuments: (PARTNER_TYPES[p.PartnerType] || {}).documents || [],
   };
   if (full) Object.assign(v, { description: p.Description, regNumber: p.RegNumber, website: p.Website, social: p.Social, years: p.YearsInBusiness, details });
   return v;
@@ -828,6 +949,40 @@ function sendMail_(to, subject, html) {
   } catch (e) { console.error('Mail failed', to, e); }
 }
 
+function activateUser_(email) {
+  withLock_(() => {
+    const sh = sheet_('Users');
+    const rows = sh.getDataRange().getValues();
+    const idx = rows.findIndex((r, i) => i > 0 && r[0] === email);
+    if (idx > 0 && rows[idx][3] === 'pending') sh.getRange(idx + 1, 4).setValue('active');
+  });
+}
+
+function siteUrl_(path) {
+  return String(prop_('SITE_URL') || 'https://mathonsimm.github.io/KCMTravel-Tours').replace(/\/$/, '') + path;
+}
+
+/**
+ * WhatsApp alerts to the KCM team. Pilot provider: CallMeBot (free). Each number that should get alerts sends
+ * "I allow callmebot to send me messages" to CallMeBot once, gets an API key, then is added in the Sheet menu
+ * (KCM → WhatsApp alerts). Stored in Script Properties as WHATSAPP_ALERTS = [{"phone":"2776…","apikey":"…"}].
+ * Never throws: an alert failing must not block a booking or application (the email alerts still go out).
+ */
+function whatsapp_(text) {
+  let list = [];
+  try { list = JSON.parse(prop_('WHATSAPP_ALERTS') || '[]'); } catch (e) { list = []; }
+  if (!list.length) return 0;
+  const requests = list.map(x => ({
+    url: 'https://api.callmebot.com/whatsapp.php?phone=' + encodeURIComponent(x.phone) + '&text=' + encodeURIComponent(String(text).slice(0, 1500)) + '&apikey=' + encodeURIComponent(x.apikey),
+    muteHttpExceptions: true,
+  }));
+  try {
+    const res = UrlFetchApp.fetchAll(requests);
+    res.forEach((r, i) => { if (r.getResponseCode() !== 200) console.error('WhatsApp alert failed', list[i].phone, r.getResponseCode(), r.getContentText().slice(0, 200)); });
+    return res.filter(r => r.getResponseCode() === 200).length;
+  } catch (e) { console.error('WhatsApp alert failed', e); return 0; }
+}
+
 function siteLink_(path, label) {
   const base = String(prop_('SITE_URL') || '').replace(/\/$/, '');
   return base ? `<p><a href="${base}${path}" style="display:inline-block;background:#a8481f;color:#fff;padding:12px 20px;border-radius:999px;text-decoration:none;font-weight:700">${label}</a></p>` : '';
@@ -872,6 +1027,7 @@ function setup() {
   if (!props.getProperty('OWNER_EMAIL')) props.setProperty('OWNER_EMAIL', me);
   if (!props.getProperty('SITE_URL')) props.setProperty('SITE_URL', 'https://mathonsimm.github.io/KCMTravel-Tours');
   partnersFolder_();
+  pepper_();
   upsertUser_(props.getProperty('OWNER_EMAIL'), { provider: 'owner' });
   // hide technical tabs
   ['Sessions', 'Codes'].forEach(n => sheet_(n).hideSheet());
@@ -880,11 +1036,32 @@ function setup() {
   return 'Setup complete. Owner: ' + props.getProperty('OWNER_EMAIL');
 }
 
+function menuWhatsApp_() {
+  const ui = SpreadsheetApp.getUi();
+  let list = [];
+  try { list = JSON.parse(prop_('WHATSAPP_ALERTS') || '[]'); } catch (e) { list = []; }
+  const current = list.length ? list.map(x => x.phone).join(', ') : 'none yet';
+  const r = ui.prompt('WhatsApp alerts',
+    'Numbers getting alerts now: ' + current + '\n\nTo add a number: from that phone, WhatsApp the text\n"I allow callmebot to send me messages" to +34 644 71 81 99.\nYou\'ll get an API key back. Then enter here:  number, apikey\n(e.g. 27764360010, 1234567)\n\nType "clear" to remove all numbers.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const v = r.getResponseText().trim();
+  if (v.toLowerCase() === 'clear') { PropertiesService.getScriptProperties().setProperty('WHATSAPP_ALERTS', '[]'); ui.alert('All WhatsApp alert numbers removed.'); return; }
+  const parts = v.split(',').map(x => x.trim());
+  let phone = (parts[0] || '').replace(/\D/g, '');
+  if (phone.startsWith('0')) phone = '27' + phone.slice(1);
+  if (phone.length < 10 || !parts[1]) { ui.alert('Please enter it as: number, apikey'); return; }
+  list = list.filter(x => x.phone !== phone).concat([{ phone, apikey: parts[1] }]);
+  PropertiesService.getScriptProperties().setProperty('WHATSAPP_ALERTS', JSON.stringify(list));
+  const sent = whatsapp_('✅ KCM Travel & Tours: WhatsApp alerts are switched on for this number.');
+  ui.alert(sent ? 'Saved. A test message was sent to WhatsApp.' : 'Saved, but the test message could not be sent. Check the number and API key.');
+}
+
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('KCM Admin')
     .addItem('Run setup', 'menuSetup_')
     .addItem('Set Google Sign-In client ID', 'menuClientId_')
     .addItem('Set website address', 'menuSiteUrl_')
+    .addItem('WhatsApp alerts…', 'menuWhatsApp_')
     .addToUi();
 }
 

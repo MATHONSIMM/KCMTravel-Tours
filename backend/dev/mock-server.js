@@ -67,6 +67,7 @@ function makeFolder(name) {
 const props = new Map();
 const cache = new Map();
 const mail = [];
+const whatsapp = []; // captured CallMeBot alerts: GET /__whatsapp
 const toSigned = buf => Array.from(buf, b => (b > 127 ? b - 256 : b));
 
 const context = {
@@ -102,6 +103,12 @@ const context = {
             const info = ok ? { iss: "https://accounts.google.com", aud: props.get("GOOGLE_CLIENT_ID"), email: m[1], email_verified: "true", name: m[1].split("@")[0], exp: String(Math.floor(Date.now() / 1000) + 3600) } : { error: "invalid_token" };
             return { getResponseCode: () => (ok ? 200 : 400), getContentText: () => JSON.stringify(info) };
         },
+        fetchAll: reqs => reqs.map(r => {
+            const q = new URL(r.url).searchParams;
+            whatsapp.push({ phone: q.get("phone"), text: q.get("text"), time: new Date().toISOString() });
+            console.log(`[whatsapp] to ${q.get("phone")}: ${q.get("text").split("\n")[0]}`);
+            return { getResponseCode: () => 200, getContentText: () => "Message queued" };
+        }),
     },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: s => ({ content: s, setMimeType() { return this; } }) },
 };
@@ -110,6 +117,7 @@ const code = fs.readFileSync(path.join(__dirname, "..", "apps-script", "Code.gs"
 vm.runInContext(code + "\n;this.__api = { doGet, doPost, setup };", context, { filename: "Code.gs" });
 props.set("GOOGLE_CLIENT_ID", CLIENT_ID);
 props.set("SITE_URL", process.env.SITE_URL || "http://127.0.0.1:5217");
+props.set("WHATSAPP_ALERTS", JSON.stringify([{ phone: "27764360010", apikey: "test" }]));
 console.log(context.__api.setup());
 
 http.createServer((req, res) => {
@@ -117,6 +125,7 @@ http.createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");
     if (req.method === "OPTIONS") { res.setHeader("Access-Control-Allow-Headers", "Content-Type"); res.end(); return; }
     if (req.method === "GET" && req.url.startsWith("/__mail")) { res.end(JSON.stringify(mail)); return; }
+    if (req.method === "GET" && req.url.startsWith("/__whatsapp")) { res.end(JSON.stringify(whatsapp)); return; }
     if (req.method === "GET" && req.url.startsWith("/__sheet")) {
         const name = decodeURIComponent((/name=([^&]+)/.exec(req.url) || [])[1] || "Partners");
         res.end(JSON.stringify(sheets.get(name)?.rows || [])); return;

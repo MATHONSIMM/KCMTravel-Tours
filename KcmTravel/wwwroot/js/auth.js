@@ -35,50 +35,68 @@
     Object.values(dialogs).forEach(d => d?.addEventListener("click", e => { if (e.target === d) d.close(); })); // backdrop
     $$("[data-api-missing]").forEach(el => { el.hidden = K.configured; });
 
-    /* ---------------- Sign-in component ---------------- */
+    /* ---------------- Sign-in component (email + password; code to set/reset a password) ---------------- */
+    document.addEventListener("click", e => {
+        const t = e.target.closest("[data-pw-toggle]"); if (!t) return;
+        const input = t.parentElement.querySelector("input"); const show = input.type === "password";
+        input.type = show ? "text" : "password"; t.textContent = show ? "Hide" : "Show"; t.setAttribute("aria-label", show ? "Hide password" : "Show password");
+    });
     function mountSignin(container, onDone) {
         const tpl = $("#tpl-signin");
         if (!tpl || !container) return;
         container.innerHTML = "";
         const node = tpl.content.firstElementChild.cloneNode(true);
         container.appendChild(node);
-        const emailForm = $("[data-step-email]", node), codeForm = $("[data-step-code]", node);
+        const pwForm = $("[data-step-password]", node), emailForm = $("[data-step-email]", node), codeForm = $("[data-step-code]", node);
         const err = $("[data-error]", node);
-        const showErr = m => { err.textContent = m || ""; err.hidden = !m; };
+        const showErr = m => { err.textContent = m || ""; err.hidden = !m; err.classList.toggle("form-error--info", false); };
+        const info = m => { showErr(m); err.classList.add("form-error--info"); };
         let email = "";
         const busy = (form, on, label) => { const b = $("button[type=submit]", form); b.disabled = on; if (label) b.textContent = label; };
+        const step = f => { [pwForm, emailForm, codeForm].forEach(x => { x.hidden = x !== f; }); showErr(""); };
+        const validEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
+        const done = r => { K.session.set(r.token, r.user); onDone?.(r.user); };
 
         if (!K.configured) { $$("input,button", node).forEach(x => x.disabled = true); }
 
+        pwForm.addEventListener("submit", async e => {
+            e.preventDefault(); showErr("");
+            email = pwForm.email.value.trim().toLowerCase();
+            if (!validEmail(email)) { showErr("Please enter a valid email address."); pwForm.email.focus(); return; }
+            if (!pwForm.password.value) { showErr("Please enter your password."); pwForm.password.focus(); return; }
+            busy(pwForm, true, "Signing in…");
+            try { done(await K.call("signIn", { email, password: pwForm.password.value })); }
+            catch (ex) { ex.code === "pending" ? info(ex.message) : showErr(ex.message); }
+            busy(pwForm, false, "Sign in");
+        });
+        $("[data-forgot]", node).addEventListener("click", () => { emailForm.email.value = pwForm.email.value; step(emailForm); emailForm.email.focus(); });
+        $("[data-back-password]", node).addEventListener("click", () => step(pwForm));
         emailForm.addEventListener("submit", async e => {
             e.preventDefault(); showErr("");
             email = emailForm.email.value.trim().toLowerCase();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { showErr("Please enter a valid email address."); emailForm.email.focus(); return; }
+            if (!validEmail(email)) { showErr("Please enter a valid email address."); emailForm.email.focus(); return; }
             busy(emailForm, true, "Sending…");
             try {
                 await K.call("requestCode", { email });
                 $("[data-sent-to]", node).textContent = email;
-                emailForm.hidden = true; codeForm.hidden = false; codeForm.code.value = ""; codeForm.code.focus();
+                step(codeForm); codeForm.code.value = ""; codeForm.code.focus();
             } catch (ex) { showErr(ex.message); }
-            busy(emailForm, false, "Email me a sign-in code");
+            busy(emailForm, false, "Email me a code");
         });
         codeForm.addEventListener("submit", async e => {
             e.preventDefault(); showErr("");
             const code = codeForm.code.value.replace(/\D/g, "");
             if (code.length !== 6) { showErr("Enter the 6-digit code from the email."); return; }
-            busy(codeForm, true, "Checking…");
-            try {
-                const r = await K.call("verifyCode", { email, code });
-                K.session.set(r.token, r.user);
-                onDone?.(r.user);
-            } catch (ex) { showErr(ex.message); }
-            busy(codeForm, false, "Verify & continue");
+            const pw = codeForm.password.value;
+            if (pw.length < 8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) { showErr("Your new password needs at least 8 characters, with letters and a number."); codeForm.password.focus(); return; }
+            busy(codeForm, true, "Saving…");
+            try { done(await K.call("resetPassword", { email, code, password: pw })); }
+            catch (ex) { ex.code === "pending" ? info("Your password is saved. " + ex.message) : showErr(ex.message); }
+            busy(codeForm, false, "Save password & sign in");
         });
-        codeForm.code.addEventListener("input", () => { if (codeForm.code.value.replace(/\D/g, "").length === 6) codeForm.requestSubmit(); });
-        $("[data-change-email]", node).addEventListener("click", () => { codeForm.hidden = true; emailForm.hidden = false; showErr(""); emailForm.email.focus(); });
+        $("[data-change-email]", node).addEventListener("click", () => { step(emailForm); emailForm.email.focus(); });
         $("[data-resend]", node).addEventListener("click", async () => {
-            showErr("");
-            try { await K.call("requestCode", { email }); showErr("A new code is on its way."); } catch (ex) { showErr(ex.message); }
+            try { await K.call("requestCode", { email }); info("A new code is on its way."); } catch (ex) { showErr(ex.message); }
         });
 
         if (K.googleClientId && K.configured) {
@@ -88,15 +106,11 @@
                     client_id: K.googleClientId,
                     callback: async resp => {
                         showErr("");
-                        try {
-                            const r = await K.call("googleSignIn", { credential: resp.credential });
-                            K.session.set(r.token, r.user);
-                            onDone?.(r.user);
-                        } catch (ex) { showErr(ex.message); }
+                        try { done(await K.call("googleSignIn", { credential: resp.credential })); }
+                        catch (ex) { ex.code === "pending" ? info(ex.message) : showErr(ex.message); }
                     },
                 });
-                const btn = $("[data-google-btn]", node);
-                google.accounts.id.renderButton(btn, { theme: "outline", size: "large", shape: "pill", text: "continue_with", width: Math.min(360, Math.max(240, container.clientWidth || 320)) });
+                google.accounts.id.renderButton($("[data-google-btn]", node), { theme: "outline", size: "large", shape: "pill", text: "signin_with", width: Math.min(360, Math.max(240, container.clientWidth || 320)) });
                 wrap.hidden = false;
             }).catch(() => { wrap.hidden = true; });
         }
@@ -170,7 +184,10 @@
     renderHeader(K.session.user());
     K.session.refresh();
 
-    /* ---------------- Registration wizard ---------------- */
+    /* ---------------- Registration wizard ----------------
+       Steps: 0 type · 1 business · 2 details · 3 photos · 4 documents · 5 account & submit · 6 done.
+       Everything stays on the device until Submit; then the account + application are created, files uploaded,
+       and the application is submitted (which alerts the KCM team on WhatsApp and by email). */
     const reg = (() => {
         const d = dialogs.register;
         if (!d) return { start() { } };
@@ -179,33 +196,28 @@
         const progress = $$("[data-reg-progress] li", d);
         const nav = $("[data-reg-nav]", d);
         const errEl = $("[data-reg-error]", d);
-        const STATE_KEY = "kcm-reg-draft";
-        let step = 0, type = "", photos = {}, appId = null, uploaded = {}, submitting = false;
+        const LAST = 5, DONE = 6;
+        let step = 0, type = "", photos = {}, docs = {}, appId = null, uploaded = {}, submitting = false, regToken = null;
 
         const showErr = m => { errEl.textContent = m || ""; errEl.hidden = !m; if (m) errEl.scrollIntoView({ block: "nearest", behavior: "smooth" }); };
+        const signedIn = () => !!K.session.user();
 
         function show(n) {
             step = n;
             steps.forEach(s => { s.hidden = +s.dataset.rstep !== n; });
             progress.forEach((li, i) => { li.classList.toggle("is-current", i === n); li.classList.toggle("is-done", i < n); });
-            nav.hidden = n === 0 || n === 6;
+            $("[data-reg-progress]", d).hidden = n === DONE;
+            nav.hidden = n === DONE;
             const next = $("[data-reg-next]", nav);
-            next.textContent = n === 5 ? "Submit application" : "Next";
-            $("[data-reg-back]", nav).hidden = n <= 1;
-            showErr("");
-            if (n === 3) renderDetails();
-            if (n === 4) renderPhotos();
-            if (n === 5) renderReview();
+            next.textContent = n === LAST ? "Submit application" : "Next";
+            next.disabled = n === LAST && !K.configured;
+            $("[data-reg-back]", nav).hidden = n === 0;
+            showErr(n === LAST && !K.configured ? "Online registration is being switched on. Please try again shortly." : "");
+            if (n === 2) renderDetails();
+            if (n === 3) renderPhotos();
+            if (n === 4) renderDocs();
+            if (n === LAST) renderAccount();
             $(".modal-inner", d).scrollTop = 0;
-            steps[n]?.querySelector("input, select, textarea, button")?.focus({ preventScroll: true });
-        }
-
-        function renderAccount() {
-            const u = K.session.user();
-            const signed = $("[data-reg-signed]", d);
-            const mount = $("[data-reg-signin]", d);
-            if (u) { signed.hidden = false; mount.innerHTML = ""; $("[data-reg-email]", d).textContent = u.email; }
-            else { signed.hidden = true; mountSignin(mount, () => { renderAccount(); show(1); }); }
         }
 
         function renderTypes() {
@@ -220,7 +232,7 @@
                 </label>`).join("");
             grid.addEventListener("change", e => {
                 if (e.target.name !== "partnerType") return;
-                if (type && type !== e.target.value) { photos = {}; uploaded = {}; }
+                if (type && type !== e.target.value) { photos = {}; docs = {}; uploaded = {}; }
                 type = e.target.value; renderServices();
             });
         }
@@ -252,6 +264,7 @@
             const slots = [...t.required.map(l => ({ l, req: true })), ...t.optional.map(l => ({ l, req: false }))];
             $("[data-photo-lead]", d).textContent = type === "vehicle"
                 ? "Show the vehicle from every angle: outside front, rear and both sides, plus the interior and boot. Clear, recent photos in daylight. Photos are private and only seen by the KCM review team."
+                : type === "accommodation" ? "Show the outside of the property and the rooms guests will use. Clear, recent photos in good light. Photos are private and only seen by the KCM review team."
                 : "Clear, recent photos in good light. Photos are private and only seen by the KCM review team.";
             grid.innerHTML = slots.map(({ l, req }) => `
                 <div class="photo-slot ${photos[l] ? "has-photo" : ""}" data-slot="${K.esc(l)}">
@@ -270,13 +283,54 @@
             const label = input.dataset.photoInput;
             showErr("");
             const slot = input.closest(".photo-slot"); slot.classList.add("is-busy");
-            try { photos[label] = await K.resizeImage(input.files[0]); delete uploaded[label]; renderPhotos(); }
+            try { photos[label] = await K.resizeImage(input.files[0]); delete uploaded["p:" + label]; renderPhotos(); }
             catch (ex) { showErr(ex.message); slot.classList.remove("is-busy"); }
         });
         $("[data-photo-grid]", d)?.addEventListener("click", e => {
             const rm = e.target.closest("[data-photo-remove]");
             if (rm) { delete photos[rm.dataset.photoRemove]; renderPhotos(); }
         });
+
+        function renderDocs() {
+            const t = K.TYPES[type];
+            const all = [...t.documents.map(x => ({ ...x, req: true })), ...(t.optionalDocs || []).map(x => ({ ...x, req: false }))];
+            $("[data-doc-list]", d).innerHTML = all.map(x => {
+                const f = docs[x.label];
+                return `<div class="doc-row ${f ? "has-doc" : ""}">
+                    <span class="doc-icon" aria-hidden="true">${f ? "✓" : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>`}</span>
+                    <div class="doc-text"><strong>${K.esc(x.label)}${x.req ? ' <em>required</em>' : ' <span class="muted">optional</span>'}</strong>
+                        <span>${f ? `${K.esc(f.name)} · ${f.size}` : K.esc(x.hint)}</span></div>
+                    <label class="btn btn--outline btn--sm doc-btn">${f ? "Replace" : "Upload"}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" data-doc-input="${K.esc(x.label)}" hidden></label>
+                    ${f && !x.req ? `<button type="button" class="photo-remove doc-remove" data-doc-remove="${K.esc(x.label)}" aria-label="Remove ${K.esc(x.label)}">×</button>` : ""}
+                </div>`;
+            }).join("");
+        }
+        $("[data-doc-list]", d)?.addEventListener("change", async e => {
+            const input = e.target.closest("[data-doc-input]");
+            if (!input || !input.files[0]) return;
+            const label = input.dataset.docInput, file = input.files[0];
+            showErr("");
+            input.closest(".doc-row").classList.add("is-busy");
+            try {
+                const dataUrl = await K.readDocument(file);
+                const kb = Math.round(file.size / 1024);
+                docs[label] = { dataUrl, name: file.name.slice(0, 40), size: kb > 1024 ? (kb / 1024).toFixed(1) + " MB" : Math.max(1, kb) + " KB" };
+                delete uploaded["d:" + label];
+            } catch (ex) { showErr(ex.message); }
+            renderDocs();
+        });
+        $("[data-doc-list]", d)?.addEventListener("click", e => {
+            const rm = e.target.closest("[data-doc-remove]");
+            if (rm) { delete docs[rm.dataset.docRemove]; renderDocs(); }
+        });
+
+        function renderAccount() {
+            const u = K.session.user();
+            $("[data-reg-account]", d).hidden = !!u;
+            $("[data-reg-signed]", d).hidden = !u;
+            if (u) $("[data-reg-email]", d).textContent = u.email;
+            renderReview();
+        }
 
         function collect() {
             const f = form.elements, t = K.TYPES[type];
@@ -296,20 +350,20 @@
 
         function renderReview() {
             const a = collect(), t = K.TYPES[type];
-            const count = Object.keys(photos).length;
+            const count = Object.keys(photos).length, dcount = Object.keys(docs).length;
             const rows = [
                 ["Partner type", t.label], ["Business", a.businessName], ["Contact", `${a.contactName} · ${a.phone}`],
                 ["Location", `${a.city}, ${a.province}`], ["Services", a.services.join(", ")],
                 ["Details", t.fields.filter(fd => a.details[fd.key] && (!Array.isArray(a.details[fd.key]) || a.details[fd.key].length)).slice(0, 6).map(fd => `${fd.label}: ${[].concat(a.details[fd.key]).join(", ")}`).join(" · ")],
-                ["Photos", `${count} photo${count === 1 ? "" : "s"} ready`],
+                ["Photos", `${count} photo${count === 1 ? "" : "s"}`], ["Documents", Object.keys(docs).join(", ") || `${dcount}`],
             ];
             $("[data-reg-review]", d).innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${K.esc(v || "-")}</dd></div>`).join("");
         }
 
         function validate(n) {
             const f = form.elements;
-            if (n === 1 && !type) return "Please choose what you'd like to offer.";
-            if (n === 2) {
+            if (n === 0 && !type) return "Please choose what you'd like to offer.";
+            if (n === 1) {
                 for (const k of ["contactName", "phone", "businessName", "province", "city", "description"]) {
                     if (!String(f[k].value).trim()) { f[k].focus(); return "Please fill in all the fields marked *."; }
                 }
@@ -317,18 +371,31 @@
                 if (!$$("input[name=services]:checked", form).length) return "Please choose at least one service.";
                 if (f.description.value.trim().length < 30) { f.description.focus(); return "Please tell us a bit more about your business (at least a sentence or two)."; }
             }
-            if (n === 3) {
+            if (n === 2) {
                 for (const fd of K.TYPES[type].fields) {
                     const el = f["d_" + fd.key];
                     if (fd.req && el && !String(el.value).trim()) { el.focus(); return "Please fill in all the fields marked *."; }
                     if (el && fd.type === "number" && el.value !== "" && (+el.value < (fd.min ?? -Infinity) || +el.value > (fd.max ?? Infinity))) { el.focus(); return `Please check "${fd.label}".`; }
                 }
             }
-            if (n === 4) {
+            if (n === 3) {
                 const missing = K.TYPES[type].required.filter(l => !photos[l]);
                 if (missing.length) return "Please add these photos: " + missing.join(", ") + ".";
             }
-            if (n === 5 && (!f.accurate.checked || !f.consent.checked)) return "Please tick both boxes to continue.";
+            if (n === 4) {
+                const missing = K.TYPES[type].documents.map(x => x.label).filter(l => !docs[l]);
+                if (missing.length) return "Please upload: " + missing.join(", ") + ".";
+            }
+            if (n === LAST) {
+                if (!signedIn()) {
+                    const email = f.email.value.trim();
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { f.email.focus(); return "Please enter a valid email address."; }
+                    const pw = f.password.value;
+                    if (pw.length < 8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) { f.password.focus(); return "Your password needs at least 8 characters, with letters and a number."; }
+                    if (pw !== f.password2.value) { f.password2.focus(); return "The two passwords don't match."; }
+                }
+                if (!f.accurate.checked || !f.consent.checked) return "Please tick both boxes to continue.";
+            }
             return "";
         }
 
@@ -339,55 +406,58 @@
             next.disabled = back.disabled = true;
             const prog = $("[data-upload-progress]", d), bar = $("[data-upload-bar]", d), txt = $("[data-upload-text]", d);
             prog.hidden = false;
+            const f = form.elements;
+            // a brand-new partner uses a temporary registration token; a signed-in partner uses their own session
+            const tok = () => (regToken ? { token: regToken } : {});
             try {
                 if (!appId) {
                     txt.textContent = "Saving your details…";
-                    const r = await K.call("submitApplication", { application: collect() });
-                    appId = r.id;
-                    try { sessionStorage.setItem(STATE_KEY, appId); } catch { }
+                    if (signedIn()) {
+                        appId = (await K.call("submitApplication", { application: collect() })).id;
+                    } else {
+                        const r = await K.call("registerPartner", { account: { email: f.email.value.trim().toLowerCase(), password: f.password.value, name: f.contactName.value.trim() }, application: collect(), website: f.hpWebsite.value });
+                        appId = r.id; regToken = r.token;
+                    }
                 }
-                const labels = Object.keys(photos);
-                for (let i = 0; i < labels.length; i++) {
-                    const l = labels[i];
-                    bar.style.width = Math.round((i / (labels.length + 1)) * 100) + "%";
-                    txt.textContent = `Uploading photo ${i + 1} of ${labels.length}: ${l}`;
-                    if (!uploaded[l]) { await K.call("uploadPhoto", { id: appId, label: l, dataUrl: photos[l] }); uploaded[l] = true; }
+                const files = [...Object.entries(photos).map(([l, u]) => ({ key: "p:" + l, label: l, dataUrl: u, kind: "photo" })),
+                    ...Object.entries(docs).map(([l, x]) => ({ key: "d:" + l, label: l, dataUrl: x.dataUrl, kind: "document" }))];
+                for (let i = 0; i < files.length; i++) {
+                    const x = files[i];
+                    bar.style.width = Math.round((i / (files.length + 1)) * 100) + "%";
+                    txt.textContent = `Uploading ${i + 1} of ${files.length}: ${x.label}`;
+                    if (!uploaded[x.key]) { await K.call("uploadPhoto", { ...tok(), id: appId, label: x.label, dataUrl: x.dataUrl, kind: x.kind }); uploaded[x.key] = true; }
                 }
-                txt.textContent = "Finishing up…"; bar.style.width = "95%";
-                await K.call("finalizeApplication", { id: appId });
+                txt.textContent = "Submitting your application…"; bar.style.width = "95%";
+                await K.call("finalizeApplication", { ...tok(), id: appId });
                 bar.style.width = "100%";
                 $("[data-reg-ref]", d).textContent = appId;
-                try { sessionStorage.removeItem(STATE_KEY); } catch { }
-                show(6);
-                appId = null; photos = {}; uploaded = {}; type = ""; form.reset();
+                if (regToken) { try { await K.call("signOut", { token: regToken }); } catch { } }
+                show(DONE);
+                appId = null; regToken = null; photos = {}; docs = {}; uploaded = {}; type = ""; form.reset();
                 $("[data-details]", d).dataset.type = "";
             } catch (ex) {
-                showErr(ex.message + (appId ? " Your details are saved. Press Submit again to retry." : ""));
+                const retry = appId ? " Your details are saved. Press Submit again to retry." : "";
+                if (ex.code === "exists") showErr(ex.message);
+                else showErr(ex.message + retry);
             } finally {
                 submitting = false; next.disabled = back.disabled = false; prog.hidden = true;
             }
         }
 
         nav.addEventListener("click", e => {
-            if (e.target.closest("[data-reg-back]")) show(Math.max(1, step - 1));
+            if (e.target.closest("[data-reg-back]")) show(Math.max(0, step - 1));
             if (e.target.closest("[data-reg-next]")) {
                 const m = validate(step);
                 if (m) { showErr(m); return; }
-                if (step === 5) submit(); else show(step + 1);
+                if (step === LAST) submit(); else show(step + 1);
             }
         });
-        $("[data-reg-signed] [data-reg-next]", d)?.addEventListener("click", () => show(1));
         renderTypes();
 
         return {
             start() {
                 $$("[data-api-missing]", d).forEach(el => { el.hidden = K.configured; });
-                form.hidden = !K.configured;
-                $("[data-reg-progress]", d).hidden = !K.configured;
-                if (!K.configured) return;
-                if (step === 6) show(0);
-                renderAccount();
-                show(K.session.user() ? Math.max(step, 1) : 0);
+                if (step === DONE) show(0); else show(step);
             },
         };
     })();

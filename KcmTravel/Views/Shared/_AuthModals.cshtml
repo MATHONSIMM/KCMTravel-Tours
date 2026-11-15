@@ -2,17 +2,26 @@
 
 <template id="tpl-signin">
     <div class="signin" data-signin>
-        <div class="signin-google" data-google-wrap hidden>
-            <div data-google-btn></div>
-            <p class="signin-or"><span>or use your email</span></p>
-        </div>
-        <form class="signin-step" data-step-email novalidate>
+        <form class="signin-step" data-step-password novalidate>
+            <div class="field">
+                <label>Email address</label>
+                <input type="email" name="email" autocomplete="username" inputmode="email" placeholder="you@example.com" required />
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <div class="pw-wrap"><input type="password" name="password" autocomplete="current-password" required /><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div>
+            </div>
+            <button class="btn btn--primary btn--block" type="submit">Sign in</button>
+            <p class="signin-links"><button type="button" class="link-btn" data-forgot>Forgot or set password?</button></p>
+        </form>
+        <form class="signin-step" data-step-email novalidate hidden>
+            <p class="signin-sent">Enter your email and we'll send a 6-digit code so you can choose a new password. KCM team members use this the first time too.</p>
             <div class="field">
                 <label>Email address</label>
                 <input type="email" name="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required />
             </div>
-            <button class="btn btn--primary btn--block" type="submit">Email me a sign-in code</button>
-            <p class="field-hint">We'll send a 6-digit code to confirm it's really you. No password needed.</p>
+            <button class="btn btn--primary btn--block" type="submit">Email me a code</button>
+            <p class="signin-links"><button type="button" class="link-btn" data-back-password>Back to sign in</button></p>
         </form>
         <form class="signin-step" data-step-code novalidate hidden>
             <p class="signin-sent">We sent a code to <strong data-sent-to></strong>. Check your inbox (and spam folder).</p>
@@ -20,9 +29,18 @@
                 <label>6-digit code</label>
                 <input class="code-input" type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" required />
             </div>
-            <button class="btn btn--primary btn--block" type="submit">Verify &amp; continue</button>
+            <div class="field">
+                <label>New password</label>
+                <div class="pw-wrap"><input type="password" name="password" autocomplete="new-password" minlength="8" required /><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div>
+                <p class="field-hint">At least 8 characters, with letters and a number.</p>
+            </div>
+            <button class="btn btn--primary btn--block" type="submit">Save password &amp; sign in</button>
             <p class="signin-links"><button type="button" class="link-btn" data-change-email>Use a different email</button> · <button type="button" class="link-btn" data-resend>Resend code</button></p>
         </form>
+        <div class="signin-google" data-google-wrap hidden>
+            <p class="signin-or"><span>or</span></p>
+            <div data-google-btn></div>
+        </div>
         <p class="form-error" role="alert" data-error hidden></p>
     </div>
 </template>
@@ -36,7 +54,7 @@
         <img class="modal-logo" src="/images/brand/kcm-logo.svg" alt="" width="64" height="48" />
         <h2 class="modal-title" id="signin-title">Sign in</h2>
         <p class="modal-lead">For KCM partners and the KCM team.</p>
-        <div class="notice notice--soft" data-api-missing hidden>Partner accounts are being set up. In the meantime, contact us on <a href="@site.WhatsAppLink("Hi KCM, I'd like to become a partner.")" target="_blank" rel="noopener">WhatsApp</a>.</div>
+        <div class="notice notice--soft" data-api-missing hidden>Partner sign-in is being switched on. Please check back shortly.</div>
         <div data-signin-mount></div>
         <p class="modal-foot">New partner? <button type="button" class="link-btn" data-open-register>Register your business</button></p>
     </div>
@@ -51,30 +69,21 @@
         <p class="eyebrow">Partner programme</p>
         <h2 class="modal-title" id="register-title">Become a KCM partner</h2>
         <ol class="reg-progress" data-reg-progress aria-label="Registration steps">
-            <li>Account</li><li>Partner type</li><li>Business</li><li>Details</li><li>Photos</li><li>Submit</li>
+            <li>Type</li><li>Business</li><li>Details</li><li>Photos</li><li>Documents</li><li>Account</li>
         </ol>
-        <div class="notice notice--soft" data-api-missing hidden>Online partner registration opens soon. Until then, send us your details on <a href="@site.WhatsAppLink("Hi KCM, I'd like to register as a partner.")" target="_blank" rel="noopener">WhatsApp</a>.</div>
+        <div class="notice notice--soft" data-api-missing hidden>Online partner registration is being switched on. You can look through the form now; submitting opens very soon.</div>
 
         <form class="reg-form" data-reg-form novalidate>
-            <!-- 0: account -->
+            <!-- 0: type -->
             <section class="reg-step" data-rstep="0">
-                <h3>First, confirm your email</h3>
-                <p class="reg-lead">We work with a small number of carefully chosen partners: vehicle owners, guesthouses, lodges, guides and small agencies who meet a premium standard. Every application, including the photos, is reviewed by our team.</p>
-                <div data-reg-signin></div>
-                <div class="reg-signed" data-reg-signed hidden>
-                    <p>Signed in as <strong data-reg-email></strong>.</p>
-                    <button class="btn btn--primary" type="button" data-reg-next>Continue</button>
-                </div>
-            </section>
-
-            <!-- 1: type -->
-            <section class="reg-step" data-rstep="1" hidden>
+                <p class="reg-lead">We work with a small number of carefully chosen partners: vehicle owners, guesthouses, lodges, guides and small agencies who meet a premium standard. Fill in the form, add photos and proof that the business is yours, choose a password and submit. Our team reviews every application.</p>
                 <h3>What would you like to offer?</h3>
                 <div class="type-grid" data-type-grid role="radiogroup" aria-label="Partner type"></div>
+                <p class="reg-have">Already a partner? <button type="button" class="link-btn" data-open-signin>Sign in</button> to add another business.</p>
             </section>
 
-            <!-- 2: business -->
-            <section class="reg-step" data-rstep="2" hidden>
+            <!-- 1: business -->
+            <section class="reg-step" data-rstep="1" hidden>
                 <h3>About your business</h3>
                 <div class="field-row">
                     <div class="field"><label for="r-contact">Your full name *</label><input id="r-contact" name="contactName" autocomplete="name" required /></div>
@@ -107,26 +116,45 @@
                 <div class="field"><label for="r-desc">Tell us about your business *</label><textarea id="r-desc" name="description" required maxlength="2000" placeholder="What makes your service premium? Where do you operate? Who are your typical guests?"></textarea></div>
             </section>
 
-            <!-- 3: details -->
-            <section class="reg-step" data-rstep="3" hidden>
+            <!-- 2: details -->
+            <section class="reg-step" data-rstep="2" hidden>
                 <h3 data-details-title>Details</h3>
                 <div class="details-grid" data-details></div>
             </section>
 
-            <!-- 4: photos -->
-            <section class="reg-step" data-rstep="4" hidden>
+            <!-- 3: photos -->
+            <section class="reg-step" data-rstep="3" hidden>
                 <h3>Photos</h3>
                 <p class="reg-lead" data-photo-lead>Clear, recent photos in good light. Photos are private and only seen by the KCM review team.</p>
                 <div class="photo-grid" data-photo-grid></div>
-                <p class="field-hint">JPG, PNG or WebP. Large photos are resized on your device before upload to save data.</p>
+                <p class="field-hint">JPG, PNG or WebP. Large photos are resized on your device before upload to save data. On a phone you can take the photo straight from the camera.</p>
             </section>
 
-            <!-- 5: review -->
+            <!-- 4: documents -->
+            <section class="reg-step" data-rstep="4" hidden>
+                <h3>Proof that it's yours</h3>
+                <p class="reg-lead">To protect our guests, we check that every vehicle or property belongs to the person applying (or that you're allowed to run it). Upload a PDF or a clear photo of each document. Documents are stored privately and only the KCM review team can see them.</p>
+                <div class="doc-list" data-doc-list></div>
+            </section>
+
+            <!-- 5: account & submit -->
             <section class="reg-step" data-rstep="5" hidden>
-                <h3>Check and submit</h3>
+                <h3>Create your login and submit</h3>
+                <div data-reg-account>
+                    <p class="reg-lead">You'll use this email and password to sign in to your partner portal once your application is approved.</p>
+                    <div class="field"><label for="r-email">Email address *</label><input id="r-email" name="email" type="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" /></div>
+                    <div class="field-row">
+                        <div class="field"><label for="r-pw">Password *</label><div class="pw-wrap"><input id="r-pw" name="password" type="password" autocomplete="new-password" minlength="8" required /><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div></div>
+                        <div class="field"><label for="r-pw2">Confirm password *</label><input id="r-pw2" name="password2" type="password" autocomplete="new-password" required /></div>
+                    </div>
+                    <p class="field-hint">At least 8 characters, with letters and a number.</p>
+                </div>
+                <p class="reg-signed" data-reg-signed hidden>Submitting as <strong data-reg-email></strong>.</p>
+                <div class="hp" aria-hidden="true"><input name="hpWebsite" tabindex="-1" autocomplete="off" /></div>
+                <h3 class="reg-sub">Your application</h3>
                 <dl class="facts" data-reg-review></dl>
-                <label class="check field"><input type="checkbox" name="accurate" /><span>The information and photos are accurate, current and belong to my business.</span></label>
-                <label class="check field"><input type="checkbox" name="consent" /><span>I agree that KCM Travel &amp; Tours may store and review my details and photos to assess my application, as described in the <a href="/privacy" target="_blank">privacy notice</a> (POPIA).</span></label>
+                <label class="check field"><input type="checkbox" name="accurate" /><span>The information, photos and documents are accurate, current and belong to my business.</span></label>
+                <label class="check field"><input type="checkbox" name="consent" /><span>I agree that KCM Travel &amp; Tours may store and review my details, photos and documents to assess my application, as described in the <a href="/privacy" target="_blank">privacy notice</a> (POPIA).</span></label>
                 <div class="upload-progress" data-upload-progress hidden>
                     <div class="upload-bar"><span data-upload-bar></span></div>
                     <p data-upload-text>Uploading…</p>
@@ -136,13 +164,14 @@
             <!-- done -->
             <section class="reg-step reg-done" data-rstep="6" hidden>
                 <div class="confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="white" stroke-width="3"/></svg></div>
-                <h3>Application received</h3>
-                <p>Your reference is <strong data-reg-ref></strong>. We've emailed you a copy. Our team reviews every application and usually replies within 3 working days.</p>
-                <a class="btn btn--primary" href="/account">Go to my account</a>
+                <h3>Application submitted</h3>
+                <p>Your reference is <strong data-reg-ref></strong>. Our team has been notified and we've emailed you a copy.</p>
+                <p>We review every application, usually within 3 working days. As soon as you're approved, we'll email you and you can <strong>sign in with your email and password</strong> to open your partner portal.</p>
+                <button class="btn btn--primary" type="button" data-close>Done</button>
             </section>
 
             <p class="form-error" role="alert" data-reg-error hidden></p>
-            <div class="reg-nav" data-reg-nav hidden>
+            <div class="reg-nav" data-reg-nav>
                 <button class="btn btn--ghost" type="button" data-reg-back>Back</button>
                 <button class="btn btn--primary" type="button" data-reg-next>Next</button>
             </div>

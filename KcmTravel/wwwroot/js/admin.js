@@ -71,6 +71,8 @@
             const fresh = body.cloneNode(false); body.replaceWith(fresh); body = fresh; // drop listeners from the previous view
             body.innerHTML = `<div class="adm-card"><p>Loading…</p></div>`;
             fn().catch(err => { body.innerHTML = `<div class="adm-card"><p class="form-error">${esc(err.message)}</p></div>`; });
+            const deep = location.hash.slice(1).split("/")[1]; // e.g. #applications/P-2611-AB12 from a WhatsApp alert
+            if (view === "applications" && deep && !sample) openApp(decodeURIComponent(deep));
         }
 
         async function cached(action) { return cache[action] ||= await get(action); }
@@ -398,6 +400,9 @@
                     ${a.reviewNote ? `<blockquote class="review-note">${esc(a.reviewNote)}</blockquote>` : ""}
                     <h3>Photos ${missing.length ? `<span class="status status--warn">Missing: ${missing.map(esc).join(", ")}</span>` : ""}</h3>
                     <div class="thumb-grid">${a.photos.map(p => `<figure class="thumb" data-file="${esc(p.fileId)}" data-label="${esc(p.label)}"><button type="button" class="thumb-img" aria-label="Enlarge ${esc(p.label)} photo"></button><figcaption>${esc(p.label)}</figcaption></figure>`).join("") || "<p class='muted'>No photos uploaded.</p>"}</div>
+                    <h3>Ownership documents ${(a.requiredDocuments || []).filter(l => !(a.documents || []).some(x => x.label === l)).length ? `<span class="status status--warn">Missing: ${(a.requiredDocuments || []).filter(l => !(a.documents || []).some(x => x.label === l)).map(esc).join(", ")}</span>` : ""}</h3>
+                    ${(a.documents || []).length ? `<ul class="doc-admin">${a.documents.map(x => `<li><span>📄 ${esc(x.label)}</span><button type="button" class="btn btn--ghost btn--sm" data-open-doc="${esc(x.fileId)}">Open</button></li>`).join("")}</ul>` : "<p class='muted'>No documents uploaded.</p>"}
+                    <p class="muted">Check that the name on the documents matches ${esc(a.contactName)}${a.regNumber ? " or the company" : ""}.</p>
                     <h3>Contact</h3>
                     <dl class="kv"><div><dt>Name</dt><dd>${esc(a.contactName)}</dd></div><div><dt>Email</dt><dd><a href="mailto:${esc(a.email)}">${esc(a.email)}</a></dd></div>
                     <div><dt>Phone</dt><dd><a href="tel:${esc(a.phone)}">${esc(a.phone)}</a> · <a href="https://wa.me/${esc(String(a.phone).replace(/\D/g, "").replace(/^0/, "27"))}" target="_blank" rel="noopener">WhatsApp</a></dd></div>
@@ -419,6 +424,18 @@
                         <p class="muted">The partner gets an email with your decision.</p>
                     </div>` : ""}`;
                 $$(".thumb[data-file]", dbody).forEach(loadThumb);
+                $$("[data-open-doc]", dbody).forEach(btn => btn.addEventListener("click", async () => {
+                    const w = window.open("", "_blank"); btn.disabled = true;
+                    try {
+                        const r = photoCache[btn.dataset.openDoc] ||= await get("getPhoto", { fileId: btn.dataset.openDoc });
+                        const [head, b64] = r.dataUrl.split(","), bin = atob(b64), arr = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                        const blob = new Blob([arr], { type: head.slice(5).split(";")[0] });
+                        const u = URL.createObjectURL(blob);
+                        if (w) w.location = u; else location.href = u;
+                    } catch (err) { if (w) w.close(); toast(err.message, true); }
+                    btn.disabled = false;
+                }));
                 $$("[data-decide]", dbody).forEach(b => b.addEventListener("click", async () => {
                     const note = $("[data-note]", dbody).value.trim();
                     if (b.dataset.decide !== "approve" && !note) { toast("Please add a note for the partner.", true); $("[data-note]", dbody).focus(); return; }
