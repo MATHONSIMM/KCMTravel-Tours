@@ -1,5 +1,13 @@
 @{ var site = SiteOptions.Value; }
 <div class="chat" data-chat data-wa="@site.WhatsApp">
+    <div class="chat-teaser" data-chat-teaser hidden>
+        <button class="chat-teaser-msg" type="button" data-chat-open>
+            <span class="chat-teaser-hi">Hi! I'm Kaycee <span aria-hidden="true">👋</span></span>
+            <span data-teaser-text>Can I help you plan a trip? I'll suggest tours and send you a quote in about a minute.</span>
+            <span class="chat-teaser-cta">Plan my trip <span aria-hidden="true">→</span></span>
+        </button>
+        <button class="chat-teaser-x" type="button" data-teaser-close aria-label="Dismiss">×</button>
+    </div>
     <button class="chat-launcher" type="button" aria-label="Plan a trip with Kaycee, our trip assistant" aria-expanded="false" aria-controls="chat-panel" data-chat-open>
         <span class="chat-launcher-avatar" aria-hidden="true">
             <img src="/images/brand/kcm-logo.svg" alt="" width="34" height="26" />

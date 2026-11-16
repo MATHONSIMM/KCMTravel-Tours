@@ -17,7 +17,7 @@
 
 const APP = {
   name: 'KCM Travel & Tours',
-  version: '1.2.0',
+  version: '1.3.0',
   sessionDays: 7,
   codeMinutes: 15,
   maxPhotoBytes: 4 * 1024 * 1024,
@@ -201,7 +201,8 @@ function pepper_() {
   return p;
 }
 function hashPassword_(password, salt) {
-  let h = salt + ':' + password + ':' + pepper_();
+  // 'np:' salts (the built-in test admin only) are hashed without the private pepper so the hash can ship in the code
+  let h = salt + ':' + password + ':' + (String(salt).indexOf('np:') === 0 ? '' : pepper_());
   for (let i = 0; i < APP.passwordRounds; i++) h = hash_(h + ':' + salt);
   return h;
 }
@@ -572,7 +573,22 @@ function submitBooking_(b) {
     `<p><strong>${esc_(d.name)}</strong> (${esc_(d.phone)}, ${esc_(d.email)}) requested <strong>${esc_(d.tour)}</strong> from ${esc_(d.startDate)} for ${num_(d.adults) + num_(d.children) + num_(d.pensioners)} travellers. Estimate: R${num_(d.total).toLocaleString('en-ZA')}.</p>${siteLink_('/admin#bookings', 'Open bookings')}`));
   const travellers = num_(d.adults) + num_(d.children) + num_(d.pensioners) + num_(d.infants);
   whatsapp_(`🧳 New booking ${d.reference}${d.source === 'chat' ? ' (via Kaycee chat)' : ''}\n${d.tour}\nWhen: ${d.startDate || 'flexible'}${d.nights ? ' · ' + num_(d.nights) + ' nights' : ''}\nTravellers: ${travellers || '-'}\n${num_(d.total) ? 'Estimate: R' + num_(d.total).toLocaleString('en-ZA') + '\n' : ''}${d.name || ''} · ${d.phone || ''}${d.email ? ' · ' + d.email : ''}${d.notes ? '\nNotes: ' + String(d.notes).slice(0, 300) : ''}\n\nOpen: ${siteUrl_('/admin#bookings')}`);
-  return { saved: true, reference: d.reference };
+  if (d.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(d.email))) sendMail_(String(d.email).trim(), `Your KCM trip quote ${d.reference}`, quoteHtml_(d, travellers));
+  return { saved: true, reference: d.reference, emailed: !!d.email };
+}
+
+/** The quote the traveller receives by email (prices are estimates until a consultant confirms availability). */
+function quoteHtml_(d, travellers) {
+  const row = (k, v) => v ? `<tr><td style="padding:6px 12px 6px 0;color:#666">${k}</td><td style="padding:6px 0"><strong>${esc_(v)}</strong></td></tr>` : '';
+  const total = num_(d.total);
+  return `<p>Hi ${esc_(String(d.name || '').split(' ')[0] || 'there')},</p>
+    <p>Thanks for planning your trip with KCM Travel &amp; Tours. Here's your quote. A consultant will confirm availability and the final price within one working day.</p>
+    <table style="border-collapse:collapse;margin:12px 0">
+      ${row('Reference', d.reference)}${row('Trip', d.tour)}${row('Travel date', d.startDate)}${row('Nights', num_(d.nights) ? String(num_(d.nights)) : '')}
+      ${row('Travellers', travellers ? String(travellers) : '')}${row('Room', d.room)}${row('Extras', (d.extras || []).join(', '))}
+      ${row('Estimated total', total ? 'R' + total.toLocaleString('en-ZA') : 'Your consultant will price this for you')}
+    </table>
+    <p>Questions or changes? Reply to this email or WhatsApp us on <a href="https://wa.me/27764360010?text=${encodeURIComponent('Hi KCM, about my quote ' + d.reference)}">076 436 0010</a> and quote <strong>${esc_(d.reference)}</strong>.</p>`;
 }
 
 function submitMessage_(b) {
@@ -890,7 +906,7 @@ function partnersFolder_() {
 }
 
 function staffEmails_(roles) {
-  return readTable_('Users').filter(u => roles.indexOf(u.Role) !== -1 && u.Status !== 'disabled').map(u => u.Email);
+  return readTable_('Users').filter(u => roles.indexOf(u.Role) !== -1 && u.Status !== 'disabled' && !/\.test$/.test(u.Email)).map(u => u.Email);
 }
 
 function publicRateLimit_() {
@@ -1015,6 +1031,34 @@ function safe_(v, max) {
  * ===================================================================== */
 
 /** Run once from the Apps Script editor (Run ▶ setup). Creates the tabs, the private photo folder and makes you the owner. */
+/**
+ * Built-in TEST admin so the dashboard can be tried before real admins are invited.
+ * Email: admin@kcm.test (password shared with the owner privately). Remove it before going live:
+ * Sheet menu KCM → Remove test admin (or disable it in the dashboard under Users & access).
+ */
+const TEST_ADMIN = { email: 'admin@kcm.test', name: 'Test Admin', salt: 'np:cf895a9d6b1dd637c904f89a', hash: '24853ddcedc507e5b8f0149a298f5c05594b84cedb0e6d79577738037141a97b' };
+function ensureTestAdmin_() {
+  if (prop_('TEST_ADMIN_REMOVED') === '1') return;
+  withLock_(() => {
+    const sh = sheet_('Users');
+    const rows = sh.getDataRange().getValues();
+    const idx = rows.findIndex((r, i) => i > 0 && r[0] === TEST_ADMIN.email);
+    const row = [TEST_ADMIN.email, TEST_ADMIN.name, 'admin', 'active', 'test', '', new Date(), '', 'setup', TEST_ADMIN.hash, TEST_ADMIN.salt];
+    if (idx > 0) sh.getRange(idx + 1, 1, 1, row.length).setValues([[row[0], row[1], row[2], rows[idx][3] === 'disabled' ? 'disabled' : 'active', row[4], row[5], rows[idx][6] || row[6], rows[idx][7], row[8], row[9], row[10]]]);
+    else sh.appendRow(row);
+  });
+}
+function menuRemoveTestAdmin_() {
+  PropertiesService.getScriptProperties().setProperty('TEST_ADMIN_REMOVED', '1');
+  withLock_(() => {
+    const sh = sheet_('Users');
+    const rows = sh.getDataRange().getValues();
+    const idx = rows.findIndex((r, i) => i > 0 && r[0] === TEST_ADMIN.email);
+    if (idx > 0) sh.deleteRow(idx + 1);
+  });
+  SpreadsheetApp.getUi().alert('The test admin (admin@kcm.test) has been removed.');
+}
+
 function setup() {
   Object.keys(TABS).forEach(name => {
     const sh = sheet_(name);
@@ -1028,6 +1072,7 @@ function setup() {
   if (!props.getProperty('SITE_URL')) props.setProperty('SITE_URL', 'https://mathonsimm.github.io/KCMTravel-Tours');
   partnersFolder_();
   pepper_();
+  ensureTestAdmin_();
   upsertUser_(props.getProperty('OWNER_EMAIL'), { provider: 'owner' });
   // hide technical tabs
   ['Sessions', 'Codes'].forEach(n => sheet_(n).hideSheet());
@@ -1062,6 +1107,7 @@ function onOpen() {
     .addItem('Set Google Sign-In client ID', 'menuClientId_')
     .addItem('Set website address', 'menuSiteUrl_')
     .addItem('WhatsApp alerts…', 'menuWhatsApp_')
+    .addItem('Remove test admin', 'menuRemoveTestAdmin_')
     .addToUi();
 }
 

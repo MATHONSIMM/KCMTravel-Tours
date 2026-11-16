@@ -37,6 +37,7 @@
     <meta name="twitter:description" content="@description" />
     <meta name="twitter:image" content="@ogImage" />
 
+    <script src="~/js/theme-init.js" asp-append-version="true"></script>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/images/brand/kcm-logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/images/brand/apple-touch-icon.png" />
@@ -86,6 +87,10 @@
                 </div>
             </nav>
             <div class="header-actions">
+                <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme" title="Dark / light theme">
+                    <svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.6A8.5 8.5 0 0 1 9.4 3.5a8.5 8.5 0 1 0 11.1 11.1z"/></svg>
+                    <svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+                </button>
                 <a class="header-phone" href="tel:@site.Phone" aria-label="Call @site.PhoneDisplay">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.2 15.2 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg>
                     <span>@site.PhoneDisplay</span>

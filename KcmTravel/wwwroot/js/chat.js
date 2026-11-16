@@ -195,7 +195,7 @@
         state.estimate = scored[0]?.total || 0;
         save();
         await typing(500);
-        addMsg("Tap 'Book this' to choose dates and extras (the form is already filled in for you), or I can send your request straight to a KCM consultant now.");
+        addMsg("Want a quote? I'll send it to you and to a KCM consultant right away. Or tap 'Book this' to choose dates and extras yourself.");
         offerWhatsApp();
     };
 
@@ -204,7 +204,7 @@
     const offerWhatsApp = () => {
         choicesEl.innerHTML = "";
         const send = document.createElement("button");
-        send.type = "button"; send.className = "chat-choice chat-choice--primary"; send.textContent = "Send my request to KCM";
+        send.type = "button"; send.className = "chat-choice chat-choice--primary"; send.textContent = "Get my quote";
         send.addEventListener("click", askContact);
         const again = document.createElement("button");
         again.type = "button"; again.className = "chat-choice"; again.textContent = "Start over";
@@ -212,22 +212,35 @@
         choicesEl.append(send, again);
     };
 
-    /* Collect name + cell, save the request to KCM's bookings (Sheet + WhatsApp alert to the team), then offer WhatsApp. */
+    const quoteCard = (q) => {
+        const el = document.createElement("div");
+        el.className = "chat-quote";
+        const rows = [["Trip", q.tour], ["When", q.startDate], ["Nights", q.nights || ""], ["Travellers", q.adults + q.children ? `${q.adults} adult${q.adults === 1 ? "" : "s"}${q.children ? `, ${q.children} child${q.children === 1 ? "" : "ren"}` : ""}` : ""],
+            ["Estimate", q.total ? "R" + Number(q.total).toLocaleString("en-ZA") : "Consultant to price"]].filter(r => r[1]);
+        el.innerHTML = `<p class="chat-quote-head"><span>Your quote</span><strong></strong></p><dl></dl><p class="chat-quote-note">Estimate only. A consultant confirms availability and the final price.</p>`;
+        el.querySelector("strong").textContent = q.reference;
+        const dl = el.querySelector("dl");
+        rows.forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); });
+        log.appendChild(el); scroll();
+    };
+
+    /* Collect contact details and send the quote immediately: saved to KCM's bookings (Sheet), team alerted on WhatsApp,
+       copy emailed to the traveller. WhatsApp chat is only a fallback when the site can't reach the booking system. */
     const askContact = async () => {
         choicesEl.innerHTML = "";
-        addMsg("Send my request to KCM", "user");
+        addMsg("Get my quote", "user");
         await typing(400);
-        addMsg("Sure! Who should our consultant contact?");
+        addMsg("Great! Where should I send your quote?");
         const f = document.createElement("form");
         f.className = "chat-contact"; f.noValidate = true;
         f.innerHTML = `<label>Your name<input name="name" autocomplete="name" required maxlength="60"></label>
             <label>Cell / WhatsApp<input name="phone" type="tel" autocomplete="tel" inputmode="tel" required placeholder="e.g. 082 123 4567" maxlength="20"></label>
-            <label>Email (optional)<input name="email" type="email" autocomplete="email" maxlength="120"></label>
+            <label>Email <span>(we'll email you the quote)</span><input name="email" type="email" autocomplete="email" maxlength="120"></label>
             <input name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
             <p class="chat-contact-err" hidden></p>
-            <button type="submit" class="chat-choice chat-choice--primary">Send request</button>`;
+            <button type="submit" class="chat-choice chat-choice--primary">Send my quote</button>`;
         log.appendChild(f); scroll();
-        f.name.focus();
+        f.name.focus({ preventScroll: true });
         f.addEventListener("submit", async e => {
             e.preventDefault();
             const err = f.querySelector(".chat-contact-err");
@@ -247,22 +260,29 @@
             };
             let saved = false;
             try { if (window.KCM?.configured) { await window.KCM.call("submitBooking", { booking, website: f.website.value }); saved = true; } }
-            catch { /* still offer WhatsApp below */ }
+            catch { /* fall back to WhatsApp below */ }
             f.remove();
-            addMsg(`${name}, ${phone}${email ? ", " + email : ""}`, "user");
+            addMsg(`${name} · ${phone}${email ? " · " + email : ""}`, "user");
             await typing(500);
-            addMsg(saved
-                ? `Done! Your request ${ref} has been sent to our team, and a consultant will contact you on ${phone}, usually within one working day. You can also chat to us on WhatsApp now.`
-                : `Thanks ${name.split(" ")[0]}! Your reference is ${ref}. Tap below to send it to a consultant on WhatsApp.`);
+            quoteCard(booking);
+            const waLink = `https://wa.me/${wa}?text=${encodeURIComponent(`Hi KCM Travel & Tours! My quote ${ref} (from Kaycee):\n${summaryText()}\nName: ${name}\nCell: ${phone}`)}`;
             choicesEl.innerHTML = "";
-            const link = document.createElement("a");
-            link.className = "chat-choice" + (saved ? "" : " chat-choice--primary"); link.target = "_blank"; link.rel = "noopener";
-            link.href = `https://wa.me/${wa}?text=${encodeURIComponent(`Hi KCM Travel & Tours! My trip request ${ref} (from Kaycee):\n${summaryText()}\nName: ${name}\nCell: ${phone}`)}`;
-            link.textContent = "Chat on WhatsApp";
             const again = document.createElement("button");
             again.type = "button"; again.className = "chat-choice"; again.textContent = "Plan another trip";
             again.addEventListener("click", restart);
-            choicesEl.append(link, again);
+            if (saved) {
+                addMsg(`Sent ✓ Your quote ${ref} is with our team${email ? ` and a copy is on its way to ${email}` : ""}. A consultant will contact you on ${phone}, usually within one working day.`);
+                const link = document.createElement("a");
+                link.className = "chat-choice chat-choice--quiet"; link.target = "_blank"; link.rel = "noopener"; link.href = waLink;
+                link.textContent = "Questions? WhatsApp us";
+                choicesEl.append(again, link);
+            } else {
+                addMsg(`I couldn't reach our booking system just now, so please send your quote ${ref} to a consultant on WhatsApp. It's already written for you.`);
+                const link = document.createElement("a");
+                link.className = "chat-choice chat-choice--primary"; link.target = "_blank"; link.rel = "noopener"; link.href = waLink;
+                link.textContent = "Send quote on WhatsApp";
+                choicesEl.append(link, again);
+            }
             state.sent = ref; save();
         });
     };
@@ -328,7 +348,26 @@
     };
 
     /* ---------- open / close ---------- */
+    /* ---------- greeting bubble next to the launcher ---------- */
+    const teaser = root.querySelector("[data-chat-teaser]");
+    const teaserOff = () => { try { return sessionStorage.getItem("kcm-teaser") === "off"; } catch { return false; } };
+    const hideTeaser = (forever) => {
+        if (!teaser) return;
+        teaser.classList.remove("is-in"); setTimeout(() => { teaser.hidden = true; }, 300);
+        if (forever) { try { sessionStorage.setItem("kcm-teaser", "off"); } catch { } }
+    };
+    if (teaser && !teaserOff()) {
+        const path = location.pathname.replace(/^\/KCMTravel-Tours/, "");
+        const text = teaser.querySelector("[data-teaser-text]");
+        if (/^\/tours\/./.test(path)) text.textContent = "Like this tour? I can check what suits your group and send you a quote in about a minute.";
+        else if (/^\/destinations/.test(path)) text.textContent = "Not sure where to go? Tell me what you enjoy and I'll suggest the right trip.";
+        else if (/^\/book/.test(path)) text.textContent = "Need help choosing? I can suggest a trip and send you a quote.";
+        setTimeout(() => { if (!root.classList.contains("is-open") && !teaserOff()) { teaser.hidden = false; requestAnimationFrame(() => teaser.classList.add("is-in")); } }, 3500);
+        teaser.querySelector("[data-teaser-close]").addEventListener("click", () => hideTeaser(true));
+    }
+
     const open = () => {
+        hideTeaser(true);
         panel.hidden = false;
         root.classList.add("is-open");
         launcher.setAttribute("aria-expanded", "true");
