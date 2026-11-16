@@ -57,10 +57,12 @@
         const validEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
         const done = r => { K.session.set(r.token, r.user); onDone?.(r.user); };
 
-        if (!K.configured) { $$("input,button", node).forEach(x => x.disabled = true); }
+        // Not connected to the Google Sheet backend yet: let people type, explain on submit instead of freezing the form.
+        const notReady = () => { if (K.configured) return false; info("Sign-in isn't switched on yet: the website still has to be connected to the KCM Google Sheet. Please try again soon."); return true; };
 
         pwForm.addEventListener("submit", async e => {
             e.preventDefault(); showErr("");
+            if (notReady()) return;
             email = pwForm.email.value.trim().toLowerCase();
             if (!validEmail(email)) { showErr("Please enter a valid email address."); pwForm.email.focus(); return; }
             if (!pwForm.password.value) { showErr("Please enter your password."); pwForm.password.focus(); return; }
@@ -73,6 +75,7 @@
         $("[data-back-password]", node).addEventListener("click", () => step(pwForm));
         emailForm.addEventListener("submit", async e => {
             e.preventDefault(); showErr("");
+            if (notReady()) return;
             email = emailForm.email.value.trim().toLowerCase();
             if (!validEmail(email)) { showErr("Please enter a valid email address."); emailForm.email.focus(); return; }
             busy(emailForm, true, "Sending…");
@@ -85,6 +88,7 @@
         });
         codeForm.addEventListener("submit", async e => {
             e.preventDefault(); showErr("");
+            if (notReady()) return;
             const code = codeForm.code.value.replace(/\D/g, "");
             if (code.length !== 6) { showErr("Enter the 6-digit code from the email."); return; }
             const pw = codeForm.password.value;
