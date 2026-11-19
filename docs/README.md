@@ -2,7 +2,7 @@
 
 | Document | For | What it covers |
 |---|---|---|
-| **[KCM-User-Guide.pdf](KCM-User-Guide.pdf)** | The whole team | 39-page illustrated guide: signing in and the authenticator app, the menu, how enquiries arrive, a consultant's daily work, tickets, quotations, payments, management, all 20 ticket statuses, giving and removing access, partners, demo data, going-live checklist, troubleshooting. Screenshots use demo data. |
+| **[KCM-User-Guide.pdf](KCM-User-Guide.pdf)** | The whole team | 41-page illustrated guide: signing in and the authenticator app, the menu, how enquiries arrive, a consultant's daily work, tickets, quotations, payments, management, all 20 ticket statuses, giving and removing access, partners, demo data, going-live checklist, troubleshooting. Screenshots use demo data. |
 | [../backend/SETUP.md](../backend/SETUP.md) | Owner / admin | Connecting the Google Sheet, deploying the Apps Script backend, two-step sign-in, access levels, what each tab holds, demo data, updating to a new version. |
 | [SECURITY-AUDIT.md](SECURITY-AUDIT.md) | Owner / technical | Security problems found and fixed, controls in place, test results, known limits of the pilot platform, production requirements, POPIA notes. |
 | [OPERATIONS-CENTRE-PLAN.md](OPERATIONS-CENTRE-PLAN.md) | Technical | How the Operations Centre was designed on top of the existing site and backend. |

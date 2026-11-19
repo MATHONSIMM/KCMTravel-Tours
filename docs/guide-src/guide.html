@@ -166,19 +166,27 @@ table.status-table td:nth-child(2) { font-weight: 800; font-size: 8.5pt; white-s
 <h3>New enquiries</h3>
 <p><b>Incoming Enquiries</b> lists everything nobody has reviewed yet; <b>Unassigned Tickets</b> lists tickets with no owner. Use the search box and filters (status, priority, employee, source, payment status, destination, dates, overdue only) to find anything quickly. <span class="ui">CSV</span> downloads the list for Excel.</p>
 <figure class="fig full"><img src="img/12-incoming.jpg" alt=""><figcaption><b>Figure 27.</b> Incoming Enquiries. Click a ticket number (1) to open it.</figcaption></figure>
-<h3>Assigning a ticket</h3>
-<ol class="steps"><li>Open the ticket and click <span class="ui">Assign</span> (Figure 28, marker 1).</li><li>Choose the employee (2) and the priority (3). You can add supporting employees and a deadline.</li><li>Click <span class="ui">Assign</span> (4). The employee is notified and gets a "Contact the customer" task automatically.</li></ol>
-<figure class="fig full"><img src="img/30-ticket-new.jpg" alt=""><figcaption><b>Figure 28.</b> A new ticket with the Assign button (1).</figcaption></figure>
-<figure class="fig full"><img src="img/31-assign-modal.jpg" alt=""><figcaption><b>Figure 29.</b> Assigning: (2) employee, (3) priority, (4) Assign.</figcaption></figure>
+<h3>Assigning straight from the list (quickest)</h3>
+<p>In <b>Unassigned Tickets</b>, <b>Incoming Enquiries</b>, <b>All Tickets</b> and the other ticket lists, the <b>Assigned</b> column is a button.</p>
+<ol class="steps"><li>Click <b>Unassigned</b> (or the person's name, to reassign) in the row.</li><li>A list of everyone who can work on tickets opens, showing how many active tickets each person already has. The current owner is marked "current".</li><li>Click a name. The ticket is assigned (or reassigned) at once and the person is notified. Choose <b>Unassign</b> to send it back to Unassigned Tickets, or <b>More options</b> for a handover note, supporters and a deadline.</li></ol>
+<figure class="fig full"><img src="img/29-assign-menu.jpg" alt=""><figcaption><b>Figure 28.</b> Click Unassigned (or a name) to pick who handles the ticket.</figcaption></figure>
+<h3>Moving several tickets at once</h3>
+<ol class="steps"><li>Tick the box at the start of each row (or the box in the header to tick them all).</li><li>In the bar that appears, choose the employee under <b>Assign to</b>.</li><li>Click <span class="ui">Assign</span>. Each ticket is moved, with a handover note when it had an owner before.</li></ol>
+<figure class="fig full"><img src="img/29b-assign-bulk.jpg" alt=""><figcaption><b>Figure 29.</b> Two tickets ticked and about to be given to Ayesha.</figcaption></figure>
+<div class="callout note"><b>Good to know</b><p>Finance staff can't own tickets, so they don't appear in these lists. Operations staff see who owns a ticket but cannot reassign it.</p></div>
+<h3>Assigning from inside a ticket</h3>
+<ol class="steps"><li>Open the ticket and click <span class="ui">Assign</span> (Figure 30, marker 1).</li><li>Choose the employee (2) and the priority (3). You can add supporting employees and a deadline.</li><li>Click <span class="ui">Assign</span> (4). The employee is notified and gets a "Contact the customer" task automatically.</li></ol>
+<figure class="fig full"><img src="img/30-ticket-new.jpg" alt=""><figcaption><b>Figure 30.</b> A new ticket with the Assign button (1).</figcaption></figure>
+<figure class="fig full"><img src="img/31-assign-modal.jpg" alt=""><figcaption><b>Figure 31.</b> Assigning: (2) employee, (3) priority, (4) Assign.</figcaption></figure>
 <h3>Handing over (leave, sick days)</h3>
 <p>Click <span class="ui">Reassign / hand over</span>, choose the new employee and write a short handover summary. Nothing is lost: notes, checklist ticks, quotations and history stay on the ticket, open tasks move to the new person, and the previous person no longer sees the ticket.</p>
 <h3>Confirming and completing</h3>
 <p>Only management can set <b>BOOKING CONFIRMED</b>, and only when a quotation has been accepted <b>and</b> finance has verified the deposit. A trip can be marked <b>COMPLETED</b> once it is confirmed; if a balance is still unpaid, management must add a note explaining why.</p>
-<figure class="fig full"><img src="img/54-confirmed-ticket.jpg" alt=""><figcaption><b>Figure 30.</b> A confirmed booking.</figcaption></figure>
+<figure class="fig full"><img src="img/54-confirmed-ticket.jpg" alt=""><figcaption><b>Figure 32.</b> A confirmed booking.</figcaption></figure>
 <h3>Operations Overview</h3>
 <p>The overview shows live figures calculated from the records: enquiries received, unassigned work, quotations, confirmed bookings, outstanding payments, overdue tasks, conversion rates, enquiries by source and destination, and each employee's workload. Choose <b>Today, This week, This month, This year</b> or a <b>Custom</b> date range.</p>
-<figure class="fig tall"><img src="img/10-ops-overview.jpg" alt=""><figcaption><b>Figure 31.</b> Operations Overview (demo data).</figcaption></figure>
-<figure class="fig full"><img src="img/18-workload.jpg" alt=""><figcaption><b>Figure 32.</b> Employee Workload: active tickets, overdue tasks and work per person.</figcaption></figure>
+<figure class="fig tall"><img src="img/10-ops-overview.jpg" alt=""><figcaption><b>Figure 33.</b> Operations Overview (demo data).</figcaption></figure>
+<figure class="fig full"><img src="img/18-workload.jpg" alt=""><figcaption><b>Figure 34.</b> Employee Workload: active tickets, overdue tasks and work per person.</figcaption></figure>
 <h3>Checklists &amp; statuses</h3>
 <p>Under <b>Checklists &amp; statuses</b> management can edit the checklist templates used for each trip type (full package, day tour, accommodation only, transfer, general), and add extra statuses if KCM needs them.</p>
 </section><section id="lifecycle" class="chapter"><h2><span class="num">11</span>The ticket journey: all statuses</h2>
@@ -188,38 +196,38 @@ table.status-table td:nth-child(2) { font-weight: 800; font-size: 8.5pt; white-s
 <p>Open <b>Users &amp; access</b> (Super Admin and Admin only).</p>
 <h3>Give someone access</h3>
 <ol class="steps"><li>In <b>Give someone access</b>, type their email (1) and name.</li><li>Choose the role (2): Management, Finance or Operations (only a Super Admin can create an Admin).</li><li>Click <span class="ui">Give access</span> (3). They then sign in with <b>Forgot or set password?</b> to choose their password.</li></ol>
-<figure class="fig full"><img src="img/60-give-access.jpg" alt=""><figcaption><b>Figure 33.</b> Giving a new employee access.</figcaption></figure>
+<figure class="fig full"><img src="img/60-give-access.jpg" alt=""><figcaption><b>Figure 35.</b> Giving a new employee access.</figcaption></figure>
 <h3>Change a role, remove access or reset two-step sign-in</h3>
 <ul>
 <li><b>Change role</b>: pick a new role from the drop-down in the Role column (A). The change happens at once and the person must sign in again.</li>
 <li><b>Remove access</b>: change Status to <b>disabled</b> (B). They are signed out immediately and cannot sign in. Change it back to <b>active</b> to restore access. Their past work stays on the tickets.</li>
 <li><b>Reset</b> (in the Two-step column): for someone who lost their phone. They set up the authenticator again at their next sign-in.</li>
 </ul>
-<figure class="fig tall"><img src="img/61-users-access.jpg" alt=""><figcaption><b>Figure 34.</b> Users &amp; access: (A) role, (B) status (active / disabled).</figcaption></figure>
+<figure class="fig tall"><img src="img/61-users-access.jpg" alt=""><figcaption><b>Figure 36.</b> Users &amp; access: (A) role, (B) status (active / disabled).</figcaption></figure>
 <div class="callout warn"><b>Important</b><p>Nobody can change their own role, and nobody can be made Super Admin from the website. This stops anyone from giving themselves more power.</p></div>
 <h3>Activity &amp; Audit History</h3>
 <p>Every sign-in, change, approval and payment is written to a permanent log that cannot be edited from the dashboard. Use the filter to search by person, action or ticket number.</p>
-<figure class="fig full"><img src="img/19-activity.jpg" alt=""><figcaption><b>Figure 35.</b> Activity &amp; Audit History.</figcaption></figure>
+<figure class="fig full"><img src="img/19-activity.jpg" alt=""><figcaption><b>Figure 37.</b> Activity &amp; Audit History.</figcaption></figure>
 </section><section id="partners" class="chapter"><h2><span class="num">13</span>Partners: lodges, drivers and guides</h2>
 <p>Businesses apply to become KCM partners on the <b>Partner with us</b> page. They upload photos and proof of ownership and choose a password.</p>
 <h3>Reviewing an application</h3>
 <ol class="steps"><li>Open <b>Partner applications</b> and click an application.</li><li>Check the photos, the ownership documents (only staff who review partners can open these, and every view is logged) and the details.</li><li>Click <span class="ui">Approve</span> (1) and choose a tier, <span class="ui">Ask for more info</span> (2) or <span class="ui">Reject</span> (3). For "more info" and "reject" you must write a note. The partner is emailed your decision.</li></ol>
-<figure class="fig full"><img src="img/62-application-detail.jpg" alt=""><figcaption><b>Figure 36.</b> Reviewing a partner application.</figcaption></figure>
+<figure class="fig full"><img src="img/62-application-detail.jpg" alt=""><figcaption><b>Figure 38.</b> Reviewing a partner application.</figcaption></figure>
 <h3>Partners, trips, payouts and ratings</h3>
 <ul>
 <li><b>Partners</b>: all approved partners.</li>
 <li><b>Partner trips &amp; payouts</b>: record each trip a partner did, the commission and the payout; mark payouts Approved, Paid or On hold. The partner is emailed when a payout is marked Paid.</li>
 <li><b>Ratings</b>: guest ratings of partners, which you can hide if needed.</li>
 </ul>
-<div class="two"><figure class="fig half"><img src="img/24-payouts.jpg" alt=""><figcaption><b>Figure 37.</b> Partner trips &amp; payouts.</figcaption></figure><figure class="fig half"><img src="img/25-ratings.jpg" alt=""><figcaption><b>Figure 38.</b> Guest ratings.</figcaption></figure></div>
+<div class="two"><figure class="fig half"><img src="img/24-payouts.jpg" alt=""><figcaption><b>Figure 39.</b> Partner trips &amp; payouts.</figcaption></figure><figure class="fig half"><img src="img/25-ratings.jpg" alt=""><figcaption><b>Figure 40.</b> Guest ratings.</figcaption></figure></div>
 <h3>What partners see</h3>
 <p>Approved partners sign in on the website and see their own portal: their businesses, trips, earnings, payouts and ratings. They cannot see anything else.</p>
-<figure class="fig tall"><img src="img/63-partner-portal.jpg" alt=""><figcaption><b>Figure 39.</b> The partner portal (demo partner).</figcaption></figure>
+<figure class="fig tall"><img src="img/63-partner-portal.jpg" alt=""><figcaption><b>Figure 41.</b> The partner portal (demo partner).</figcaption></figure>
 </section><section id="requests" class="chapter"><h2><span class="num">14</span>Website requests and messages</h2>
 <p><b>Website requests</b> lists every booking-form and Kaycee request as it was submitted (each one also has a ticket in the Operations Centre). <b>Messages</b> lists notes sent from the Contact page. Both can be downloaded as CSV.</p>
-<figure class="fig full"><img src="img/26-website-requests.jpg" alt=""><figcaption><b>Figure 40.</b> Website requests.</figcaption></figure>
+<figure class="fig full"><img src="img/26-website-requests.jpg" alt=""><figcaption><b>Figure 42.</b> Website requests.</figcaption></figure>
 </section><section id="demo" class="chapter"><h2><span class="num">15</span>Demo data for testing</h2>
-<p>To try everything out before going live, the system can fill itself with <b>fake</b> records: about 23 tickets at every stage of the journey (new, assigned, quoting, waiting for deposit, confirmed, travelling, completed, lost, cancelled, on hold), customers, tasks, notes, quotations, payments waiting for verification, a refund waiting for approval, suppliers, partner applications, payouts, ratings and website messages.</p>
+<p>To try everything out before going live, the system can fill itself with <b>fake</b> records: about 33 tickets (9 of them unassigned, so you can practise assigning) at every stage of the journey (new, assigned, quoting, waiting for deposit, confirmed, travelling, completed, lost, cancelled, on hold), customers, tasks, notes, quotations, payments waiting for verification, a refund waiting for approval, suppliers, partner applications, payouts, ratings and website messages.</p>
 <p>Everything fake is clearly labelled: names end in <b>(demo)</b>, emails end in <b>@demo.kcm.test</b> and descriptions start with <b>[DEMO]</b>. No emails or WhatsApp messages are sent while demo data is created.</p>
 <h3>Load it</h3>
 <ol class="steps"><li>Open the Google Sheet and wait for the <b>KCM Admin</b> menu to appear.</li><li>Click <b>KCM Admin → Load demo data (testing only)</b> and confirm.</li><li>Wait until the message appears (it can take a few minutes). If it says "Part loaded", click the menu item again to continue.</li></ol>

@@ -201,7 +201,19 @@ sec('management', 'For management: assigning, approving and confirming', f'''
 <h3>New enquiries</h3>
 <p><b>Incoming Enquiries</b> lists everything nobody has reviewed yet; <b>Unassigned Tickets</b> lists tickets with no owner. Use the search box and filters (status, priority, employee, source, payment status, destination, dates, overdue only) to find anything quickly. {btn('CSV')} downloads the list for Excel.</p>
 {fig('12-incoming', 'Incoming Enquiries. Click a ticket number (1) to open it.')}
-<h3>Assigning a ticket</h3>
+<h3>Assigning straight from the list (quickest)</h3>
+<p>In <b>Unassigned Tickets</b>, <b>Incoming Enquiries</b>, <b>All Tickets</b> and the other ticket lists, the <b>Assigned</b> column is a button.</p>
+{steps('Click <b>Unassigned</b> (or the person\'s name, to reassign) in the row.',
+       'A list of everyone who can work on tickets opens, showing how many active tickets each person already has. The current owner is marked "current".',
+       'Click a name. The ticket is assigned (or reassigned) at once and the person is notified. Choose <b>Unassign</b> to send it back to Unassigned Tickets, or <b>More options</b> for a handover note, supporters and a deadline.')}
+{fig('29-assign-menu', 'Click Unassigned (or a name) to pick who handles the ticket.')}
+<h3>Moving several tickets at once</h3>
+{steps('Tick the box at the start of each row (or the box in the header to tick them all).',
+       'In the bar that appears, choose the employee under <b>Assign to</b>.',
+       'Click ' + btn('Assign') + '. Each ticket is moved, with a handover note when it had an owner before.')}
+{fig('29b-assign-bulk', 'Two tickets ticked and about to be given to Ayesha.')}
+{tip('Finance staff can\'t own tickets, so they don\'t appear in these lists. Operations staff see who owns a ticket but cannot reassign it.', 'note')}
+<h3>Assigning from inside a ticket</h3>
 {steps('Open the ticket and click ' + btn('Assign') + ' (Figure ' + str(fig_no[0]+1) + ', marker 1).',
        'Choose the employee (2) and the priority (3). You can add supporting employees and a deadline.',
        'Click ' + btn('Assign') + ' (4). The employee is notified and gets a "Contact the customer" task automatically.')}
@@ -291,7 +303,7 @@ sec('requests', 'Website requests and messages', f'''
 ''')
 
 sec('demo', 'Demo data for testing', f'''
-<p>To try everything out before going live, the system can fill itself with <b>fake</b> records: about 23 tickets at every stage of the journey (new, assigned, quoting, waiting for deposit, confirmed, travelling, completed, lost, cancelled, on hold), customers, tasks, notes, quotations, payments waiting for verification, a refund waiting for approval, suppliers, partner applications, payouts, ratings and website messages.</p>
+<p>To try everything out before going live, the system can fill itself with <b>fake</b> records: about 33 tickets (9 of them unassigned, so you can practise assigning) at every stage of the journey (new, assigned, quoting, waiting for deposit, confirmed, travelling, completed, lost, cancelled, on hold), customers, tasks, notes, quotations, payments waiting for verification, a refund waiting for approval, suppliers, partner applications, payouts, ratings and website messages.</p>
 <p>Everything fake is clearly labelled: names end in <b>(demo)</b>, emails end in <b>@demo.kcm.test</b> and descriptions start with <b>[DEMO]</b>. No emails or WhatsApp messages are sent while demo data is created.</p>
 <h3>Load it</h3>
 {steps('Open the Google Sheet and wait for the <b>KCM Admin</b> menu to appear.',

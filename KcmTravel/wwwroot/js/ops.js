@@ -112,15 +112,17 @@
                         <button type="button" class="btn btn--ghost btn--sm" data-clear>Clear</button>
                         <button type="button" class="btn btn--ghost btn--sm" data-csv>CSV</button>
                     </form>
+                    ${can("ops.assign") ? `<div class="bulk-bar" data-bulk hidden><strong data-bulk-n></strong><label class="inline-field">Assign to <select data-bulk-to aria-label="Assign selected tickets to"></select></label><button type="button" class="btn btn--primary btn--sm" data-bulk-go>Assign</button><button type="button" class="link-btn" data-bulk-clear>Clear selection</button></div>` : ""}
                     <div data-results><p class="muted">Loading…</p></div>
                 </div>`;
             let timer = null, last = [];
+            if (can("ops.assign")) wireAssign(b, () => last, () => load());
             const load = async () => {
                 const payload = Object.assign({ view: opts.apiView || "all" }, f, { overdue: f.overdue || undefined });
                 try {
                     const r = await get("listTickets", payload);
                     last = r.tickets;
-                    $("[data-results]", b).innerHTML = r.tickets.length ? `<p class="muted ops-count">${r.total} ticket${r.total === 1 ? "" : "s"}${r.total > r.tickets.length ? ` (showing ${r.tickets.length})` : ""}</p>${ticketTable(r.tickets)}`
+                    $("[data-results]", b).innerHTML = r.tickets.length ? `<p class="muted ops-count">${r.total} ticket${r.total === 1 ? "" : "s"}${r.total > r.tickets.length ? ` (showing ${r.tickets.length})` : ""}</p>${ticketTable(r.tickets, { assign: true })}`
                         : empty(opts.emptyTitle || "No tickets", opts.emptyText || "Nothing matches these filters.");
                 } catch (e) { $("[data-results]", b).innerHTML = `<p class="form-error">${esc(e.message)}</p>`; }
             };
@@ -135,15 +137,99 @@
             $("[data-csv]", b).addEventListener("click", () => downloadCsv(`kcm-${view}-${today()}.csv`, last, ["ref", "created", "customerName", "customerPhone", "source", "opStatus", "paymentStatus", "responseStatus", "priority", "assignedTo", "package", "destination", "departDate", "travellers", "nextAction", "nextActionDue"]));
             load();
         }
-        function ticketTable(list) {
-            return `<div class="table-wrap"><table class="table ops-table"><thead><tr><th>Ticket</th><th>Customer</th><th>Trip</th><th>Status</th><th>Payment</th><th>Assigned</th><th>Next action</th></tr></thead><tbody>
+        /* ---------- quick assign from any ticket list (management) ---------- */
+        const WORK_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGEMENT", "OPERATIONS"]; // finance can't own tickets
+        function wireAssign(b, rows, reload) {
+            const card = $(".adm-card", b);
+            let counts = {};
+            const people = () => cfg.staff.filter(s => WORK_ROLES.includes(s.role));
+            const loadCounts = async () => { if (!can("ops.workload")) return; try { (await get("workload")).forEach(w => { counts[w.email] = w.activeTickets; }); } catch { /* counts are a nice-to-have */ } };
+            loadCounts();
+            const label = s => `${s.name}${counts[s.email] !== undefined ? ` · ${counts[s.email]} active` : ""}`;
+            const assign = async (t, to) => {
+                const supporters = String(t.supportBy || "").split(",").map(x => x.trim()).filter(x => x && x !== to);
+                await get("assignTicket", { ref: t.ref, assignee: to, supporters });
+            };
+            const closeMenu = () => { $$(".assign-menu").forEach(m => m.remove()); };
+            document.addEventListener("click", e => { if (!e.target.closest(".assign-menu, [data-qa]")) closeMenu(); });
+            document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenu(); });
+            card.addEventListener("click", async e => {
+                const chip = e.target.closest("[data-qa]");
+                if (!chip) return;
+                e.preventDefault();
+                const open = document.querySelector(".assign-menu");
+                closeMenu();
+                if (open && open.dataset.ref === chip.dataset.qa) return;
+                const t = rows().find(x => x.ref === chip.dataset.qa); if (!t) return;
+                const m = document.createElement("div");
+                m.className = "assign-menu"; m.dataset.ref = t.ref; m.setAttribute("role", "menu");
+                m.innerHTML = `<p class="assign-menu-head">${t.assignedTo ? "Reassign" : "Assign"} ${esc(t.ref)} to…</p>
+                    ${people().map(s => `<button type="button" role="menuitem" data-to="${esc(s.email)}" class="${s.email === t.assignedTo ? "is-current" : ""}"><span>${esc(s.name)}</span><small>${esc(ROLE_LABEL[s.role] || s.role)}${counts[s.email] !== undefined ? ` · ${counts[s.email]} active` : ""}</small></button>`).join("")}
+                    ${t.assignedTo ? `<button type="button" role="menuitem" data-to="" class="assign-menu-unassign"><span>Unassign</span><small>back to Unassigned Tickets</small></button>` : ""}
+                    <button type="button" role="menuitem" data-more class="assign-menu-more">More options: handover note, supporters, deadline…</button>`;
+                document.body.append(m);
+                const r = chip.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
+                m.style.left = Math.max(8, Math.min(window.innerWidth - mw - 8, r.left)) + "px";
+                m.style.top = (r.bottom + mh + 8 > window.innerHeight ? Math.max(8, r.top - mh - 6) : r.bottom + 6) + "px";
+                m.querySelector("button")?.focus();
+                m.addEventListener("click", async ev => {
+                    const more = ev.target.closest("[data-more]"), pickBtn = ev.target.closest("[data-to]");
+                    if (more) { closeMenu(); try { const full = await get("getTicket", { ref: t.ref }); ACT.assign(full, reload); } catch (err) { toast(err.message, true); } return; }
+                    if (!pickBtn) return;
+                    const to = pickBtn.dataset.to;
+                    if (to === (t.assignedTo || "")) { closeMenu(); return; }
+                    closeMenu(); chip.disabled = true; chip.classList.add("is-busy");
+                    try {
+                        await assign(t, to);
+                        const who = to ? (cfg.staff.find(x => x.email === to) || {}).name || to : "";
+                        toast(to ? `${t.ref} ${t.assignedTo ? "reassigned" : "assigned"} to ${who}` : `${t.ref} is unassigned`);
+                        if (t.assignedTo && counts[t.assignedTo]) counts[t.assignedTo]--; if (to) counts[to] = (counts[to] || 0) + 1;
+                        reload();
+                    } catch (err) { toast(err.message, true); chip.disabled = false; chip.classList.remove("is-busy"); }
+                });
+            });
+            // ---- select several tickets and move them to one person ----
+            const bar = $("[data-bulk]", card);
+            const selected = () => $$("[data-sel]:checked", card).map(x => x.dataset.sel);
+            const refresh = () => {
+                const n = selected().length;
+                bar.hidden = !n;
+                $("[data-bulk-n]", bar).textContent = `${n} ticket${n === 1 ? "" : "s"} selected`;
+                const sel = $("[data-bulk-to]", bar);
+                if (!sel.options.length || sel.dataset.stale) { sel.innerHTML = `<option value="">Choose an employee…</option>` + people().map(s => `<option value="${esc(s.email)}">${esc(label(s))}</option>`).join("") + `<option value="__none">Unassign</option>`; delete sel.dataset.stale; }
+            };
+            card.addEventListener("change", e => {
+                if (e.target.matches("[data-selall]")) $$("[data-sel]", card).forEach(x => { x.checked = e.target.checked; });
+                if (e.target.matches("[data-sel], [data-selall]")) refresh();
+            });
+            $("[data-bulk-clear]", bar).addEventListener("click", () => { $$("[data-sel], [data-selall]", card).forEach(x => { x.checked = false; }); refresh(); });
+            $("[data-bulk-go]", bar).addEventListener("click", async () => {
+                const sel = $("[data-bulk-to]", bar), v = sel.value;
+                if (!v) { toast("Choose who should get the selected tickets.", true); sel.focus(); return; }
+                const to = v === "__none" ? "" : v, refs = selected(), btn = $("[data-bulk-go]", bar);
+                btn.disabled = true; let ok = 0; const failed = [];
+                for (const ref of refs) {
+                    btn.textContent = `Assigning ${ok + failed.length + 1} of ${refs.length}…`;
+                    const t = rows().find(x => x.ref === ref);
+                    if (!t || (t.assignedTo || "") === to) { ok++; continue; }
+                    try { await assign(t, to); ok++; } catch (err) { failed.push(`${ref}: ${err.message}`); }
+                }
+                btn.disabled = false; btn.textContent = "Assign";
+                const who = to ? (cfg.staff.find(x => x.email === to) || {}).name || to : "nobody";
+                toast(failed.length ? `${ok} done, ${failed.length} not changed. ${failed[0]}` : `${ok} ticket${ok === 1 ? "" : "s"} now assigned to ${who}`, !!failed.length);
+                sel.dataset.stale = "1"; await loadCounts(); reload(); bar.hidden = true;
+            });
+        }
+        function ticketTable(list, o = {}) {
+            const pick = !!o.assign && can("ops.assign"); // registers only: tick-boxes + click-to-assign
+            return `<div class="table-wrap"><table class="table ops-table"><thead><tr>${pick ? `<th class="sel-col"><input type="checkbox" data-selall aria-label="Select all tickets"></th>` : ""}<th>Ticket</th><th>Customer</th><th>Trip</th><th>Status</th><th>Payment</th><th>Assigned</th><th>Next action</th></tr></thead><tbody>
                 ${list.map(t => `<tr class="${t.overdue ? "is-overdue" : ""}">
-                    <td>${ticketLink(t.ref)} ${priBadge(t.priority)}<span>${esc(t.source)} · ${fmtDate(t.created)}</span></td>
+                    ${pick ? `<td class="sel-col"><input type="checkbox" data-sel="${esc(t.ref)}" aria-label="Select ${esc(t.ref)}"></td>` : ""}<td>${ticketLink(t.ref)} ${priBadge(t.priority)}<span>${esc(t.source)} · ${fmtDate(t.created)}</span></td>
                     <td><strong>${esc(t.customerName || t.customerRef)}</strong><span>${esc(t.customerPhone || t.customerEmail || "")}</span></td>
                     <td>${esc(t.package || t.destination || "—")}<span>${t.departDate ? fmtDate(t.departDate) : "Dates TBC"}${t.travellers ? " · " + t.travellers + " pax" : ""}</span></td>
                     <td>${opBadge(t.opStatus)}${respBadge(t.responseStatus)}</td>
                     <td>${payBadge(t.paymentStatus)}</td>
-                    <td>${t.assignedTo ? esc(staffName(t.assignedTo)) : `<span class="status status--warn">Unassigned</span>`}${t.openTasks ? `<span>${t.openTasks} open task${t.openTasks > 1 ? "s" : ""}${t.overdueTasks ? `, <b class="overdue-txt">${t.overdueTasks} overdue</b>` : ""}</span>` : ""}</td>
+                    <td>${pick ? `<button type="button" class="assign-chip ${t.assignedTo ? "" : "is-none"}" data-qa="${esc(t.ref)}" aria-haspopup="menu" title="${t.assignedTo ? "Reassign" : "Assign"} ${esc(t.ref)}">${t.assignedTo ? esc(staffName(t.assignedTo)) : "Unassigned"}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>` : t.assignedTo ? esc(staffName(t.assignedTo)) : `<span class="status status--warn">Unassigned</span>`}${t.openTasks ? `<span>${t.openTasks} open task${t.openTasks > 1 ? "s" : ""}${t.overdueTasks ? `, <b class="overdue-txt">${t.overdueTasks} overdue</b>` : ""}</span>` : ""}</td>
                     <td>${esc(t.nextAction || "—")}<span class="${t.overdue ? "overdue-txt" : ""}">${t.nextActionDue ? (t.overdue ? "Overdue · " : "Due ") + fmtWhen(t.nextActionDue) : ""}</span></td></tr>`).join("")}
                 </tbody></table></div>`;
         }
@@ -885,7 +971,7 @@
             views: {
                 workspace, ops: overview, ticket, intake, tasks, quotes, payments, workload, opssettings: settings, customer,
                 incoming: reg("incoming", { apiView: "incoming", intro: "New enquiries from Kaycee, the website and staff intake that nobody has reviewed yet.", emptyTitle: "No new enquiries", emptyText: "New website, Kaycee and staff-registered enquiries appear here." }),
-                unassigned: reg("unassigned", { apiView: "unassigned", hideAssignee: true, sort: "created", intro: "Open tickets without an owner. Open one and use Assign.", emptyTitle: "Everything is assigned", emptyText: "Every open ticket has an accountable employee." }),
+                unassigned: reg("unassigned", { apiView: "unassigned", hideAssignee: true, sort: "created", intro: "Open tickets without an owner. Click <b>Unassigned</b> in a row to choose who handles it, or tick several tickets and assign them together.", emptyTitle: "Everything is assigned", emptyText: "Every open ticket has an accountable employee." }),
                 tickets: reg("tickets", { apiView: "all" }),
                 mine: reg("mine", { apiView: "mine", hideAssignee: true, sort: "due", emptyTitle: "No tickets assigned to you" }),
                 opsbookings: reg("opsbookings", { apiView: "bookings", intro: "Confirmed bookings (deposit verified and confirmed by management) through to completion.", emptyTitle: "No confirmed bookings yet" }),

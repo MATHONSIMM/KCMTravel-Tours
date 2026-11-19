@@ -168,8 +168,9 @@ async function step(name, fn) { try { await fn(); } catch (e) { fails.push(name 
   let verifiedRef = null;
   await step('finance', async () => {
     await go(f, '#payments', '.pay-list'); await shot(f, '50-finance-verify', { mark: [['.pay-list [data-verify]', '1']] });
-    verifiedRef = (await f.textContent('.pay-list li:first-child a')).trim();
-    await f.click('.pay-list [data-verify]'); await f.waitForSelector('[data-ops-modal][open]'); await f.fill('[data-ops-modal] input[name=source]', 'FNB business account statement');
+    const depLi = f.locator('.pay-list li', { hasText: '· deposit ·' }).first();
+    verifiedRef = (await depLi.locator('a').first().textContent()).trim();
+    await depLi.locator('[data-verify]').click(); await f.waitForSelector('[data-ops-modal][open]'); await f.fill('[data-ops-modal] input[name=source]', 'FNB business account statement');
     await shot(f, '51-verify-modal', { mark: [['[data-ops-modal] input[name=source]', '2'], ['[data-ops-modal] button[type=submit]', '3']] });
     await f.click('[data-ops-modal] button[type=submit]'); await f.waitForSelector('.toast'); await f.waitForTimeout(800);
     check('finance verifies a demo deposit', /Deposit received/.test(await f.textContent('.toast')));

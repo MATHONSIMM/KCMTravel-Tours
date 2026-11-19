@@ -166,7 +166,7 @@ Please don't rename tabs or column headers: the script relies on them.
 
 ## Demo data (for testing)
 
-To try every screen with realistic examples, open the Sheet and click **KCM Admin → Load demo data (testing only)**. It creates about 23 tickets at every stage (new, assigned, quoting, awaiting deposit, payment verification, confirmed, travelling, completed, lost, cancelled, on hold, refund pending), customers, tasks, notes, quotations, payments, suppliers, partner applications, payouts, ratings, website messages and demo staff accounts. It takes a few minutes; if it says "Part loaded", click it again to continue.
+To try every screen with realistic examples, open the Sheet and click **KCM Admin → Load demo data (testing only)**. It creates about 33 tickets at every stage (9 left unassigned so you can practise assigning) (new, assigned, quoting, awaiting deposit, payment verification, confirmed, travelling, completed, lost, cancelled, on hold, refund pending), customers, tasks, notes, quotations, payments, suppliers, partner applications, payouts, ratings, website messages and demo staff accounts. It takes a few minutes; if it says "Part loaded", click it again to continue.
 
 - Everything fake is labelled: names end in **(demo)**, emails end in **@demo.kcm.test**, descriptions start with **[DEMO]**. No emails or WhatsApp messages are sent while it runs.
 - Demo staff (password **Demo-Lowveld-2026**): `nomsa.ops@`, `sipho.ops@`, `ayesha.ops@` (Operations), `thandi.manager@` (Management), `fiona.finance@`, `sam.finance@` (Finance), `former.ops@` (disabled), all `@demo.kcm.test`. Partner: `lowveld.partner0@demo.kcm.test`.

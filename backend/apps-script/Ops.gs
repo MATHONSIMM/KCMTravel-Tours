@@ -598,7 +598,8 @@ function assignTicket_(b) {
     const f = loadTicket_(actor, b.ref, false);
     checkVersion_(f, b.version);
     const prev = f.row.AssignedTo || '';
-    const extra = { AssignedTo: to, SupportBy: supporters.join(', ') };
+    const extra = { AssignedTo: to };
+    if (Array.isArray(b.supporters)) extra.SupportBy = supporters.join(', '); // quick (re)assign from a list keeps existing supporters
     if (to && ['NEW ENQUIRY', 'AWAITING REVIEW', 'UNASSIGNED'].indexOf(f.row.OpStatus) !== -1) extra.OpStatus = 'ASSIGNED';
     if (!to && ['ASSIGNED', 'NEW ENQUIRY', 'AWAITING REVIEW'].indexOf(f.row.OpStatus) !== -1) extra.OpStatus = 'UNASSIGNED';
     if (b.priority) extra.Priority = oneOf_(b.priority, PRIORITIES, f.row.Priority);

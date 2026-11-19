@@ -231,6 +231,44 @@ function demoSteps_() {
       const sip = mine.filter(t => t.assignedTo === demoStaffEmail_('sipho'))[0];
       if (sip) demoCall_('assignTicket', T.mgr, { ref: sip.ref, assignee: demoStaffEmail_('nomsa'), handoverSummary: '[DEMO] Sipho on leave. Customer prefers WhatsApp; lodge quote pending; next step is the quotation.' });
     } },
+    // ----- batch 2: richer records so every field and list has something in it
+    { name: 'More unassigned enquiries (to practise assigning)', run: T => {
+      [['peter', 'Email', 'Golf weekend for 8 at White River', 'White River', 'Corporate travel', 34, 8, 0],
+        ['nandi', 'Social media', 'Graduation trip, 6 friends, budget conscious', 'Graskop & Pilgrim\'s Rest', 'Package tour', 48, 6, 0],
+        ['fatima', 'Referral', 'Halaal-friendly safari for 2 families', 'Kruger', 'Package tour', 62, 4, 4],
+        ['chen', 'Website booking form', 'Self-drive route with lodge stays', 'Panorama Route', 'Custom trip', 70, 2, 2],
+        ['ahmed', 'Email', 'Conference shuttle KMIA ↔ Mbombela, 3 days', 'Mbombela', 'Transfer / transport', 16, 24, 0]]
+        .forEach(x => {
+          const r = demoManualEnquiry_(T, 'ayesha', people[x[0]], { source: x[1], description: x[2], destination: x[3], enquiryType: x[4], departDate: dIso_(x[5]), returnDate: dIso_(x[5] + 2), adults: x[6], children: x[7], budget: 'R' + (x[6] * 2500) + ' total' });
+          demoCall_('assignTicket', T.mgr, { ref: r, assignee: '' }); // back to Unassigned for practice
+        });
+    } },
+    { name: 'Fully detailed trips', run: T => {
+      const full = (dest, days, adults, children, f) => Object.assign({
+        enquiryType: 'Package tour', destination: dest, destinations: dest + ', Blyde River Canyon, God\'s Window', departDate: dIso_(days), returnDate: dIso_(days + 4), nights: 4, adults, children,
+        accommodation: '4-star lodge, half board', rooms: (adults / 2) + ' double rooms' + (children ? ', 1 family room' : ''), transport: '4x4 safari vehicle with driver-guide', activities: 'Sunrise game drive, Blyde boat cruise, Bourke\'s Luck Potholes',
+        airportTransfer: 'Yes', carHire: 'No', insurance: 'Yes', meals: 'Breakfast and dinner; one vegetarian', specialRequests: 'Anniversary cake on night 2', accessibility: 'One traveller uses a walking stick: ground-floor room please',
+        budget: 'R25 000 – R35 000', paymentPref: '30% deposit, balance 30 days before', intakeNotes: '[DEMO] Detailed brief taken on the phone', commsNotes: 'Prefers WhatsApp after 17:00' }, f || {});
+      const a = demoManualEnquiry_(T, 'nomsa', people.sarah, full('Kruger', 40, 2, 0, { source: 'Direct phone call' }));
+      demoAdvance_(T, a, 'quoteSent', { agent: 'nomsa', sell: 28500, lines: [{ category: 'Accommodation', description: 'Marula Bush Lodge, 4 nights half board', supplier: 'Marula Bush Lodge (demo)', cost: 14800 }, { category: 'Transport', description: 'Safari vehicle and driver-guide, 5 days', supplier: 'Lowveld Shuttles (demo)', cost: 6200 }, { category: 'Activities', description: 'Blyde boat cruise and park fees', supplier: 'Blyde Canyon Boat Cruises (demo)', cost: 2100 }, { category: 'Additional services', description: 'Travel insurance', supplier: '', cost: 900 }] });
+      const b = demoManualEnquiry_(T, 'sipho', people.johan, full('Hazyview', 22, 2, 2, { source: 'WhatsApp', accessibility: '' }));
+      demoAdvance_(T, b, 'confirmed', { agent: 'sipho', sell: 33800, supplierCost: 21000 });
+      demoCall_('recordPayment', T.sipho, { ref: b, payment: { type: 'instalment', amount: 8000, method: 'EFT', reference: 'DEMO-' + b.slice(-6) + '-I1', paidOn: dIso_(-1), notes: '[DEMO] Second instalment' } });
+      const c = demoManualEnquiry_(T, 'ayesha', people.grace, full('Sabie', 30, 20, 8, { source: 'Email', enquiryType: 'Group or school trip', rooms: '14 rooms at Sabie River Guesthouse', transport: '2 x 22-seater buses', accessibility: '' }));
+      demoAdvance_(T, c, 'accepted', { agent: 'ayesha', sell: 72000, supplierCost: 48000 });
+    } },
+    { name: 'More quotation states', run: T => {
+      // approved but not yet sent
+      const a = demoManualEnquiry_(T, 'nomsa', people.mpho, { source: 'WhatsApp', enquiryType: 'Day tour', description: 'Panorama day tour for 4', destination: 'Panorama Route', departDate: dIso_(19), adults: 4 });
+      demoAdvance_(T, a, 'quoteSubmitted', { agent: 'nomsa', sell: 5200, supplierCost: 3000 });
+      const qa = (demoCall_('getTicket', T.mgr, { ref: a }).quotes || [])[0];
+      if (qa) demoCall_('quoteAction', T.mgr, { quoteId: qa.id, step: 'approve' });
+      // revised quotation: version 1 superseded by version 2
+      const b = demoManualEnquiry_(T, 'sipho', people.anna, { source: 'Email', enquiryType: 'Package tour', description: 'Honeymoon, wants a private plunge pool', destination: 'Kruger', departDate: dIso_(85), returnDate: dIso_(89), nights: 4, adults: 2 });
+      demoAdvance_(T, b, 'quoteSent', { agent: 'sipho', sell: 46000, supplierCost: 30000 });
+      const v2 = demoCall_('saveQuote', T.sipho, { ref: b, quote: { lines: [{ category: 'Accommodation', description: 'Luxury suite with plunge pool', cost: 30000 }], sellingPrice: 43500, discount: 1000, vatMode: 'exclusive', depositPct: 40, validUntil: dIso_(10), notes: '[DEMO] Revised after customer asked for a better rate' } });
+      demoCall_('quoteAction', T.sipho, { quoteId: v2.id, step: 'submit' });
+    } },
     { name: 'Website messages', run: () => {
       [['Tumi Maseko', 'Do you do day trips from Johannesburg to the Panorama Route?'], ['Lisa Brown', 'Can you arrange a wheelchair-friendly safari vehicle?'],
         ['Andile Cele', 'Price for a school group of 60 to Kruger in March?'], ['Hennie Joubert', 'Do you offer airport transfers from KMIA on Sundays?']]
