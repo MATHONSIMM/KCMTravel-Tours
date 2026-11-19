@@ -1,5 +1,10 @@
 /* KCM Operations Centre: builds on admin.css tokens (works in light and dark themes). */
-.adm-nav-group { margin: 18px 12px 6px; font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.45); }
+.adm-nav-group { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: calc(100% - 12px); margin: 18px 6px 6px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; cursor: pointer; font: inherit; font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.45); text-align: left; transition: color .2s, background .2s; }
+.adm-nav-group:hover { color: rgba(255,255,255,.8); background: rgba(255,255,255,.05); }
+.adm-nav-group:focus-visible { outline: 2px solid var(--accent, #c8703e); outline-offset: 2px; }
+.adm-nav-chev { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.adm-nav-group[aria-expanded="false"] .adm-nav-chev { transform: rotate(-90deg); }
+.adm-nav a.nav-collapsed { display: none; }
 .adm-nav-group:first-child { margin-top: 4px; }
 .adm-nav { overflow-y: auto; }
 .ops-intro { color: var(--ink-soft); margin: 0 0 14px; max-width: 80ch; }
@@ -159,7 +164,7 @@ tr.is-overdue td:first-child { box-shadow: inset 3px 0 0 #b42318; }
 
 /* public chat consent (site.css scope also loads this only on admin; duplicated in site.css) */
 @media (max-width: 1100px) { .ops-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 1024px) { .adm-nav-group { display: none; } }
+@media (max-width: 1024px) { .adm-nav-group { display: none; } .adm-nav a.nav-collapsed { display: flex; } }
 @media (max-width: 700px) {
     .ops-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .ops-filters select, .ops-filters input:not([type=checkbox]):not(.search) { max-width: none; flex: 1 1 45%; }

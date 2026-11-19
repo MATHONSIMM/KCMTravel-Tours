@@ -57,8 +57,37 @@
             if (window.KCMOps && !legacy) { const o = window.KCMOps(opsCtx()); Object.assign(VIEWS, o.views); Object.assign(TITLES, o.titles); o.start?.(); }
             $$("[data-perm]").forEach(a => { a.hidden = !a.dataset.perm.split("|").some(can); });
             $$("[data-nav-group]").forEach(g => { let n = g.nextElementSibling, any = false; while (n && !n.hasAttribute("data-nav-group")) { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; });
+            setupNavGroups();
             if (!location.hash || !VIEWS[location.hash.slice(1).split("/")[0]]) location.replace("#" + (can("ops.edit.own") || can("ops.view.all") ? "workspace" : "overview"));
             route();
+        }
+
+        /* ---------- collapsible menu groups (remembered per browser) ---------- */
+        const NAV_KEY = "kcm-nav-collapsed";
+        const groupLinks = g => { const out = []; let n = g.nextElementSibling; while (n && !n.hasAttribute("data-nav-group")) { out.push(n); n = n.nextElementSibling; } return out; };
+        const groupName = g => g.textContent.trim();
+        function readCollapsed() { try { return JSON.parse(localStorage.getItem(NAV_KEY) || "[]"); } catch { return []; } }
+        function setGroup(g, open, remember) {
+            g.setAttribute("aria-expanded", open ? "true" : "false");
+            groupLinks(g).forEach(a => a.classList.toggle("nav-collapsed", !open));
+            if (!remember) return;
+            const list = readCollapsed().filter(n => n !== groupName(g));
+            if (!open) list.push(groupName(g));
+            try { localStorage.setItem(NAV_KEY, JSON.stringify(list)); } catch { /* storage unavailable */ }
+        }
+        function setupNavGroups() {
+            const collapsed = readCollapsed();
+            $$("[data-nav-group]").forEach(g => {
+                setGroup(g, !collapsed.includes(groupName(g)), false);
+                g.addEventListener("click", () => setGroup(g, g.getAttribute("aria-expanded") !== "true", true));
+            });
+        }
+        /* the page you're on is never hidden inside a collapsed group */
+        function openGroupOf(link) {
+            if (!link || !link.classList.contains("nav-collapsed")) return;
+            let n = link.previousElementSibling;
+            while (n && !n.hasAttribute("data-nav-group")) n = n.previousElementSibling;
+            if (n) setGroup(n, true, false);
         }
 
         function gate(kind) {
@@ -87,6 +116,7 @@
             const fn = VIEWS[view] || VIEWS.overview;
             const navView = VIEWS[view] ? (view === "ticket" || view === "customer" ? "tickets" : view) : "overview";
             $$("[data-view]").forEach(a => a.classList.toggle("is-active", a.dataset.view === navView));
+            openGroupOf($("[data-view].is-active"));
             $("[data-adm-title]").textContent = TITLES[view] || TITLES.overview;
             $("[data-adm-eyebrow]").textContent = `${me.name || me.email} · ${ROLE_LABEL[me.role] || me.role}`;
             const fresh = body.cloneNode(false); body.replaceWith(fresh); body = fresh; // drop listeners from the previous view
