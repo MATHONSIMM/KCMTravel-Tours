@@ -31,13 +31,14 @@ class Range {
 }
 class Sheet {
     constructor(name) { this.name = name; this.rows = []; this.hidden = false; }
-    set(r, c, v) { while (this.rows.length < r) this.rows.push([]); const row = this.rows[r - 1]; while (row.length < c) row.push(""); row[c - 1] = v; }
+    set(r, c, v) { if (typeof v === "string" && v[0] === "'") v = v.slice(1); /* like Sheets: a leading apostrophe only marks the cell as text */ while (this.rows.length < r) this.rows.push([]); const row = this.rows[r - 1]; while (row.length < c) row.push(""); row[c - 1] = v; }
     get(r, c) { return (this.rows[r - 1] || [])[c - 1] ?? ""; }
     width() { return Math.max(1, ...this.rows.map(r => r.length)); }
     getDataRange() { const w = this.width(); const rows = this.rows.length ? this.rows : [[]]; return { getValues: () => rows.map(r => Array.from({ length: w }, (_, i) => r[i] ?? "")) }; }
-    appendRow(row) { this.rows.push([...row]); return this; }
+    appendRow(row) { this.rows.push(row.map(v => typeof v === "string" && v[0] === "'" ? v.slice(1) : v)); return this; }
     getLastRow() { return this.rows.length; }
     deleteRow(i) { this.rows.splice(i - 1, 1); }
+    deleteRows(i, n) { this.rows.splice(i - 1, n); }
     getRange(r, c, nr, nc) { return new Range(this, r, c, nr, nc); }
     setFrozenRows() { } hideSheet() { this.hidden = true; }
 }
@@ -74,7 +75,7 @@ const toSigned = buf => Array.from(buf, b => (b > 127 ? b - 256 : b));
 const context = {
     console,
     SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, getUi: () => { throw new Error("No UI in mock"); } },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: k => props.get(k) ?? null, setProperty: (k, v) => props.set(k, String(v)) }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => props.get(k) ?? null, setProperty: (k, v) => props.set(k, String(v)), deleteProperty: k => props.delete(k) }) },
     CacheService: { getScriptCache: () => ({ get: k => cache.get(k) ?? null, put: (k, v) => cache.set(k, v), remove: k => cache.delete(k) }) },
     LockService: { getScriptLock: () => ({ waitLock() { }, releaseLock() { } }) },
     Session: { getEffectiveUser: () => ({ getEmail: () => OWNER }) },
@@ -120,9 +121,9 @@ const context = {
 };
 vm.createContext(context);
 // same order as scripts/build_backend.py (dist/KCM-Backend.gs)
-const FILES = ["Vendor.gs", "Security.gs", "Pricing.gs", "Code.gs", "Ops.gs"];
+const FILES = ["Vendor.gs", "Security.gs", "Pricing.gs", "Code.gs", "Ops.gs", "Demo.gs"];
 const code = FILES.map(f => fs.readFileSync(path.join(__dirname, "..", "apps-script", f), "utf8")).join("\n;\n");
-vm.runInContext(code + "\n;this.__api = { doGet, doPost, setup, opsSweep, backfillTickets_, setUserFields_, legacyHashPassword_, upsertUser_ };", context, { filename: "KCM-Backend.gs" });
+vm.runInContext(code + "\n;this.__api = { doGet, doPost, setup, opsSweep, backfillTickets_, setUserFields_, legacyHashPassword_, upsertUser_, loadDemoData_, removeDemoData_ };", context, { filename: "KCM-Backend.gs" });
 props.set("GOOGLE_CLIENT_ID", CLIENT_ID);
 props.set("SITE_URL", process.env.SITE_URL || "http://127.0.0.1:5217");
 props.set("WHATSAPP_ALERTS", JSON.stringify([{ phone: "27764360010", apikey: "test" }]));
@@ -135,6 +136,11 @@ http.createServer((req, res) => {
     if (req.method === "GET" && req.url.startsWith("/__mail")) { res.end(JSON.stringify(mail)); return; }
     if (req.method === "GET" && req.url.startsWith("/__whatsapp")) { res.end(JSON.stringify(whatsapp)); return; }
     // TEST ONLY (mock): plant a pre-1.4 password hash to prove it is upgraded to Argon2id on sign-in
+    if (req.method === "GET" && req.url.startsWith("/__demo")) { // test-only: same functions as the Sheet menu items
+        const t0 = Date.now(); let out;
+        try { out = req.url.includes("remove") ? context.__api.removeDemoData_() : context.__api.loadDemoData_(); } catch (e) { out = { error: e.message, stack: e.stack }; }
+        res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify({ ms: Date.now() - t0, out })); return;
+    }
     if (req.method === "GET" && req.url.startsWith("/__legacy")) {
         const q = new URL(req.url, "http://x").searchParams, email = q.get("email"), salt = "abc123";
         context.__api.upsertUser_(email, { role: q.get("role") || "PARTNER", status: "active", provider: "password" });

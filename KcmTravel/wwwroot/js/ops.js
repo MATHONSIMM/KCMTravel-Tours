@@ -9,7 +9,8 @@
         const me = () => ctx.me();
         let cfg = null;
         const config = async force => (cfg && !force ? cfg : (cfg = await get("opsConfig")));
-        const money = n => { const v = Number(n) || 0; return "R" + v.toLocaleString("en-ZA", { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 }).replace(/[,\u00a0\u202f]/g, " "); };
+        /* R12 345 or R6 727.50: space between thousands, point before cents (same on every browser) */
+        const money = n => { const v = Math.round((Number(n) || 0) * 100) / 100, neg = v < 0, [i, d] = Math.abs(v).toFixed(2).split("."); return (neg ? "-R" : "R") + i.replace(/\B(?=(\d{3})+(?!\d))/g, " ") + (d !== "00" ? "." + d : ""); };
         const staffName = e => { if (!e) return "—"; const s = (cfg?.staff || []).find(x => x.email === e); return s ? s.name : e; };
         const today = () => new Date().toISOString().slice(0, 10);
         const dInput = s => (s ? String(s).slice(0, 10) : "");
@@ -226,7 +227,7 @@
             bar("source", items(o.bySource)); bar("status", items(o.byStatus)); bar("dest", items(o.byDestination));
             bar("work", o.workload.map(w => ({ label: w.name + (w.overdue ? ` (${w.overdue} overdue)` : ""), value: w.active })));
             const pp = o.paymentProgress;
-            if (pp.due) segBar(ch("pay"), [{ label: "Received (verified)", value: pp.received, color: "#237a2a" }, { label: "Outstanding", value: Math.max(0, pp.due - pp.received), color: "#c98a1b" }]);
+            if (pp.due) segBar(ch("pay"), [{ label: "Received (verified)", value: pp.received, color: "#237a2a", fmt: money }, { label: "Outstanding", value: Math.max(0, pp.due - pp.received), color: "#c98a1b", fmt: money }]);
             else ch("pay").innerHTML = `<p class="chart-empty">No accepted quotes yet</p>`;
             b.addEventListener("click", e => {
                 const r = e.target.closest("[data-range]"); if (r) { range.range = r.dataset.range; if (range.range !== "custom") overview(); else $(".ops-custom", b).hidden = false; }

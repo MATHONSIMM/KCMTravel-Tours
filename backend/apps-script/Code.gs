@@ -580,7 +580,7 @@ function submitBooking_(b) {
   if (!name) throw userError_('Please add your name.');
   if (!email && !phone) throw userError_('Please add your email or cell number.');
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw userError_('Please check your email address.');
-  if (phone && !/^[0-9 +()-]{9,20}$/.test(phone)) throw userError_('Please check your cell number.');
+  if (phone && !/^[0-9 +()-]{9,20}$/.test(phone.replace(/^'/, ''))) throw userError_('Please check your cell number.'); // safe_ prefixes ' to +27… so Sheets doesn't treat it as a formula
   if (d.consent !== true) throw userError_('Please agree to the privacy notice so we can contact you.');
   const source = d.source === 'chat' ? 'chat' : 'website';
   const est = priceQuote_({ tourSlug: d.tourSlug, tour: d.tour, nights: d.nights, adults: d.adults, children: d.children, infants: d.infants,
@@ -606,8 +606,8 @@ function submitBooking_(b) {
   const travellers = num_(d.adults) + num_(d.children) + num_(d.pensioners) + num_(d.infants);
   const q = { reference: ref, tour: tourTitle, startDate: startDate || 'flexible', nights: est ? est.nights : num_(d.nights), room: d.room, extras: est ? est.extras : [], total: est ? est.total : 0, name };
   staffEmails_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT']).forEach(to => sendMail_(to, `New enquiry ${ref}: ${tourTitle}`,
-    `<p><strong>${esc_(name)}</strong> (${esc_(phone)}${email ? ', ' + esc_(email) : ''}) asked about <strong>${esc_(tourTitle)}</strong> from ${esc_(q.startDate)} for ${travellers} travellers via ${source === 'chat' ? 'Kaycee' : 'the booking form'}.${est ? ' Website estimate: R' + est.total.toLocaleString('en-ZA') + '.' : ''}</p>${siteLink_('/admin#ticket/' + ref, 'Open the ticket')}`));
-  whatsapp_(`🧳 New enquiry ${ref}${source === 'chat' ? ' (via Kaycee)' : ''}\n${tourTitle}\nWhen: ${q.startDate}${q.nights ? ' · ' + q.nights + ' nights' : ''}\nTravellers: ${travellers || '-'}\n${est ? 'Estimate: R' + est.total.toLocaleString('en-ZA') + '\n' : ''}${name} · ${phone}${email ? ' · ' + email : ''}\n\nOpen: ${siteUrl_('/admin#ticket/' + ref)}`);
+    `<p><strong>${esc_(name)}</strong> (${esc_(phone)}${email ? ', ' + esc_(email) : ''}) asked about <strong>${esc_(tourTitle)}</strong> from ${esc_(q.startDate)} for ${travellers} travellers via ${source === 'chat' ? 'Kaycee' : 'the booking form'}.${est ? ' Website estimate: R' + zar_(est.total) + '.' : ''}</p>${siteLink_('/admin#ticket/' + ref, 'Open the ticket')}`));
+  whatsapp_(`🧳 New enquiry ${ref}${source === 'chat' ? ' (via Kaycee)' : ''}\n${tourTitle}\nWhen: ${q.startDate}${q.nights ? ' · ' + q.nights + ' nights' : ''}\nTravellers: ${travellers || '-'}\n${est ? 'Estimate: R' + zar_(est.total) + '\n' : ''}${name} · ${phone}${email ? ' · ' + email : ''}\n\nOpen: ${siteUrl_('/admin#ticket/' + ref)}`);
   if (email) sendMail_(email, `Your KCM trip quote ${ref}`, quoteHtml_(q, travellers));
   const out = { saved: true, reference: ref, estimate: est ? est.total : null, emailed: !!email };
   if (idem) cache.put('idem:booking:' + idem, JSON.stringify(out), 3600);
@@ -623,7 +623,7 @@ function quoteHtml_(d, travellers) {
     <table style="border-collapse:collapse;margin:12px 0">
       ${row('Reference', d.reference)}${row('Trip', d.tour)}${row('Travel date', d.startDate)}${row('Nights', num_(d.nights) ? String(num_(d.nights)) : '')}
       ${row('Travellers', travellers ? String(travellers) : '')}${row('Room', d.room)}${row('Extras', (d.extras || []).join(', '))}
-      ${row('Estimated total', total ? 'R' + total.toLocaleString('en-ZA') + ' (estimate)' : 'Your consultant will price this for you')}
+      ${row('Estimated total', total ? 'R' + zar_(total) + ' (estimate)' : 'Your consultant will price this for you')}
     </table>
     <p>Questions or changes? Reply to this email or WhatsApp us on <a href="https://wa.me/27764360010?text=${encodeURIComponent('Hi KCM, about my quote ' + d.reference)}">076 436 0010</a> and quote <strong>${esc_(d.reference)}</strong>.</p>`;
 }
@@ -825,8 +825,8 @@ function setPayoutStatus_(b) {
   log_(actor.Email, 'payout_' + String(b.status).toLowerCase().replace(/\s/g, '_'), b.id, 'R' + job.Payout);
   if (b.status === 'Paid') {
     const p = findApplication_(job.PartnerID);
-    if (p) sendMail_(p.row.Email, `Payout sent: R${num_(job.Payout).toLocaleString('en-ZA')} (${job.JobID})`,
-      `<p>Hi ${esc_(p.row.ContactName)},</p><p>We've paid <strong>R${num_(job.Payout).toLocaleString('en-ZA')}</strong> for ${esc_(job.Service || 'your trip')} (${job.JobID}${job.BookingRef ? ', booking ' + esc_(job.BookingRef) : ''}).</p>${siteLink_('/account#payouts', 'View your statement')}`);
+    if (p) sendMail_(p.row.Email, `Payout sent: R${zar_(num_(job.Payout))} (${job.JobID})`,
+      `<p>Hi ${esc_(p.row.ContactName)},</p><p>We've paid <strong>R${zar_(num_(job.Payout))}</strong> for ${esc_(job.Service || 'your trip')} (${job.JobID}${job.BookingRef ? ', booking ' + esc_(job.BookingRef) : ''}).</p>${siteLink_('/account#payouts', 'View your statement')}`);
   }
   return { status: b.status };
 }
@@ -957,6 +957,7 @@ function fileMatchesType_(bytes, mime) {
 }
 
 function publicRateLimit_() {
+  if (typeof DEMO_MODE_ !== 'undefined' && DEMO_MODE_) return;
   const cache = CacheService.getScriptCache();
   const key = 'public-rate:' + Math.floor(Date.now() / 60000);
   const n = Number(cache.get(key) || 0);
@@ -1008,6 +1009,7 @@ function log_(actor, action, target, details) {
 }
 
 function sendMail_(to, subject, html) {
+  if (typeof DEMO_MODE_ !== 'undefined' && DEMO_MODE_) return; // demo data: never email anyone
   try {
     MailApp.sendEmail({
       to, subject, name: APP.name,
@@ -1037,6 +1039,7 @@ function siteUrl_(path) {
  * Never throws: an alert failing must not block a booking or application (the email alerts still go out).
  */
 function whatsapp_(text) {
+  if (typeof DEMO_MODE_ !== 'undefined' && DEMO_MODE_) return 0;
   let list = [];
   try { list = JSON.parse(prop_('WHATSAPP_ALERTS') || '[]'); } catch (e) { list = []; }
   if (!list.length) return 0;
@@ -1072,6 +1075,12 @@ function cleanEmail_(v) {
 }
 
 /** Cleans text for the sheet: trims, limits length and stops spreadsheet formula injection. */
+/** 12 345 or 6 727.50 (no currency sign): one format for emails, alerts and messages. */
+function zar_(n) {
+  const v = Math.round((Number(n) || 0) * 100) / 100, parts = Math.abs(v).toFixed(2).split('.');
+  return (v < 0 ? '-' : '') + parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (parts[1] !== '00' ? '.' + parts[1] : '');
+}
+
 function safe_(v, max) {
   let s = String(v == null ? '' : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, max || 200);
   if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
@@ -1165,6 +1174,9 @@ function onOpen() {
     .addSeparator()
     .addItem('Create tickets from existing bookings', 'menuBackfillTickets_')
     .addItem('Rotate data-encryption key', 'menuRotateKey_')
+    .addSeparator()
+    .addItem('Load demo data (testing only)', 'menuLoadDemo_')
+    .addItem('Remove demo data', 'menuRemoveDemo_')
     .addToUi();
 }
 

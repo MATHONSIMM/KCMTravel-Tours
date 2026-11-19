@@ -36,7 +36,7 @@ From a terminal instead: `cd KcmTravel` then `dotnet run`, and open the URL it p
 - **`/partners`**: the public partner programme page.
 - The data lives in the Google Sheet **"KCM Travel & Tours – Pilot Database"** in Google Drive, through a Google Apps Script backend. **Setup guide: [`backend/SETUP.md`](backend/SETUP.md).** Until the backend URL is added (`Site:ApiUrl`), the forms show a "coming soon" note and `/admin` offers a sample-data preview.
 
-Security details, test results and known limits: **[`docs/SECURITY-AUDIT.md`](docs/SECURITY-AUDIT.md)**.
+Security details, test results and known limits: **[`docs/SECURITY-AUDIT.md`](docs/SECURITY-AUDIT.md)**. Step-by-step user guide with screenshots: **[`docs/KCM-User-Guide.pdf`](docs/KCM-User-Guide.pdf)**.
 
 The **Kaycee chat assistant** (bottom right) asks about trip style, province, dates, travellers, nights and budget. It then suggests 3 trips with a price estimate for the group, and a "Book this" link that fills in the booking form for you. It can also pass everything to a consultant on WhatsApp.
 

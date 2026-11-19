@@ -164,6 +164,16 @@ Please don't rename tabs or column headers: the script relies on them.
 - Apps Script runs for up to 6 minutes per request, which is plenty here.
 - Comfortable for a pilot with hundreds of partners and a few thousand bookings. When you outgrow it, the website only talks to the backend through `kcm-api.js`, so moving to Supabase or a server means replacing the Apps Script, not the pages.
 
+## Demo data (for testing)
+
+To try every screen with realistic examples, open the Sheet and click **KCM Admin → Load demo data (testing only)**. It creates about 23 tickets at every stage (new, assigned, quoting, awaiting deposit, payment verification, confirmed, travelling, completed, lost, cancelled, on hold, refund pending), customers, tasks, notes, quotations, payments, suppliers, partner applications, payouts, ratings, website messages and demo staff accounts. It takes a few minutes; if it says "Part loaded", click it again to continue.
+
+- Everything fake is labelled: names end in **(demo)**, emails end in **@demo.kcm.test**, descriptions start with **[DEMO]**. No emails or WhatsApp messages are sent while it runs.
+- Demo staff (password **Demo-Lowveld-2026**): `nomsa.ops@`, `sipho.ops@`, `ayesha.ops@` (Operations), `thandi.manager@` (Management), `fiona.finance@`, `sam.finance@` (Finance), `former.ops@` (disabled), all `@demo.kcm.test`. Partner: `lowveld.partner0@demo.kcm.test`.
+- **Before going live:** **KCM Admin → Remove demo data**. It deletes only demo records and accounts; if no real tickets exist, numbering restarts at KCM-YYYY-000001.
+
+The illustrated user guide for the whole team is [`docs/KCM-User-Guide.pdf`](../docs/KCM-User-Guide.pdf).
+
 ## Testing locally without Google
 
 ```bash

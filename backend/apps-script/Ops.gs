@@ -535,12 +535,12 @@ function transitionProblem_(t, to, user, note) {
   if (to === 'BOOKING CONFIRMED') {
     if (!can_(user, 'ops.confirm')) return 'Only management can confirm a booking.';
     if (!m.accepted) return 'A booking needs an accepted quotation.';
-    if (m.paid < (m.deposit || m.final) || m.paid <= 0) return 'A booking can only be confirmed once finance has verified the deposit (R' + (m.deposit || m.final).toLocaleString('en-ZA') + ').';
+    if (m.paid < (m.deposit || m.final) || m.paid <= 0) return 'A booking can only be confirmed once finance has verified the deposit (R' + zar_((m.deposit || m.final)) + ').';
   }
   if (['TRIP PREPARATION', 'IN PROGRESS / TRAVELLING'].indexOf(to) !== -1 && !wasConfirmed) return 'Confirm the booking first.';
   if (to === 'COMPLETED') {
     if (!wasConfirmed) return 'Only confirmed bookings can be completed. Use Cancelled or Lost for others.';
-    if (m.outstanding > 0 && !(can_(user, 'ops.confirm') && String(note || '').trim())) return 'R' + m.outstanding.toLocaleString('en-ZA') + ' is still outstanding. Management can complete it with a note.';
+    if (m.outstanding > 0 && !(can_(user, 'ops.confirm') && String(note || '').trim())) return 'R' + zar_(m.outstanding) + ' is still outstanding. Management can complete it with a note.';
   }
   if (wasConfirmed && idx(to) !== -1 && idx(to) < CONFIRMED_INDEX && ['ON HOLD'].indexOf(to) === -1 && !can_(user, 'ops.confirm')) return 'Only management can move a confirmed booking back.';
   if (from === to) return 'The ticket already has this status.';
@@ -894,7 +894,7 @@ function quoteAction_(b) {
     if (a === 'submit') {
       if (q.Status !== 'Draft') throw userError_('Only drafts can be submitted for approval.');
       q.Status = 'Awaiting approval';
-      notifyRoles_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT'], 'quote_approval', q.TicketRef, `Quotation v${q.Version} on ${q.TicketRef} needs approval (R${num_(q.FinalAmount).toLocaleString('en-ZA')})`, '', user.Email);
+      notifyRoles_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT'], 'quote_approval', q.TicketRef, `Quotation v${q.Version} on ${q.TicketRef} needs approval (R${zar_(num_(q.FinalAmount))})`, '', user.Email);
     } else if (a === 'approve') {
       if (!can_(user, 'quote.approve')) throw userError_('Only management can approve quotations.', 'forbidden');
       if (['Draft', 'Awaiting approval'].indexOf(q.Status) === -1) throw userError_('This quotation is not waiting for approval.');
@@ -912,7 +912,7 @@ function quoteAction_(b) {
         sendMail_(cust.row.Email, `Your quotation ${q.TicketRef} (v${q.Version}) from KCM Travel & Tours`, quoteEmailHtml_(f.row, cust.row, q));
         channel = 'Email';
       }
-      addNoteRow_(q.TicketRef, user.Email, 'customer', channel === 'Email' ? 'Email' : oneOf_(b.channel, COMMS, ''), `Quotation v${q.Version} sent to the customer${channel === 'Email' ? ' by email' : ' (' + (b.channel || 'channel not recorded') + ')'}: R${num_(q.FinalAmount).toLocaleString('en-ZA')}, deposit R${num_(q.DepositAmount).toLocaleString('en-ZA')}.`);
+      addNoteRow_(q.TicketRef, user.Email, 'customer', channel === 'Email' ? 'Email' : oneOf_(b.channel, COMMS, ''), `Quotation v${q.Version} sent to the customer${channel === 'Email' ? ' by email' : ' (' + (b.channel || 'channel not recorded') + ')'}: R${zar_(num_(q.FinalAmount))}, deposit R${zar_(num_(q.DepositAmount))}.`);
     } else if (a === 'accept') {
       if (['Sent', 'Approved'].indexOf(q.Status) === -1) throw userError_('Only a sent quotation can be accepted.');
       if (q.ValidUntil && day_(q.ValidUntil) + 86400000 < Date.now() && !can_(user, 'quote.approve')) throw userError_('This quotation has expired. Management can still record acceptance, or send a revised version.');
@@ -922,7 +922,7 @@ function quoteAction_(b) {
       tickChecklist_(q.TicketRef, ['Customer response recorded'], user.Email);
       autoTask_(f.row, 'Send invoice and payment instructions for the deposit', f.row.AssignedTo || user.Email, new Date(Date.now() + 86400000), 'workflow:invoice');
       notifyOthers_(f.row, user, 'quote_accepted', `Quotation v${q.Version} on ${q.TicketRef} was accepted by the customer`);
-      notifyRoles_(['FINANCE'], 'quote_accepted', q.TicketRef, `${q.TicketRef}: quotation accepted (R${num_(q.FinalAmount).toLocaleString('en-ZA')}). Expect a deposit.`, 'qa:' + q.QuoteID);
+      notifyRoles_(['FINANCE'], 'quote_accepted', q.TicketRef, `${q.TicketRef}: quotation accepted (R${zar_(num_(q.FinalAmount))}). Expect a deposit.`, 'qa:' + q.QuoteID);
     } else if (a === 'decline') {
       if (['Sent', 'Approved'].indexOf(q.Status) === -1) throw userError_('Only a sent quotation can be declined.');
       q.Status = 'Declined'; q.DeclinedAt = new Date(); extra.ResponseStatus = 'Declined'; extra.OpStatus = 'AWAITING CUSTOMER RESPONSE';
@@ -946,8 +946,8 @@ function quoteEmailHtml_(t, c, q) {
     <tr><td style="padding:6px 12px 6px 0;color:#666">Trip</td><td><strong>${esc_(t.Package || t.Destination || 'Your trip')}</strong></td></tr>
     ${t.DepartDate ? `<tr><td style="padding:6px 12px 6px 0;color:#666">Travel date</td><td><strong>${esc_(Utilities.formatDate(new Date(t.DepartDate), 'Africa/Johannesburg', 'd MMM yyyy'))}</strong></td></tr>` : ''}
     <tr><td style="padding:6px 12px 6px 0;color:#666">Includes</td><td>${esc_(Object.keys(cats).join(', ') || 'As discussed')}</td></tr>
-    <tr><td style="padding:6px 12px 6px 0;color:#666">Total</td><td><strong>R${num_(q.FinalAmount).toLocaleString('en-ZA')}</strong>${q.VatMode === 'inclusive' ? ' (incl. VAT)' : q.VatMode === 'exclusive' ? ' (incl. VAT of R' + num_(q.VatAmount).toLocaleString('en-ZA') + ')' : ''}</td></tr>
-    <tr><td style="padding:6px 12px 6px 0;color:#666">Deposit to secure</td><td><strong>R${num_(q.DepositAmount).toLocaleString('en-ZA')}</strong></td></tr>
+    <tr><td style="padding:6px 12px 6px 0;color:#666">Total</td><td><strong>R${zar_(num_(q.FinalAmount))}</strong>${q.VatMode === 'inclusive' ? ' (incl. VAT)' : q.VatMode === 'exclusive' ? ' (incl. VAT of R' + zar_(num_(q.VatAmount)) + ')' : ''}</td></tr>
+    <tr><td style="padding:6px 12px 6px 0;color:#666">Deposit to secure</td><td><strong>R${zar_(num_(q.DepositAmount))}</strong></td></tr>
     ${q.ValidUntil ? `<tr><td style="padding:6px 12px 6px 0;color:#666">Valid until</td><td>${esc_(Utilities.formatDate(new Date(q.ValidUntil), 'Africa/Johannesburg', 'd MMM yyyy'))}</td></tr>` : ''}</table>
     <p>To accept, simply reply to this email or WhatsApp us on 076 436 0010 quoting <strong>${esc_(t.Ref)}</strong>. We'll then send payment instructions. Your booking is confirmed once the deposit has been received and verified.</p>`;
 }
@@ -992,7 +992,7 @@ function recordPayment_(b) {
     }
     const m = ticketMoney_(f.row.Ref);
     if (!m.accepted) throw userError_('Record the customer\'s acceptance of a quotation before recording payments.');
-    if (type === 'refund' && amount > m.paid) throw userError_('A refund cannot be more than the verified amount paid (R' + m.paid.toLocaleString('en-ZA') + ').');
+    if (type === 'refund' && amount > m.paid) throw userError_('A refund cannot be more than the verified amount paid (R' + zar_(m.paid) + ').');
     if (type !== 'refund' && amount > m.final - m.paid - m.unverifiedIn + 0.01 && !String(d.notes || '').trim()) throw userError_('This is more than the outstanding balance. Add a note explaining the overpayment.');
     const id = newId_('PAY');
     appendObj_('Payments', { PaymentID: id, TicketRef: f.row.Ref, QuoteID: m.accepted.QuoteID, Type: type, Amount: amount, Method: method, Reference: reference, PaidOn: paidOn,
@@ -1002,7 +1002,7 @@ function recordPayment_(b) {
     touchTicket_(f, user, extra);
     audit_(user.Email, f.row.Ref, type === 'refund' ? 'refund_requested' : 'payment_recorded', { payment: id, amount, method, verification: 'Unverified' });
     notifyRoles_(type === 'refund' ? ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] : ['FINANCE'], type === 'refund' ? 'refund_approval' : 'payment_verify', f.row.Ref,
-      `${f.row.Ref}: ${type === 'refund' ? 'refund of' : 'payment of'} R${amount.toLocaleString('en-ZA')} ${type === 'refund' ? 'needs approval' : 'needs verification'}`, '', user.Email);
+      `${f.row.Ref}: ${type === 'refund' ? 'refund of' : 'payment of'} R${zar_(amount)} ${type === 'refund' ? 'needs approval' : 'needs verification'}`, '', user.Email);
     const ps = refreshPaymentStatus_(f.row.Ref, user.Email);
     return { id, paymentStatus: ps.status };
   });
@@ -1027,7 +1027,7 @@ function verifyPayment_(b) {
     const t = findRow_('Tickets', p.TicketRef);
     if (t) {
       if (decision === 'Verified') tickChecklist_(p.TicketRef, ps.money.paid >= ps.money.final ? ['Deposit received', 'Payment verified', 'Balance calculated', 'Final payment verified'] : ['Deposit received', 'Payment verified', 'Balance calculated'], user.Email);
-      notifyOthers_(t.row, user, 'payment_' + decision.toLowerCase(), `${p.TicketRef}: payment of R${num_(p.Amount).toLocaleString('en-ZA')} ${decision.toLowerCase()} (${ps.status})`);
+      notifyOthers_(t.row, user, 'payment_' + decision.toLowerCase(), `${p.TicketRef}: payment of R${zar_(num_(p.Amount))} ${decision.toLowerCase()} (${ps.status})`);
     }
     return { payment: paymentView_(p, true), paymentStatus: ps.status, outstanding: ps.money.outstanding };
   });
@@ -1109,7 +1109,7 @@ function addSupplierQuote_(b) {
     appendObj_('SupplierQuotes', { SQID: id, TicketRef: f.row.Ref, SupplierID: sup ? sup.id : '', SupplierName: name, Service: safe_(d.service, 140), Amount: money_(d.amount, 'supplier quote'),
       ValidUntil: dateOrBlank_(d.validUntil, 'valid until'), Status: oneOf_(d.status, ['Requested', 'Received', 'Accepted', 'Declined'], 'Received'), Notes: safe_(d.notes, 500), RecordedBy: user.Email, RecordedAt: new Date() });
     if (d.status !== 'Requested') tickChecklist_(f.row.Ref, /accommodation|lodge|hotel|room|guest/i.test(d.service || '') ? ['Supplier quotation received'] : /transport|vehicle|transfer|car|shuttle/i.test(d.service || '') ? ['Transport quotation received'] : [], user.Email);
-    addNoteRow_(f.row.Ref, user.Email, 'supplier', '', `Supplier ${name}: ${safe_(d.service, 140)}${num_(d.amount) ? ' · R' + num_(d.amount).toLocaleString('en-ZA') : ''} (${d.status || 'Received'})${d.notes ? ' — ' + safe_(d.notes, 300) : ''}`);
+    addNoteRow_(f.row.Ref, user.Email, 'supplier', '', `Supplier ${name}: ${safe_(d.service, 140)}${num_(d.amount) ? ' · R' + zar_(num_(d.amount)) : ''} (${d.status || 'Received'})${d.notes ? ' — ' + safe_(d.notes, 300) : ''}`);
     touchTicket_(f, user, f.row.OpStatus === 'REQUIREMENTS UNDER REVIEW' || f.row.OpStatus === 'ASSIGNED' ? { OpStatus: 'SUPPLIER RESEARCH' } : {});
     audit_(user.Email, f.row.Ref, 'supplier_quote_added', { id, supplier: name, amount: num_(d.amount) });
     return { id };

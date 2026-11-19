@@ -99,10 +99,10 @@
                 <p>The dashboard reads from the pilot database in your Google Drive. It isn't connected yet: deploy the Apps Script backend and add its URL to the site settings (see <code>backend/SETUP.md</code>).</p>
                 <div class="btn-row">${preview}</div></div>`;
             if (kind === "signin") {
-                body.innerHTML = `<div class="adm-card adm-gate"><h2>Sign in to continue</h2><p>Only KCM team members with admin or viewer access can open the dashboard.</p><div data-mount></div><div class="btn-row" style="margin-top:18px">${preview}</div></div>`;
+                body.innerHTML = `<div class="adm-card adm-gate"><h2>Sign in to continue</h2><p>Only members of the KCM team can open the dashboard.</p><div data-mount></div><div class="btn-row" style="margin-top:18px">${preview}</div></div>`;
                 K.mountSignin($("[data-mount]", body), () => location.reload());
             }
-            if (kind === "noaccess") body.innerHTML = `<div class="adm-card adm-gate"><h2>You don't have admin access</h2><p>You're signed in as <strong>${esc(K.session.user()?.email)}</strong>. Ask the KCM owner to give your email admin or viewer access.</p>
+            if (kind === "noaccess") body.innerHTML = `<div class="adm-card adm-gate"><h2>You don't have admin access</h2><p>You're signed in as <strong>${esc(K.session.user()?.email)}</strong>. Ask a KCM admin to give your email access in Users &amp; access.</p>
                 <div class="btn-row"><a class="btn btn--primary" href="${K.base}/account">Go to my account</a>${preview}</div></div>`;
         }
 
@@ -568,8 +568,8 @@
         function segBar(el, items) {
             const total = items.reduce((s, i) => s + i.value, 0);
             if (!total) { el.innerHTML = `<p class="chart-empty">No applications yet</p>`; return; }
-            el.innerHTML = `<div class="segbar">${items.filter(i => i.value).map(i => `<span style="flex:${i.value};background:${i.color}" data-tipv="${esc(i.label)}: ${i.value} (${Math.round(i.value / total * 100)}%)"></span>`).join("")}</div>
-                <ul class="seg-legend">${items.map(i => `<li><i style="background:${i.color}"></i>${esc(i.label)}<strong>${i.value}</strong></li>`).join("")}</ul>`;
+            el.innerHTML = `<div class="segbar">${items.filter(i => i.value).map(i => `<span style="flex:${i.value};background:${i.color}" data-tipv="${esc(i.label)}: ${i.fmt ? i.fmt(i.value) : i.value} (${Math.round(i.value / total * 100)}%)"></span>`).join("")}</div>
+                <ul class="seg-legend">${items.map(i => `<li><i style="background:${i.color}"></i>${esc(i.label)}<strong>${i.fmt ? i.fmt(i.value) : i.value}</strong></li>`).join("")}</ul>`;
         }
 
         function lineChart(el, labels, series) {

@@ -183,3 +183,7 @@ tr.is-overdue td:first-child { box-shadow: inset 3px 0 0 #b42318; }
 
 .adm-legacy { margin-bottom: 20px; border-left: 4px solid var(--warn, #c98a1b); line-height: 1.6; }
 .adm-legacy code { font-size: .9em; }
+
+/* long figures (e.g. R92 448) shrink instead of being cut off; long status names wrap inside their badge */
+.ops-kpis .kpi-value { font-size: clamp(22px, 2vw, 36px); white-space: normal; overflow-wrap: anywhere; }
+.tk-facts .status { white-space: normal; line-height: 1.25; text-align: left; }
