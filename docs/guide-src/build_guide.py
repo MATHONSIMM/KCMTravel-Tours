@@ -2,9 +2,9 @@
 """Builds the KCM Travel & Tours user guide (HTML -> PDF via Chrome)."""
 import html, pathlib, datetime
 
-ROOT = pathlib.Path('/home/claude/guide')
-FONTS = pathlib.Path('/home/claude/kcmtravel-tours/KcmTravel/wwwroot/fonts')
-LOGO = pathlib.Path('/home/claude/kcmtravel-tours/KcmTravel/wwwroot/images/brand/kcm-logo.svg')
+ROOT = pathlib.Path(__file__).resolve().parent  # docs/guide-src
+FONTS = ROOT.parents[1] / 'KcmTravel/wwwroot/fonts'
+LOGO = ROOT.parents[1] / 'KcmTravel/wwwroot/images/brand/kcm-logo.svg'
 E = html.escape
 
 sections = []          # (id, title, html)

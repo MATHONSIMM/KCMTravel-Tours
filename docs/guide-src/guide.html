@@ -1,0 +1,236 @@
+<!DOCTYPE html><html lang="en-ZA"><head><meta charset="utf-8"><title>KCM Travel &amp; Tours: User Guide</title>
+<style>
+@font-face { font-family: Fraunces; src: url("file:///home/claude/kcmtravel-tours/KcmTravel/wwwroot/fonts/fraunces.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: Manrope; src: url("file:///home/claude/kcmtravel-tours/KcmTravel/wwwroot/fonts/manrope.woff2") format("woff2"); font-weight: 200 800; }
+@page { size: A4; margin: 16mm 15mm 18mm; }
+:root { --ink: #14201b; --soft: #5b6a63; --accent: #b4542a; --line: #e5ddd1; --paper: #fbf8f3; --green: #1f5f45; }
+* { box-sizing: border-box; }
+body { font-family: Manrope, Inter, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.55; margin: 0; }
+h1, h2, h3 { font-family: Fraunces, Georgia, serif; font-weight: 500; line-height: 1.15; }
+.cover { height: 262mm; display: flex; flex-direction: column; justify-content: space-between; padding: 8mm 4mm; page-break-after: always; background: linear-gradient(160deg, #fbf8f3 0%, #f3ece1 100%); border-radius: 6mm; }
+.cover img.logo { width: 70mm; }
+.cover h1 { font-size: 40pt; margin: 0 0 6mm; letter-spacing: -.01em; }
+.cover h1 em { color: var(--accent); }
+.cover p.lead { font-size: 14pt; color: var(--soft); max-width: 140mm; margin: 0; }
+.cover .shot { width: 100%; border-radius: 3mm; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
+.cover .meta { font-size: 9.5pt; color: var(--soft); display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 4mm; }
+.toc { page-break-after: always; }
+.toc h2 { font-size: 24pt; margin: 0 0 6mm; }
+.toc ol { list-style: none; padding: 0; columns: 1; }
+.toc li { padding: 1.4mm 0; border-bottom: 1px dotted var(--line); font-size: 11pt; }
+.toc a { color: var(--ink); text-decoration: none; }
+.howto { margin-top: 5mm; padding: 5mm 6mm; background: var(--paper); border-radius: 3mm; }
+.chapter { page-break-before: always; }
+.chapter h2 { font-size: 22pt; margin: 0 0 5mm; padding-bottom: 3mm; border-bottom: 2px solid var(--accent); display: flex; gap: 4mm; align-items: baseline; }
+.chapter h2 .num { font-family: Manrope, sans-serif; font-size: 11pt; font-weight: 800; color: #fff; background: var(--accent); border-radius: 50%; width: 9mm; height: 9mm; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transform: translateY(-1mm); }
+h3 { font-size: 14pt; margin: 6mm 0 2mm; color: var(--green); break-after: avoid; }
+p { margin: 0 0 3mm; }
+ul { margin: 0 0 3mm; padding-left: 5mm; } li { margin-bottom: 1.2mm; }
+ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 0 0 4mm; }
+ol.steps li { counter-increment: s; position: relative; padding: 1.4mm 0 1.4mm 10mm; break-inside: avoid; }
+ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 1.2mm; width: 6.5mm; height: 6.5mm; border-radius: 50%; background: var(--green); color: #fff; font-weight: 800; font-size: 9pt; display: flex; align-items: center; justify-content: center; }
+.ui { display: inline-block; padding: 0 2.2mm; border: 1px solid #cdbfae; border-radius: 99px; background: #fff; font-weight: 700; font-size: 9pt; line-height: 1.6; white-space: nowrap; }
+figure.fig { margin: 3mm 0 5mm; break-inside: avoid; }
+figure.fig img { width: 100%; border: 1px solid var(--line); border-radius: 2mm; display: block; }
+figure.tall img { max-height: 170mm; width: auto; max-width: 100%; margin: 0 auto; }
+figure.half img, figure.narrow img { width: 100%; }
+figure.narrow img { max-height: 150mm; width: auto; margin: 0 auto; }
+figcaption { font-size: 8.8pt; color: var(--soft); margin-top: 1.5mm; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; align-items: start; }
+table { width: 100%; border-collapse: collapse; margin: 2mm 0 5mm; font-size: 9.2pt; break-inside: auto; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { text-align: left; background: #f1ebe2; font-weight: 800; padding: 1.6mm 2.2mm; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em; }
+td { padding: 1.5mm 2.2mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.roles td, table.roles th { padding: 1.4mm 2mm; font-size: 8.6pt; }
+table.status-table td, table.status-table th { padding: 1.2mm 2mm; font-size: 8.4pt; }
+table.status-table td:nth-child(2) { font-weight: 800; font-size: 8.5pt; white-space: nowrap; }
+.callout { border-left: 4px solid var(--green); background: #eef5f0; padding: 3mm 4mm; border-radius: 0 2mm 2mm 0; margin: 3mm 0 5mm; break-inside: avoid; }
+.callout b { display: block; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .08em; color: var(--green); margin-bottom: 1mm; }
+.callout p { margin: 0; }
+.callout.note { border-color: #2f6f9f; background: #edf3f8; } .callout.note b { color: #2f6f9f; }
+.callout.warn { border-color: var(--accent); background: #fbf0e9; } .callout.warn b { color: var(--accent); }
+</style></head><body>
+<div class="cover">
+  <div><img class="logo" src="file:///home/claude/kcmtravel-tours/KcmTravel/wwwroot/images/brand/kcm-logo.svg" alt="KCM Travel &amp; Tours"></div>
+  <div><h1>User Guide<br><em>KCM Operations Centre</em></h1><p class="lead">How to use the KCM Travel &amp; Tours website and staff dashboard: from a customer's first enquiry to a completed trip. Written for the whole team, with pictures.</p></div>
+  <img class="shot" src="img/10-ops-overview.jpg" alt="" style="max-height:105mm;object-fit:cover;object-position:top">
+  <div class="meta"><span>Version 1.4 · 19 November 2026</span><span>Screenshots show demo data, not real customers</span></div>
+</div>
+<div class="toc"><h2>Contents</h2><ol><li><a href="#about"><span>1. What the system is</span></a></li><li><a href="#signin"><span>2. Signing in</span></a></li><li><a href="#layout"><span>3. Finding your way around</span></a></li><li><a href="#website"><span>4. How enquiries arrive from the website</span></a></li><li><a href="#workspace"><span>5. Daily work: My Workspace</span></a></li><li><a href="#ticket"><span>6. Working on a ticket</span></a></li><li><a href="#intake"><span>7. Registering an enquiry (WhatsApp, phone, email, walk-in)</span></a></li><li><a href="#quotes"><span>8. Quotations</span></a></li><li><a href="#payments"><span>9. Payments</span></a></li><li><a href="#management"><span>10. For management: assigning, approving and confirming</span></a></li><li><a href="#lifecycle"><span>11. The ticket journey: all statuses</span></a></li><li><a href="#access"><span>12. For admins: giving and removing access</span></a></li><li><a href="#partners"><span>13. Partners: lodges, drivers and guides</span></a></li><li><a href="#requests"><span>14. Website requests and messages</span></a></li><li><a href="#demo"><span>15. Demo data for testing</span></a></li><li><a href="#golive"><span>16. Going-live checklist</span></a></li><li><a href="#help"><span>17. Troubleshooting</span></a></li></ol>
+<div class="howto"><h3 style="margin-top:0">How to read this guide</h3>
+<p><b>Orange numbered circles</b> on the pictures show where to click, in order. Button names appear like <span class="ui">this</span>. Sections 5 to 9 cover everyday work for consultants, managers and finance; sections 11 to 12 are for admins.</p>
+<p>All names, numbers and amounts in the pictures are <b>demo data</b> created for testing. They are not real customers or real money.</p></div></div>
+<section id="about" class="chapter"><h2><span class="num">1</span>What the system is</h2>
+<p>The KCM Travel &amp; Tours system has two parts that work together:</p>
+<ul>
+<li><b>The public website</b>: what customers see. They browse tours, fill in the booking form or chat with <b>Kaycee</b>, the trip-planning assistant. Every request is saved automatically.</li>
+<li><b>The staff dashboard</b> (at <b>/admin</b>): where the KCM team handles every enquiry from first contact until the trip is finished. The main part of the dashboard is the <b>KCM Operations Centre</b>.</li>
+</ul>
+<p>Behind both sits a private <b>Google Sheet</b> that stores the records, and a Google Apps Script program that enforces the rules.</p>
+<h3>The one idea to understand: the ticket</h3>
+<p>Every enquiry becomes a <b>ticket</b> with a number like <b>KCM-2026-000014</b>. The ticket follows the customer's request from start to finish: who is handling it, what the customer wants, the quotation, the payments, notes, tasks and a full history. Whether the enquiry came from the website, Kaycee, WhatsApp, a phone call or a walk-in, it ends up as a ticket in the same place.</p>
+<p>Each ticket has three separate statuses. The system checks every action against the person's role, so hiding a menu item is never the only protection.</p>
+<table class=""><thead><tr><th>Status</th><th>What it tells you</th></tr></thead><tbody><tr><td><b>Operational</b></td><td>Where the work is in the journey, e.g. QUOTATION SENT, BOOKING CONFIRMED</td></tr><tr><td><b>Payment</b></td><td>Worked out from verified payments (nobody types it in), e.g. Deposit pending, Fully paid</td></tr><tr><td><b>Customer response</b></td><td>What the customer said about the quotation, e.g. Accepted, Declined</td></tr></tbody></table>
+<h3>Who uses it</h3>
+<table class="roles"><thead><tr><th>Role</th><th>Typical person</th><th>What they can do</th></tr></thead><tbody><tr><td><b>Super Admin</b></td><td>The owner</td><td>Everything, including managing other admins.</td></tr><tr><td><b>Admin</b></td><td>Office manager</td><td>Users and access, partners, all tickets, payment verification, refunds, customer data erasure.</td></tr><tr><td><b>Management</b></td><td>Operations manager</td><td>All tickets, assigning work, approving quotations, confirming and completing bookings, workload, settings, partner review.</td></tr><tr><td><b>Finance</b></td><td>Bookkeeper</td><td>Sees all tickets and payments; <b>verifies</b> payments, approves refunds, manages partner payouts.</td></tr><tr><td><b>Operations</b></td><td>Travel consultant</td><td>Registers enquiries and works on the tickets given to them: notes, tasks, checklists, quotations, recording payments (unverified).</td></tr><tr><td><b>Partner</b></td><td>Lodge, driver, guide</td><td>Only their own listings, trips, payouts and ratings in the partner portal.</td></tr></tbody></table>
+</section><section id="signin" class="chapter"><h2><span class="num">2</span>Signing in</h2>
+<h3>Staff sign-in</h3>
+<ol class="steps"><li>Open the website and click <span class="ui">Sign in</span> at the top right (Figure 1), or go straight to <b>/admin</b>.</li><li>Type your email address and password, then click <span class="ui">Sign in</span>.</li><li>If your role needs it, type the 6-digit code from your authenticator app (see below).</li></ol>
+<figure class="fig full"><img src="img/04-header-signin.jpg" alt=""><figcaption><b>Figure 1.</b> The Sign in button in the website header.</figcaption></figure>
+<figure class="fig full"><img src="img/06-admin-signin.jpg" alt=""><figcaption><b>Figure 2.</b> The dashboard sign-in: (1) email, (2) password, (3) Sign in.</figcaption></figure>
+<h3>First time, or forgot your password</h3>
+<p>Click <b>Forgot or set password?</b> under the sign-in button. Enter your email, then the 6-digit code that arrives in your inbox, then choose a password of at least 10 characters. Very common passwords (such as "password123") are refused. Setting a new password signs you out on every other device.</p>
+<h3>Two-step sign-in (authenticator app)</h3>
+<p><b>Super Admin, Admin, Management and Finance</b> must use an authenticator app such as Google Authenticator or Microsoft Authenticator. Operations staff and partners don't need one.</p>
+<ol class="steps"><li>The first time you sign in, a QR code appears (Figure 3).</li><li>On your phone, open the authenticator app, tap <b>+</b> and scan the code.</li><li>Type the 6-digit code the app shows and click <span class="ui">Turn on two-step verification</span>.</li><li>You are shown <b>8 recovery codes</b>, once only. Save them somewhere safe (a password manager, or print them). Each one works once if you lose your phone.</li><li>From then on, every sign-in asks for the current 6-digit code from the app.</li></ol>
+<figure class="fig tall"><img src="img/07-mfa-setup.jpg" alt=""><figcaption><b>Figure 3.</b> Setting up the authenticator: scan the QR code, then type the 6-digit code.</figcaption></figure>
+<figure class="fig tall"><img src="img/08-recovery-codes.jpg" alt=""><figcaption><b>Figure 4.</b> Your 8 recovery codes. Tick the box to confirm you saved them.</figcaption></figure>
+<div class="callout tip"><b>Tip</b><p>Lost your phone and your recovery codes? Ask a Super Admin or Admin to click <b>Reset</b> next to your name in <b>Users &amp; access</b>. You set the app up again at your next sign-in.</p></div>
+</section><section id="layout" class="chapter"><h2><span class="num">3</span>Finding your way around</h2>
+<p>The dark menu on the left has two groups. Click a group heading to fold it away and keep the menu tidy; the dashboard remembers your choice on that computer.</p>
+<table class=""><thead><tr><th>Group</th><th>Pages</th></tr></thead><tbody><tr><td><b>KCM Operations Centre</b></td><td>My Workspace, Operations Overview, Incoming Enquiries, Unassigned Tickets, All Tickets, My Assigned Tickets, Tasks &amp; Follow-ups, Quotations, Bookings, Payments, Completed Orders, Employee Workload, Activity &amp; Audit History, Checklists &amp; statuses</td></tr><tr><td><b>Website &amp; partners</b></td><td>Website overview, Partner applications, Partners, Partner trips &amp; payouts, Ratings, Website requests, Messages, Users &amp; access</td></tr></tbody></table>
+<p>You only see the pages your role is allowed to use. For example, Operations staff do not see Payments, Workload or Users &amp; access (Figure 6).</p>
+<div class="two"><figure class="fig narrow"><img src="img/65-menu-collapsed.jpg" alt=""><figcaption><b>Figure 5.</b> Click a group heading (1) to fold or unfold it.</figcaption></figure><figure class="fig narrow"><img src="img/33-agent-menu.jpg" alt=""><figcaption><b>Figure 6.</b> The menu as an Operations consultant sees it.</figcaption></figure></div>
+<h3>The buttons at the top of every page</h3>
+<ul>
+<li><span class="ui">+ Register enquiry</span>: record an enquiry that came in by WhatsApp, phone, email or in person.</li>
+<li><b>The bell</b>: your notifications, such as a ticket assigned to you, a quotation waiting for approval or a payment to verify. A red number shows how many are unread.</li>
+<li><span class="ui">Refresh</span>: reload the page with the latest data.</li>
+<li><b>The sun / moon button</b> in the header switches between light and dark mode.</li>
+</ul>
+<figure class="fig half"><img src="img/28-notifications.jpg" alt=""><figcaption><b>Figure 7.</b> The notification bell opened.</figcaption></figure>
+<div class="callout note"><b>Good to know</b><p>The dashboard also works on a phone. The menu then runs across the top of the screen.</p></div>
+</section><section id="website" class="chapter"><h2><span class="num">4</span>How enquiries arrive from the website</h2>
+<p>Customers can reach KCM in three ways on the website. Each one creates a ticket straight away, with a ticket number shown to the customer.</p>
+<h3>1. The booking form</h3>
+<p>The customer picks a tour, a date and the number of travellers, sees an estimated price, adds their contact details, ticks the privacy (POPIA) consent box and sends it. The system works out the estimate itself, so a customer cannot change the price in their browser.</p>
+<figure class="fig full"><img src="img/02-booking-form.jpg" alt=""><figcaption><b>Figure 8.</b> The public booking form.</figcaption></figure>
+<h3>2. Kaycee, the trip-planning assistant</h3>
+<p>Kaycee asks a few simple questions (style of trip, region, dates, group size, budget) and then sends the request. She cannot confirm bookings or take payments; she only creates the enquiry for the team.</p>
+<figure class="fig full"><img src="img/03-kaycee.jpg" alt=""><figcaption><b>Figure 9.</b> Kaycee on the home page.</figcaption></figure>
+<h3>3. WhatsApp, phone, email and walk-ins</h3>
+<p>These are <b>not</b> imported automatically. An employee records them with <span class="ui">+ Register enquiry</span> (see "Registering an enquiry"). The WhatsApp "Open chat" links in a ticket simply open WhatsApp; the conversation is not saved in the system unless you add a note.</p>
+</section><section id="workspace" class="chapter"><h2><span class="num">5</span>Daily work: My Workspace</h2>
+<p><b>My Workspace</b> is the first page every team member sees. It shows only <b>your</b> work:</p>
+<ul>
+<li>The counters: your open tickets, overdue tasks, things due this week and what you finished in the last 30 days.</li>
+<li><b>My tickets</b>: every ticket assigned to you, with its status, payment status and next action.</li>
+<li><b>My tasks</b>: change a task's status from the drop-down, or click <span class="ui">Done</span> to finish it.</li>
+<li><b>Upcoming deadlines</b> for the next 7 days, <b>Recently completed</b> work and <b>My recent activity</b>.</li>
+</ul>
+<figure class="fig tall"><img src="img/32-agent-workspace.jpg" alt=""><figcaption><b>Figure 10.</b> My Workspace for Nomsa, an Operations consultant (demo data).</figcaption></figure>
+</section><section id="ticket" class="chapter"><h2><span class="num">6</span>Working on a ticket</h2>
+<p>Click a ticket number anywhere (it is shown in orange) to open the ticket page.</p>
+<figure class="fig tall"><img src="img/34-ticket-summary.jpg" alt=""><figcaption><b>Figure 11.</b> A ticket: (1) Change status, (2) Add note, (3) Add task, (4) the tabs.</figcaption></figure>
+<h3>The top of the ticket</h3>
+<p>The header shows where the enquiry came from, the customer, the trip, and six key facts: <b>operational status</b>, <b>payment status</b>, <b>customer response</b>, <b>priority</b>, <b>who it is assigned to</b> and the <b>next action</b> with its due date. Click <b>Edit</b> under Next action to change it.</p>
+<h3>The tabs</h3>
+<table class=""><thead><tr><th>Tab</th><th>What it is for</th></tr></thead><tbody><tr><td><b>Summary</b></td><td>Everything at a glance: original enquiry, customer, travel requirements, progress, money and the latest notes.</td></tr><tr><td><b>Requirements</b></td><td>The full travel details: dates, travellers, accommodation, transport, activities, budget, special requests. Edit and click Save.</td></tr><tr><td><b>Tasks</b></td><td>Follow-ups for this ticket, with due dates and who is responsible.</td></tr><tr><td><b>Checklist</b></td><td>A ready-made list of things to do for this type of trip. Tick each item when done; the system records who and when.</td></tr><tr><td><b>Notes</b></td><td>Internal notes and records of customer conversations. Notes can never be edited or deleted.</td></tr><tr><td><b>Quotations</b></td><td>Prepare, submit, approve, send and record the customer's answer.</td></tr><tr><td><b>Payments</b></td><td>Deposits, balances and refunds, and whether finance has verified them.</td></tr><tr><td><b>Suppliers</b></td><td>Quotes from lodges, transport and other suppliers for this trip.</td></tr><tr><td><b>Files</b></td><td>Attach documents such as itineraries or proof of payment (PDF, images).</td></tr><tr><td><b>History</b></td><td>Every change ever made: who, when, and old value to new value.</td></tr></tbody></table>
+<div class="two"><figure class="fig half"><img src="img/37-tab-checklist.jpg" alt=""><figcaption><b>Figure 12.</b> Checklist tab.</figcaption></figure><figure class="fig half"><img src="img/40-tab-history.jpg" alt=""><figcaption><b>Figure 13.</b> History tab: the full audit trail.</figcaption></figure></div>
+<h3>Changing the status</h3>
+<ol class="steps"><li>Click <span class="ui">Change status</span>.</li><li>Choose the new status from the list (1).</li><li>Add a note if needed (required for Cancelled, Lost and On hold).</li><li>Click <span class="ui">Change status</span> (2).</li></ol>
+<figure class="fig full"><img src="img/41-status-modal.jpg" alt=""><figcaption><b>Figure 14.</b> Changing a ticket's status.</figcaption></figure>
+<p>The system checks that the earlier steps have happened. If something is missing it says so in red and nothing changes. For example, an Operations consultant cannot confirm a booking (Figure 15), and a booking can only be confirmed once finance has verified the deposit.</p>
+<div class="two"><figure class="fig half"><img src="img/42-status-guard.jpg" alt=""><figcaption><b>Figure 15.</b> "Only management can confirm a booking."</figcaption></figure><figure class="fig half"><img src="img/55-complete-guard.jpg" alt=""><figcaption><b>Figure 16.</b> An unpaid balance blocks completion unless management adds a note.</figcaption></figure></div>
+<h3>Adding a note or a task</h3>
+<p>Click <span class="ui">Add note</span>, choose the type (internal, customer communication, supplier, decision or problem) and how you spoke to the customer (WhatsApp, phone, email, SMS). You can create a follow-up task from the same note. Click <span class="ui">Add task</span> to create a task with a due date and priority.</p>
+<figure class="fig full"><img src="img/38-tab-notes.jpg" alt=""><figcaption><b>Figure 17.</b> The Notes tab.</figcaption></figure>
+</section><section id="intake" class="chapter"><h2><span class="num">7</span>Registering an enquiry (WhatsApp, phone, email, walk-in)</h2>
+<ol class="steps"><li>Click <span class="ui">+ Register enquiry</span> at the top of any Operations page.</li><li><b>A. Customer</b>: name, phone, WhatsApp, email. If the phone number or email already exists, the system links the enquiry to the same customer instead of creating a duplicate. Tick the POPIA consent box once the customer agrees.</li><li><b>B. Enquiry</b>: where it came from (WhatsApp, phone call, email...), the type of trip and a short description.</li><li><b>C. Travel</b>: destination, dates, number of travellers, accommodation, transport and extras.</li><li><b>D. Budget and payment preference</b>.</li><li><b>E. Next action</b>: what happens next and by when. You can also start a draft quotation.</li><li>Click <span class="ui">Save enquiry</span>. If you are an Operations consultant, the ticket is assigned to you automatically.</li></ol>
+<figure class="fig tall"><img src="img/45-intake.jpg" alt=""><figcaption><b>Figure 18.</b> The Register enquiry form (top part).</figcaption></figure>
+</section><section id="quotes" class="chapter"><h2><span class="num">8</span>Quotations</h2>
+<p>A quotation goes through these steps. Each step is recorded on the ticket.</p>
+<table class=""><thead><tr><th>Step</th><th>Who</th><th>What happens</th></tr></thead><tbody><tr><td>1. Prepare</td><td>Consultant</td><td>Open the <b>Quotations</b> tab and click <b>Prepare quotation</b>. Add cost lines (accommodation, transport, activities...), the selling price or a markup, any discount, VAT treatment, deposit percentage and the valid-until date. A preview shows the total, VAT, deposit and margin; the system recalculates everything when you save.</td></tr><tr><td>2. Submit</td><td>Consultant</td><td>Click <b>Submit for approval</b>. Management is notified.</td></tr><tr><td>3. Approve</td><td>Management</td><td>Check the figures and click <b>Approve</b>. A quotation must be approved before it can be sent.</td></tr><tr><td>4. Send</td><td>Consultant or Management</td><td>Click <b>Send to customer</b>. You can email it to the customer from the system, or mark it as sent by WhatsApp.</td></tr><tr><td>5. Customer answer</td><td>Consultant</td><td>Click <b>Customer accepted</b> or <b>Customer declined</b> and note how the customer replied.</td></tr></tbody></table>
+<figure class="fig full"><img src="img/46-quote-editor.jpg" alt=""><figcaption><b>Figure 19.</b> Preparing a quotation, with the live preview at the bottom.</figcaption></figure>
+<div class="callout tip"><b>Tip</b><p>Need to change a quotation that was already sent? Click <b>New version</b>. It becomes version 2 and the old version is kept, marked "Superseded", so you always have the history.</p></div>
+<figure class="fig full"><img src="img/43-tab-quotes.jpg" alt=""><figcaption><b>Figure 20.</b> The Quotations tab on a ticket.</figcaption></figure>
+<figure class="fig full"><img src="img/15-quotes.jpg" alt=""><figcaption><b>Figure 21.</b> The Quotations page lists all quotations; use the filters to see those awaiting approval.</figcaption></figure>
+</section><section id="payments" class="chapter"><h2><span class="num">9</span>Payments</h2>
+<h3>Recording a payment (anyone handling the ticket)</h3>
+<ol class="steps"><li>Open the ticket, go to the <b>Payments</b> tab and click <b>Record payment</b>.</li><li>Choose deposit, instalment or balance; enter the amount, method (EFT, card, cash...), the bank reference and the date paid.</li><li>Save. The payment shows as <b>Unverified</b>. It does <b>not</b> count as paid until finance checks it.</li></ol>
+<figure class="fig full"><img src="img/44-tab-payments.jpg" alt=""><figcaption><b>Figure 22.</b> The Payments tab on a ticket: the deposit is recorded but still unverified.</figcaption></figure>
+<h3>Verifying payments (Finance)</h3>
+<ol class="steps"><li>Open <b>Payments</b> in the menu. The <b>Needs verification</b> tab lists unverified payments.</li><li>Check the money is really in the bank account, then click <span class="ui">Verify</span> (1).</li><li>Say how you checked (for example "FNB business account statement") and click <span class="ui">Verify</span>.</li><li>If the money did not arrive, click <span class="ui">Reject</span> and give a reason.</li></ol>
+<figure class="fig full"><img src="img/50-finance-verify.jpg" alt=""><figcaption><b>Figure 23.</b> Payments waiting for finance to verify.</figcaption></figure>
+<figure class="fig full"><img src="img/51-verify-modal.jpg" alt=""><figcaption><b>Figure 24.</b> Verifying a payment: (2) how it was checked, (3) Verify.</figcaption></figure>
+<p>Rules that protect KCM's money:</p>
+<ul>
+<li>The person who recorded a payment cannot verify it; someone else must.</li>
+<li>The same bank reference cannot be recorded twice, and pressing Save twice doesn't create two payments.</li>
+<li>A verified payment cannot be changed. Mistakes are corrected with a reversal or a refund, so the history stays complete.</li>
+<li><b>Refunds</b> are recorded by finance and must be approved by a <b>different</b> finance person or an admin (Figure 26).</li>
+</ul>
+<div class="two"><figure class="fig half"><img src="img/52-finance-balances.jpg" alt=""><figcaption><b>Figure 25.</b> Balances: what each ticket owes.</figcaption></figure><figure class="fig half"><img src="img/56-refund-approve.jpg" alt=""><figcaption><b>Figure 26.</b> Approving a refund (1).</figcaption></figure></div>
+</section><section id="management" class="chapter"><h2><span class="num">10</span>For management: assigning, approving and confirming</h2>
+<h3>New enquiries</h3>
+<p><b>Incoming Enquiries</b> lists everything nobody has reviewed yet; <b>Unassigned Tickets</b> lists tickets with no owner. Use the search box and filters (status, priority, employee, source, payment status, destination, dates, overdue only) to find anything quickly. <span class="ui">CSV</span> downloads the list for Excel.</p>
+<figure class="fig full"><img src="img/12-incoming.jpg" alt=""><figcaption><b>Figure 27.</b> Incoming Enquiries. Click a ticket number (1) to open it.</figcaption></figure>
+<h3>Assigning a ticket</h3>
+<ol class="steps"><li>Open the ticket and click <span class="ui">Assign</span> (Figure 28, marker 1).</li><li>Choose the employee (2) and the priority (3). You can add supporting employees and a deadline.</li><li>Click <span class="ui">Assign</span> (4). The employee is notified and gets a "Contact the customer" task automatically.</li></ol>
+<figure class="fig full"><img src="img/30-ticket-new.jpg" alt=""><figcaption><b>Figure 28.</b> A new ticket with the Assign button (1).</figcaption></figure>
+<figure class="fig full"><img src="img/31-assign-modal.jpg" alt=""><figcaption><b>Figure 29.</b> Assigning: (2) employee, (3) priority, (4) Assign.</figcaption></figure>
+<h3>Handing over (leave, sick days)</h3>
+<p>Click <span class="ui">Reassign / hand over</span>, choose the new employee and write a short handover summary. Nothing is lost: notes, checklist ticks, quotations and history stay on the ticket, open tasks move to the new person, and the previous person no longer sees the ticket.</p>
+<h3>Confirming and completing</h3>
+<p>Only management can set <b>BOOKING CONFIRMED</b>, and only when a quotation has been accepted <b>and</b> finance has verified the deposit. A trip can be marked <b>COMPLETED</b> once it is confirmed; if a balance is still unpaid, management must add a note explaining why.</p>
+<figure class="fig full"><img src="img/54-confirmed-ticket.jpg" alt=""><figcaption><b>Figure 30.</b> A confirmed booking.</figcaption></figure>
+<h3>Operations Overview</h3>
+<p>The overview shows live figures calculated from the records: enquiries received, unassigned work, quotations, confirmed bookings, outstanding payments, overdue tasks, conversion rates, enquiries by source and destination, and each employee's workload. Choose <b>Today, This week, This month, This year</b> or a <b>Custom</b> date range.</p>
+<figure class="fig tall"><img src="img/10-ops-overview.jpg" alt=""><figcaption><b>Figure 31.</b> Operations Overview (demo data).</figcaption></figure>
+<figure class="fig full"><img src="img/18-workload.jpg" alt=""><figcaption><b>Figure 32.</b> Employee Workload: active tickets, overdue tasks and work per person.</figcaption></figure>
+<h3>Checklists &amp; statuses</h3>
+<p>Under <b>Checklists &amp; statuses</b> management can edit the checklist templates used for each trip type (full package, day tour, accommodation only, transfer, general), and add extra statuses if KCM needs them.</p>
+</section><section id="lifecycle" class="chapter"><h2><span class="num">11</span>The ticket journey: all statuses</h2>
+<p>A typical booking moves down this list. Some steps happen automatically (for example, recording a supplier quote moves the ticket to Supplier research).</p>
+<table class="status-table"><thead><tr><th>#</th><th>Status</th><th>Meaning</th><th>Who usually sets it</th></tr></thead><tbody><tr><td>1</td><td>NEW ENQUIRY</td><td>Just arrived from the website, Kaycee or staff intake</td><td>Automatic</td></tr><tr><td>2</td><td>AWAITING REVIEW</td><td>Waiting for management to look at it</td><td>Management</td></tr><tr><td>3</td><td>UNASSIGNED</td><td>Reviewed but nobody owns it yet</td><td>Management</td></tr><tr><td>4</td><td>ASSIGNED</td><td>An employee is responsible</td><td>Automatic when assigned</td></tr><tr><td>5</td><td>REQUIREMENTS UNDER REVIEW</td><td>Confirming dates, numbers, budget with the customer</td><td>Consultant</td></tr><tr><td>6</td><td>SUPPLIER RESEARCH</td><td>Getting prices from lodges, transport, activities</td><td>Consultant / automatic</td></tr><tr><td>7</td><td>QUOTATION IN PREPARATION</td><td>Quotation being drafted or waiting for approval</td><td>Automatic</td></tr><tr><td>8</td><td>QUOTATION SENT</td><td>Approved quotation sent to the customer</td><td>Automatic when sent</td></tr><tr><td>9</td><td>AWAITING CUSTOMER RESPONSE</td><td>Waiting for the customer to decide</td><td>Consultant</td></tr><tr><td>10</td><td>ACCEPTED BY CUSTOMER</td><td>Customer accepted the quotation</td><td>Automatic when accepted</td></tr><tr><td>11</td><td>AWAITING DEPOSIT</td><td>Waiting for the deposit to be paid</td><td>Consultant</td></tr><tr><td>12</td><td>PAYMENT VERIFICATION</td><td>Payment recorded; finance must verify</td><td>Automatic</td></tr><tr><td>13</td><td>SUPPLIER CONFIRMATION</td><td>Confirming bookings with suppliers</td><td>Consultant</td></tr><tr><td>14</td><td>BOOKING CONFIRMED</td><td>Booking confirmed (deposit verified)</td><td><b>Management only</b></td></tr><tr><td>15</td><td>TRIP PREPARATION</td><td>Vouchers, itinerary, driver details</td><td>Consultant</td></tr><tr><td>16</td><td>IN PROGRESS / TRAVELLING</td><td>The customer is on the trip</td><td>Consultant</td></tr><tr><td>17</td><td>COMPLETED</td><td>Trip finished</td><td>Consultant / management</td></tr><tr><td>18</td><td>CANCELLED</td><td>Cancelled (reason required)</td><td>Consultant; management if it was confirmed</td></tr><tr><td>19</td><td>LOST / DECLINED</td><td>Customer declined or went elsewhere (reason required)</td><td>Consultant</td></tr><tr><td>20</td><td>ON HOLD</td><td>Paused, for example waiting for passports (reason required)</td><td>Consultant</td></tr></tbody></table>
+</section><section id="access" class="chapter"><h2><span class="num">12</span>For admins: giving and removing access</h2>
+<p>Open <b>Users &amp; access</b> (Super Admin and Admin only).</p>
+<h3>Give someone access</h3>
+<ol class="steps"><li>In <b>Give someone access</b>, type their email (1) and name.</li><li>Choose the role (2): Management, Finance or Operations (only a Super Admin can create an Admin).</li><li>Click <span class="ui">Give access</span> (3). They then sign in with <b>Forgot or set password?</b> to choose their password.</li></ol>
+<figure class="fig full"><img src="img/60-give-access.jpg" alt=""><figcaption><b>Figure 33.</b> Giving a new employee access.</figcaption></figure>
+<h3>Change a role, remove access or reset two-step sign-in</h3>
+<ul>
+<li><b>Change role</b>: pick a new role from the drop-down in the Role column (A). The change happens at once and the person must sign in again.</li>
+<li><b>Remove access</b>: change Status to <b>disabled</b> (B). They are signed out immediately and cannot sign in. Change it back to <b>active</b> to restore access. Their past work stays on the tickets.</li>
+<li><b>Reset</b> (in the Two-step column): for someone who lost their phone. They set up the authenticator again at their next sign-in.</li>
+</ul>
+<figure class="fig tall"><img src="img/61-users-access.jpg" alt=""><figcaption><b>Figure 34.</b> Users &amp; access: (A) role, (B) status (active / disabled).</figcaption></figure>
+<div class="callout warn"><b>Important</b><p>Nobody can change their own role, and nobody can be made Super Admin from the website. This stops anyone from giving themselves more power.</p></div>
+<h3>Activity &amp; Audit History</h3>
+<p>Every sign-in, change, approval and payment is written to a permanent log that cannot be edited from the dashboard. Use the filter to search by person, action or ticket number.</p>
+<figure class="fig full"><img src="img/19-activity.jpg" alt=""><figcaption><b>Figure 35.</b> Activity &amp; Audit History.</figcaption></figure>
+</section><section id="partners" class="chapter"><h2><span class="num">13</span>Partners: lodges, drivers and guides</h2>
+<p>Businesses apply to become KCM partners on the <b>Partner with us</b> page. They upload photos and proof of ownership and choose a password.</p>
+<h3>Reviewing an application</h3>
+<ol class="steps"><li>Open <b>Partner applications</b> and click an application.</li><li>Check the photos, the ownership documents (only staff who review partners can open these, and every view is logged) and the details.</li><li>Click <span class="ui">Approve</span> (1) and choose a tier, <span class="ui">Ask for more info</span> (2) or <span class="ui">Reject</span> (3). For "more info" and "reject" you must write a note. The partner is emailed your decision.</li></ol>
+<figure class="fig full"><img src="img/62-application-detail.jpg" alt=""><figcaption><b>Figure 36.</b> Reviewing a partner application.</figcaption></figure>
+<h3>Partners, trips, payouts and ratings</h3>
+<ul>
+<li><b>Partners</b>: all approved partners.</li>
+<li><b>Partner trips &amp; payouts</b>: record each trip a partner did, the commission and the payout; mark payouts Approved, Paid or On hold. The partner is emailed when a payout is marked Paid.</li>
+<li><b>Ratings</b>: guest ratings of partners, which you can hide if needed.</li>
+</ul>
+<div class="two"><figure class="fig half"><img src="img/24-payouts.jpg" alt=""><figcaption><b>Figure 37.</b> Partner trips &amp; payouts.</figcaption></figure><figure class="fig half"><img src="img/25-ratings.jpg" alt=""><figcaption><b>Figure 38.</b> Guest ratings.</figcaption></figure></div>
+<h3>What partners see</h3>
+<p>Approved partners sign in on the website and see their own portal: their businesses, trips, earnings, payouts and ratings. They cannot see anything else.</p>
+<figure class="fig tall"><img src="img/63-partner-portal.jpg" alt=""><figcaption><b>Figure 39.</b> The partner portal (demo partner).</figcaption></figure>
+</section><section id="requests" class="chapter"><h2><span class="num">14</span>Website requests and messages</h2>
+<p><b>Website requests</b> lists every booking-form and Kaycee request as it was submitted (each one also has a ticket in the Operations Centre). <b>Messages</b> lists notes sent from the Contact page. Both can be downloaded as CSV.</p>
+<figure class="fig full"><img src="img/26-website-requests.jpg" alt=""><figcaption><b>Figure 40.</b> Website requests.</figcaption></figure>
+</section><section id="demo" class="chapter"><h2><span class="num">15</span>Demo data for testing</h2>
+<p>To try everything out before going live, the system can fill itself with <b>fake</b> records: about 23 tickets at every stage of the journey (new, assigned, quoting, waiting for deposit, confirmed, travelling, completed, lost, cancelled, on hold), customers, tasks, notes, quotations, payments waiting for verification, a refund waiting for approval, suppliers, partner applications, payouts, ratings and website messages.</p>
+<p>Everything fake is clearly labelled: names end in <b>(demo)</b>, emails end in <b>@demo.kcm.test</b> and descriptions start with <b>[DEMO]</b>. No emails or WhatsApp messages are sent while demo data is created.</p>
+<h3>Load it</h3>
+<ol class="steps"><li>Open the Google Sheet and wait for the <b>KCM Admin</b> menu to appear.</li><li>Click <b>KCM Admin → Load demo data (testing only)</b> and confirm.</li><li>Wait until the message appears (it can take a few minutes). If it says "Part loaded", click the menu item again to continue.</li></ol>
+<h3>Demo accounts</h3>
+<p>All demo accounts use the password <b>Demo-Lowveld-2026</b>. Management and Finance accounts set up an authenticator at their first sign-in, like real ones.</p>
+<table class=""><thead><tr><th>Email</th><th>Role</th><th>Use it to try</th></tr></thead><tbody><tr><td>nomsa.ops@demo.kcm.test</td><td>Operations</td><td>A consultant's day: workspace, notes, tasks, quotations</td></tr><tr><td>sipho.ops@demo.kcm.test</td><td>Operations</td><td>Second consultant</td></tr><tr><td>ayesha.ops@demo.kcm.test</td><td>Operations</td><td>Third consultant</td></tr><tr><td>thandi.manager@demo.kcm.test</td><td>Management</td><td>Assigning, approving quotations, confirming bookings</td></tr><tr><td>fiona.finance@demo.kcm.test</td><td>Finance</td><td>Verifying payments</td></tr><tr><td>sam.finance@demo.kcm.test</td><td>Finance</td><td>Approving refunds recorded by Fiona</td></tr><tr><td>former.ops@demo.kcm.test</td><td>Operations (disabled)</td><td>Shows what removed access looks like</td></tr><tr><td>lowveld.partner0@demo.kcm.test</td><td>Partner (approved)</td><td>The partner portal</td></tr></tbody></table>
+<h3>Remove it before going live</h3>
+<p>Click <b>KCM Admin → Remove demo data</b> and confirm. Every demo record and demo account is deleted from every tab; real records are not touched. If no real tickets exist yet, ticket numbering starts again at KCM-2026-000001.</p>
+</section><section id="golive" class="chapter"><h2><span class="num">16</span>Going-live checklist</h2>
+<ol class="steps"><li><b>KCM Admin → Remove demo data</b>.</li><li><b>KCM Admin → Remove test admin</b> (admin@kcm.test).</li><li>Give each real employee access in <b>Users &amp; access</b> and make sure every Super Admin, Admin, Management and Finance user has set up their authenticator and saved their recovery codes.</li><li>Turn on Google's own 2-Step Verification for the Google account that owns the Sheet: whoever controls that account controls all the data.</li><li>Don't share the Google Sheet itself with staff; they use the dashboard.</li><li>Check the privacy policy page and name an Information Officer (POPIA).</li><li>Make a test booking on the live website and follow it all the way to Completed.</li></ol>
+</section><section id="help" class="chapter"><h2><span class="num">17</span>Troubleshooting</h2>
+<table class=""><thead><tr><th>What you see</th><th>What to do</th></tr></thead><tbody><tr><td>"We couldn't reach the server" when signing in</td><td>In Apps Script, open <b>Deploy → Manage deployments</b>, edit the deployment and check <b>Who has access</b> is <b>Anyone</b>. Then deploy a new version.</td></tr><tr><td>The left menu is empty, or a yellow note says the Operations Centre isn't switched on</td><td>The Google backend is an old version. Paste the latest <b>KCM-Backend.gs</b> into Apps Script, run <b>setup</b>, then <b>Deploy → Manage deployments → Edit → New version</b>.</td></tr><tr><td>Not sure which backend version is live</td><td>Open the backend web-app link in a browser. It shows the version number, for example "1.4.0".</td></tr><tr><td>"Someone else updated this ticket a moment ago"</td><td>Two people edited the same ticket. Click Refresh to see their change, then make yours again. Nothing was overwritten.</td></tr><tr><td>"Only management can confirm a booking" or another red message</td><td>The system is protecting a rule. The message says what is missing (for example, finance must verify the deposit first).</td></tr><tr><td>A new employee doesn't see a page</td><td>Each role only sees its own pages. Check their role in Users &amp; access.</td></tr><tr><td>Lost authenticator phone</td><td>Use a recovery code, or ask an admin to click Reset next to your name.</td></tr><tr><td>The website doesn't show my change</td><td>Press Ctrl+F5 to reload the page without the browser's saved copy.</td></tr></tbody></table>
+</section>
+</body></html>
