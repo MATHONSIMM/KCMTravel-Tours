@@ -48,14 +48,62 @@
         const node = tpl.content.firstElementChild.cloneNode(true);
         container.appendChild(node);
         const pwForm = $("[data-step-password]", node), emailForm = $("[data-step-email]", node), codeForm = $("[data-step-code]", node);
+        const mfaForm = $("[data-step-mfa]", node), setupForm = $("[data-step-mfa-setup]", node), recoveryStep = $("[data-step-recovery]", node);
+        let challenge = "", useRecovery = false;
         const err = $("[data-error]", node);
         const showErr = m => { err.textContent = m || ""; err.hidden = !m; err.classList.toggle("form-error--info", false); };
         const info = m => { showErr(m); err.classList.add("form-error--info"); };
         let email = "";
         const busy = (form, on, label) => { const b = $("button[type=submit]", form); b.disabled = on; if (label) b.textContent = label; };
-        const step = f => { [pwForm, emailForm, codeForm].forEach(x => { x.hidden = x !== f; }); showErr(""); };
+        const step = f => { [pwForm, emailForm, codeForm, mfaForm, setupForm, recoveryStep].forEach(x => { x.hidden = x !== f; }); $("[data-google-wrap]", node).hidden = !(f === pwForm && K.googleClientId && K.configured); showErr(""); };
         const validEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
-        const done = r => { K.session.set(r.token, r.user); onDone?.(r.user); };
+        const finish = r => { K.session.set(r.token, r.user); onDone?.(r.user); };
+        /* Every sign-in method can come back with an MFA step instead of a session (privileged roles). */
+        const done = r => {
+            if (r && r.mfa === "verify") { challenge = r.challenge; useRecovery = false; mfaForm.code.value = ""; $("[data-mfa-code-wrap]", node).hidden = false; $("[data-mfa-recovery-wrap]", node).hidden = true; step(mfaForm); mfaForm.code.focus(); return; }
+            if (r && r.mfa === "setup") { challenge = r.challenge; showSetup(r); return; }
+            if (r && r.recoveryCodes) { showRecovery(r); return; }
+            finish(r);
+        };
+        const loadQr = () => window.qrcode ? Promise.resolve() : new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = K.base + "/js/vendor/qrcode.js"; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
+        function showSetup(r) {
+            step(setupForm);
+            $("[data-mfa-secret]", node).textContent = r.secret.replace(/(.{4})/g, "$1 ").trim();
+            const box = $("[data-mfa-qr]", node); box.textContent = "Loading QR code…";
+            loadQr().then(() => {
+                const qr = window.qrcode(0, "M"); qr.addData(r.otpauth); qr.make();
+                box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+            }).catch(() => { box.textContent = "Type the key below into your app."; });
+            setupForm.code.value = ""; setupForm.code.focus();
+        }
+        function showRecovery(r) {
+            step(recoveryStep);
+            $("[data-recovery-list]", node).innerHTML = r.recoveryCodes.map(c => `<li><code>${K.esc(c)}</code></li>`).join("");
+            const ack = $("[data-recovery-ack]", node), btn = $("[data-recovery-done]", node);
+            ack.onchange = () => { btn.disabled = !ack.checked; };
+            $("[data-copy-recovery]", node).onclick = () => navigator.clipboard?.writeText(r.recoveryCodes.join("\n")).then(() => info("Copied."));
+            btn.onclick = () => finish(r);
+        }
+        $("[data-copy-secret]", node).addEventListener("click", () => navigator.clipboard?.writeText($("[data-mfa-secret]", node).textContent.replace(/\s/g, "")).then(() => info("Key copied.")));
+        $("[data-mfa-use-recovery]", node).addEventListener("click", () => { useRecovery = !useRecovery; $("[data-mfa-code-wrap]", node).hidden = useRecovery; $("[data-mfa-recovery-wrap]", node).hidden = !useRecovery; (useRecovery ? mfaForm.recovery : mfaForm.code).focus(); });
+        mfaForm.addEventListener("submit", async e => {
+            e.preventDefault(); showErr("");
+            const payload = useRecovery ? { challenge, recoveryCode: mfaForm.recovery.value.trim() } : { challenge, code: mfaForm.code.value.replace(/\D/g, "") };
+            if (!useRecovery && payload.code.length !== 6) { showErr("Enter the 6-digit code from your app."); return; }
+            busy(mfaForm, true, "Checking…");
+            try { done(await K.call("mfaVerify", payload)); }
+            catch (ex) { showErr(ex.message); if (ex.code === "auth") step(pwForm); }
+            busy(mfaForm, false, "Verify");
+        });
+        setupForm.addEventListener("submit", async e => {
+            e.preventDefault(); showErr("");
+            const code = setupForm.code.value.replace(/\D/g, "");
+            if (code.length !== 6) { showErr("Enter the 6-digit code your app shows."); return; }
+            busy(setupForm, true, "Checking…");
+            try { done(await K.call("mfaSetupConfirm", { challenge, code })); }
+            catch (ex) { showErr(ex.message); if (ex.code === "auth") step(pwForm); }
+            busy(setupForm, false, "Turn on two-step verification");
+        });
 
         // Not connected to the Google Sheet backend yet: let people type, explain on submit instead of freezing the form.
         const notReady = () => { if (K.configured) return false; info("Sign-in isn't switched on yet: the website still has to be connected to the KCM Google Sheet. Please try again soon."); return true; };
@@ -92,7 +140,7 @@
             const code = codeForm.code.value.replace(/\D/g, "");
             if (code.length !== 6) { showErr("Enter the 6-digit code from the email."); return; }
             const pw = codeForm.password.value;
-            if (pw.length < 8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) { showErr("Your new password needs at least 8 characters, with letters and a number."); codeForm.password.focus(); return; }
+            if (pw.length < 10 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) { showErr("Your new password needs at least 10 characters, with letters and a number."); codeForm.password.focus(); return; }
             busy(codeForm, true, "Saving…");
             try { done(await K.call("resetPassword", { email, code, password: pw })); }
             catch (ex) { ex.code === "pending" ? info("Your password is saved. " + ex.message) : showErr(ex.message); }
@@ -395,7 +443,7 @@
                     const email = f.email.value.trim();
                     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { f.email.focus(); return "Please enter a valid email address."; }
                     const pw = f.password.value;
-                    if (pw.length < 8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) { f.password.focus(); return "Your password needs at least 8 characters, with letters and a number."; }
+                    if (pw.length < 10 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) { f.password.focus(); return "Your password needs at least 10 characters, with letters and a number."; }
                     if (pw !== f.password2.value) { f.password2.focus(); return "The two passwords don't match."; }
                 }
                 if (!f.accurate.checked || !f.consent.checked) return "Please tick both boxes to continue.";

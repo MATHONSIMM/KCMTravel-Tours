@@ -31,12 +31,46 @@
             </div>
             <div class="field">
                 <label>New password</label>
-                <div class="pw-wrap"><input type="password" name="password" autocomplete="new-password" minlength="8" required /><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div>
-                <p class="field-hint">At least 8 characters, with letters and a number.</p>
+                <div class="pw-wrap"><input type="password" name="password" autocomplete="new-password" minlength="10" required /><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div>
+                <p class="field-hint">At least 10 characters, with letters and a number.</p>
             </div>
             <button class="btn btn--primary btn--block" type="submit">Save password &amp; sign in</button>
             <p class="signin-links"><button type="button" class="link-btn" data-change-email>Use a different email</button> · <button type="button" class="link-btn" data-resend>Resend code</button></p>
         </form>
+        <form class="signin-step" data-step-mfa novalidate hidden>
+            <p class="signin-sent"><strong>Two-step verification.</strong> Open your authenticator app (Google Authenticator, Microsoft Authenticator…) and enter the 6-digit code for KCM Travel &amp; Tours.</p>
+            <div class="field" data-mfa-code-wrap>
+                <label>Authenticator code</label>
+                <input class="code-input" type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" />
+            </div>
+            <div class="field" data-mfa-recovery-wrap hidden>
+                <label>Recovery code</label>
+                <input type="text" name="recovery" autocomplete="off" maxlength="12" placeholder="XXXXX-XXXXX" />
+            </div>
+            <button class="btn btn--primary btn--block" type="submit">Verify</button>
+            <p class="signin-links"><button type="button" class="link-btn" data-mfa-use-recovery>Lost your phone? Use a recovery code</button></p>
+        </form>
+        <form class="signin-step" data-step-mfa-setup novalidate hidden>
+            <p class="signin-sent"><strong>Protect your account.</strong> Your role can see customer and payment information, so KCM requires a second step when you sign in.</p>
+            <ol class="mfa-steps">
+                <li>Install <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong> on your phone.</li>
+                <li>In the app, tap <strong>+</strong> and scan this code (or type the key below).</li>
+            </ol>
+            <div class="mfa-qr" data-mfa-qr aria-label="QR code for your authenticator app"></div>
+            <p class="mfa-key">Key: <code data-mfa-secret></code> <button type="button" class="link-btn" data-copy-secret>Copy</button></p>
+            <div class="field">
+                <label>3. Enter the 6-digit code the app shows</label>
+                <input class="code-input" type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" />
+            </div>
+            <button class="btn btn--primary btn--block" type="submit">Turn on two-step verification</button>
+        </form>
+        <div class="signin-step" data-step-recovery hidden>
+            <p class="signin-sent"><strong>Save your recovery codes.</strong> Each one works once if you lose your phone. Store them somewhere safe (a password manager or printed). They won't be shown again.</p>
+            <ul class="recovery-codes" data-recovery-list></ul>
+            <div class="btn-row"><button type="button" class="btn btn--ghost btn--sm" data-copy-recovery>Copy codes</button></div>
+            <label class="check field"><input type="checkbox" data-recovery-ack /><span>I've saved my recovery codes.</span></label>
+            <button class="btn btn--primary btn--block" type="button" data-recovery-done disabled>Continue</button>
+        </div>
         <div class="signin-google" data-google-wrap hidden>
             <p class="signin-or"><span>or</span></p>
             <div data-google-btn></div>
@@ -144,10 +178,10 @@
                     <p class="reg-lead">You'll use this email and password to sign in to your partner portal once your application is approved.</p>
                     <div class="field"><label for="r-email">Email address *</label><input id="r-email" name="email" type="email" autocomplete="email" inputmode="email" required placeholder="you@example.com" /></div>
                     <div class="field-row">
-                        <div class="field"><label for="r-pw">Password *</label><div class="pw-wrap"><input id="r-pw" name="password" type="password" autocomplete="new-password" minlength="8" required /><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div></div>
+                        <div class="field"><label for="r-pw">Password *</label><div class="pw-wrap"><input id="r-pw" name="password" type="password" autocomplete="new-password" minlength="10" required /><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div></div>
                         <div class="field"><label for="r-pw2">Confirm password *</label><input id="r-pw2" name="password2" type="password" autocomplete="new-password" required /></div>
                     </div>
-                    <p class="field-hint">At least 8 characters, with letters and a number.</p>
+                    <p class="field-hint">At least 10 characters, with letters and a number.</p>
                 </div>
                 <p class="reg-signed" data-reg-signed hidden>Submitting as <strong data-reg-email></strong>.</p>
                 <div class="hp" aria-hidden="true"><input name="hpWebsite" tabindex="-1" autocomplete="off" /></div>

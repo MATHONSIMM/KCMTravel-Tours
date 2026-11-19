@@ -21,6 +21,16 @@ def rebase(text, kind):
     if kind == "html":
         text = re.sub(r'(\s(?:href|src|action|srcset|imagesrcset)=")/(?!/)', rf'\1{base}/', text)
         text = re.sub(r'(<html\b[^>]*?)\sdata-base=""', rf'\1 data-base="{base}" data-static="1"', text, count=1)
+        # GitHub Pages cannot send security headers, so the Content Security Policy goes in a <meta> tag
+        # (same policy as Program.cs; frame-ancestors is not allowed in <meta> and is left out).
+        api = re.search(r'data-api="(https://[^/"]+)', text)
+        csp = ("default-src 'self'; img-src 'self' data: blob: https://images.unsplash.com https://*.googleusercontent.com; "
+               "style-src 'self' 'unsafe-inline' https://accounts.google.com; script-src 'self' https://accounts.google.com; font-src 'self'; "
+               "frame-src https://www.google.com https://maps.google.com https://accounts.google.com; "
+               "connect-src 'self' https://script.google.com https://script.googleusercontent.com https://accounts.google.com" + (" " + api.group(1) if api else "") + "; "
+               "form-action 'self'; base-uri 'self'")
+        if 'http-equiv="Content-Security-Policy"' not in text:
+            text = re.sub(r'(<head[^>]*>)', r'\1\n    <meta http-equiv="Content-Security-Policy" content="' + csp.replace('\\', '') + r'" />\n    <meta name="referrer" content="strict-origin-when-cross-origin" />', text, count=1)
     if kind in ("html", "json"):
         text = text.replace('"/images/', f'"{base}/images/')
     if kind == "manifest":

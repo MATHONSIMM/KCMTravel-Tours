@@ -237,6 +237,7 @@
             <label>Cell / WhatsApp<input name="phone" type="tel" autocomplete="tel" inputmode="tel" required placeholder="e.g. 082 123 4567" maxlength="20"></label>
             <label>Email <span>(we'll email you the quote)</span><input name="email" type="email" autocomplete="email" maxlength="120"></label>
             <input name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <label class="chat-consent"><input type="checkbox" name="consent"> <span>I agree that KCM may use these details to prepare my quote and contact me (<a href="${(window.KCM?.base || "")}/privacy" target="_blank" rel="noopener">privacy notice</a>).</span></label>
             <p class="chat-contact-err" hidden></p>
             <button type="submit" class="chat-choice chat-choice--primary">Send my quote</button>`;
         log.appendChild(f); scroll();
@@ -248,19 +249,26 @@
             if (!name) { err.textContent = "Please add your name."; err.hidden = false; return; }
             if (!/^[0-9 +()-]{9,20}$/.test(phone)) { err.textContent = "Please add a valid cell number."; err.hidden = false; return; }
             if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { err.textContent = "Please check your email address."; err.hidden = false; return; }
+            if (!f.consent.checked) { err.textContent = "Please tick the box so we may contact you about your quote."; err.hidden = false; return; }
             const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "Sending…";
-            const now = new Date();
-            const ref = "KCM-" + String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0") + "-" +
-                Array.from({ length: 4 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
+            const idempotencyKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2);
+            // temporary reference for the WhatsApp fallback only; the real ticket number is issued by the server
+            let ref = "REQ-" + idempotencyKey.replace(/[^A-Za-z0-9]/g, "").slice(0, 6).toUpperCase();
             const { adults, children } = party();
             const booking = {
                 reference: ref, tour: (state.picks && state.picks[0]) || `Trip enquiry (${state.style || "any"}, ${state.region || "anywhere"})`,
                 startDate: travelDate() || state.date || "flexible", nights: parseInt(state.nights ?? "0", 10) || 0, adults, children,
-                total: state.estimate || 0, name, phone, email, notes: "Kaycee chat\n" + summaryText(), source: "chat",
+                total: state.estimate || 0, name, phone, email, notes: "Kaycee chat\n" + summaryText(), source: "chat", consent: true,
+                kaycee: { style: state.style || "", region: state.region || "", date: state.date || "", party: state.party || "", nights: state.nights ?? "", budget: state.budget || "", picks: (state.picks || []).slice(0, 3) },
             };
             let saved = false;
-            try { if (window.KCM?.configured) { await window.KCM.call("submitBooking", { booking, website: f.website.value }); saved = true; } }
-            catch { /* fall back to WhatsApp below */ }
+            try {
+                if (window.KCM?.configured) {
+                    const r = await window.KCM.call("submitBooking", { booking, website: f.website.value, idempotencyKey });
+                    saved = true; booking.reference = ref = r.reference; if (r.estimate) booking.total = r.estimate;
+                }
+            } catch { /* fall back to WhatsApp below */ }
+            booking.reference = ref;
             f.remove();
             addMsg(`${name} · ${phone}${email ? " · " + email : ""}`, "user");
             await typing(500);

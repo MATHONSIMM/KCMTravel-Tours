@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Local test server for the Apps Script backend.
- * Runs backend/apps-script/Code.gs in Node with in-memory stand-ins for Google's services
+ * Runs the Apps Script backend (Vendor.gs, Security.gs, Pricing.gs, Code.gs, Ops.gs) in Node with in-memory stand-ins for Google's services
  * (SpreadsheetApp, DriveApp, MailApp, ...), so the website can be tested without deploying.
  *
  *   node backend/dev/mock-server.js            # http://127.0.0.1:8787
@@ -36,6 +36,7 @@ class Sheet {
     width() { return Math.max(1, ...this.rows.map(r => r.length)); }
     getDataRange() { const w = this.width(); const rows = this.rows.length ? this.rows : [[]]; return { getValues: () => rows.map(r => Array.from({ length: w }, (_, i) => r[i] ?? "")) }; }
     appendRow(row) { this.rows.push([...row]); return this; }
+    getLastRow() { return this.rows.length; }
     deleteRow(i) { this.rows.splice(i - 1, 1); }
     getRange(r, c, nr, nc) { return new Range(this, r, c, nr, nc); }
     setFrozenRows() { } hideSheet() { this.hidden = true; }
@@ -93,7 +94,11 @@ const context = {
         base64Decode: s => toSigned(Buffer.from(s, "base64")),
         base64Encode: bytes => Buffer.from(bytes.map(b => b & 255)).toString("base64"),
         newBlob: (bytes, type, name) => ({ getBytes: () => bytes, getContentType: () => type, getName: () => name }),
-        formatDate: (d, tz, fmt) => { const Y = String(d.getFullYear()), m = String(d.getMonth() + 1).padStart(2, "0"); return fmt.replace("yyyy", Y).replace("yy", Y.slice(2)).replace("MM", m); },
+        formatDate: (d, tz, fmt) => {
+            const p2 = n => String(n).padStart(2, "0"), M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const map = { yyyy: String(d.getFullYear()), yy: String(d.getFullYear()).slice(2), MMM: M[d.getMonth()], MM: p2(d.getMonth() + 1), dd: p2(d.getDate()), d: String(d.getDate()), HH: p2(d.getHours()), mm: p2(d.getMinutes()) };
+            return fmt.replace(/yyyy|yy|MMM|MM|dd|d|HH|mm/g, t => map[t]);
+        },
     },
     UrlFetchApp: {
         fetch: url => {
@@ -110,11 +115,14 @@ const context = {
             return { getResponseCode: () => 200, getContentText: () => "Message queued" };
         }),
     },
+    ScriptApp: { getProjectTriggers: () => [], newTrigger: () => { const c = { timeBased: () => c, everyHours: () => c, create: () => ({}) }; return c; } },
     ContentService: { MimeType: { JSON: "json" }, createTextOutput: s => ({ content: s, setMimeType() { return this; } }) },
 };
 vm.createContext(context);
-const code = fs.readFileSync(path.join(__dirname, "..", "apps-script", "Code.gs"), "utf8");
-vm.runInContext(code + "\n;this.__api = { doGet, doPost, setup };", context, { filename: "Code.gs" });
+// same order as scripts/build_backend.py (dist/KCM-Backend.gs)
+const FILES = ["Vendor.gs", "Security.gs", "Pricing.gs", "Code.gs", "Ops.gs"];
+const code = FILES.map(f => fs.readFileSync(path.join(__dirname, "..", "apps-script", f), "utf8")).join("\n;\n");
+vm.runInContext(code + "\n;this.__api = { doGet, doPost, setup, opsSweep, backfillTickets_, setUserFields_, legacyHashPassword_, upsertUser_ };", context, { filename: "KCM-Backend.gs" });
 props.set("GOOGLE_CLIENT_ID", CLIENT_ID);
 props.set("SITE_URL", process.env.SITE_URL || "http://127.0.0.1:5217");
 props.set("WHATSAPP_ALERTS", JSON.stringify([{ phone: "27764360010", apikey: "test" }]));
@@ -126,6 +134,13 @@ http.createServer((req, res) => {
     if (req.method === "OPTIONS") { res.setHeader("Access-Control-Allow-Headers", "Content-Type"); res.end(); return; }
     if (req.method === "GET" && req.url.startsWith("/__mail")) { res.end(JSON.stringify(mail)); return; }
     if (req.method === "GET" && req.url.startsWith("/__whatsapp")) { res.end(JSON.stringify(whatsapp)); return; }
+    // TEST ONLY (mock): plant a pre-1.4 password hash to prove it is upgraded to Argon2id on sign-in
+    if (req.method === "GET" && req.url.startsWith("/__legacy")) {
+        const q = new URL(req.url, "http://x").searchParams, email = q.get("email"), salt = "abc123";
+        context.__api.upsertUser_(email, { role: q.get("role") || "PARTNER", status: "active", provider: "password" });
+        context.__api.setUserFields_(email, { PasswordHash: context.__api.legacyHashPassword_(q.get("password"), salt), PasswordSalt: salt });
+        res.end(JSON.stringify({ ok: true })); return;
+    }
     if (req.method === "GET" && req.url.startsWith("/__sheet")) {
         const name = decodeURIComponent((/name=([^&]+)/.exec(req.url) || [])[1] || "Partners");
         res.end(JSON.stringify(sheets.get(name)?.rows || [])); return;

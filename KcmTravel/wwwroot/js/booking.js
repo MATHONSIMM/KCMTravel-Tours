@@ -93,12 +93,15 @@
     });
 
     /* Saves the booking to the KCM Sheet (team alerted on WhatsApp + email). If the backend isn't reachable, falls back to WhatsApp. */
+    // one key per form visit: a double-click or retry can never create two tickets
+    const idempotencyKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2);
+    let sending = false;
     const sendViaWhatsApp = async () => {
+        if (sending) return;
+        sending = true;
         const q = quote();
-        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        const now = new Date();
-        const ref = "KCM-" + String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, "0") + "-" +
-            Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+        // temporary reference, only used if the booking system can't be reached; the real ticket number comes from the server
+        let ref = "REQ-" + idempotencyKey.replace(/[^A-Za-z0-9]/g, "").slice(0, 6).toUpperCase();
         const f = form.elements;
         const extras = $$("input[name=Extras]:checked").map(cb => data.extras[cb.value]?.name).filter(Boolean);
         const msg = [
@@ -117,27 +120,28 @@
             f.Notes.value ? `Notes: ${f.Notes.value}` : "",
         ].filter(Boolean).join("\n");
         const booking = {
-            reference: ref, tour: q.t.title, startDate: f.StartDate.value, nights: q.nights, adults: num("Adults"), children: num("Children"),
-            infants: num("Infants"), pensioners: num("Pensioners"), room: f.Room.value, extras, payment: f.Payment.value, total: q.total,
-            name: f.FullName.value, email: f.Email.value, phone: f.Phone.value, notes: f.Notes.value, source: "website",
+            tourSlug: f.TourSlug.value, tour: q.t.title, startDate: f.StartDate.value, nights: q.nights, adults: num("Adults"), children: num("Children"),
+            infants: num("Infants"), pensioners: num("Pensioners"), room: f.Room.value, extraCodes: $$("input[name=Extras]:checked").map(cb => cb.value), payment: f.Payment.value,
+            total: q.total, name: f.FullName.value, email: f.Email.value, phone: f.Phone.value, notes: f.Notes.value, source: "website",
+            consent: !!form.querySelector("input[type=checkbox][name=Consent]")?.checked,
         };
         const wa = document.querySelector("[data-chat]")?.dataset.wa || "";
-        const link = `https://wa.me/${wa}?text=${encodeURIComponent(msg)}`;
         const card = steps[4];
         const submitBtn = card.querySelector("button[type=submit], [data-submit]");
         if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Sending…"; }
-        let saved = false;
+        let saved = false, estimate = null;
         if (window.KCM?.configured) {
-            try { await window.KCM.call("submitBooking", { booking }); saved = true; }
+            try { const r = await window.KCM.call("submitBooking", { booking, idempotencyKey }); saved = true; ref = r.reference; estimate = r.estimate; }
             catch { saved = false; }
         }
+        const link = `https://wa.me/${wa}?text=${encodeURIComponent(msg.replace(/^Hi KCM Travel & Tours! Booking request \S+/, "Hi KCM Travel & Tours! Booking request " + ref))}`;
         card.innerHTML = "";
         const h = document.createElement("h2");
         const p = document.createElement("p");
         const a = document.createElement("a"); a.href = link; a.target = "_blank"; a.rel = "noopener";
         if (saved) {
             h.textContent = "Booking request received";
-            p.textContent = `Thank you! Your reference is ${ref}. Our team has been notified and a consultant will confirm availability with you within one working day, by email or on ${f.Phone.value}. Want to chat now? You can also message us on WhatsApp.`;
+            p.textContent = `Thank you! Your reference is ${ref}${estimate ? ` and your estimate is ${fmt(estimate)}` : ""}. Our team has been notified and a consultant will confirm availability with you within one working day, by email or on ${f.Phone.value}. Want to chat now? You can also message us on WhatsApp.`;
             a.className = "btn btn--outline btn--lg"; a.textContent = "Chat on WhatsApp (optional)";
         } else {
             h.textContent = "Almost done: send it on WhatsApp";

@@ -24,6 +24,9 @@
 
         let me = null, sample = false;
         const cache = {};
+        /* Permissions come from the server (me.permissions). The UI only hides what you can't use; the backend enforces it. */
+        const can = p => !!(me && Array.isArray(me.permissions) && me.permissions.includes(p));
+        const ROLE_LABEL = { SUPER_ADMIN: "Super admin", ADMIN: "Admin", MANAGEMENT: "Management", FINANCE: "Finance", OPERATIONS: "Operations", PARTNER: "Partner", CUSTOMER: "Customer" };
 
         /* ---------- data access (live or sample) ---------- */
         async function get(action, payload) {
@@ -38,6 +41,10 @@
             if (!user) return gate("signin");
             me = await K.session.refresh(true) || user;
             if (!me || !me.isStaff) return gate("noaccess");
+            if (window.KCMOps) { const o = window.KCMOps(opsCtx()); Object.assign(VIEWS, o.views); Object.assign(TITLES, o.titles); o.start?.(); }
+            $$("[data-perm]").forEach(a => { a.hidden = !a.dataset.perm.split("|").some(can); });
+            $$("[data-nav-group]").forEach(g => { let n = g.nextElementSibling, any = false; while (n && !n.hasAttribute("data-nav-group")) { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; });
+            if (!location.hash) location.replace("#" + (can("ops.edit.own") || can("ops.view.all") ? "workspace" : "overview"));
             route();
         }
 
@@ -65,13 +72,14 @@
             if (!me) return;
             const view = (location.hash.slice(1) || "overview").split("/")[0];
             const fn = VIEWS[view] || VIEWS.overview;
-            $$("[data-view]").forEach(a => a.classList.toggle("is-active", a.dataset.view === (VIEWS[view] ? view : "overview")));
+            const navView = VIEWS[view] ? (view === "ticket" || view === "customer" ? "tickets" : view) : "overview";
+            $$("[data-view]").forEach(a => a.classList.toggle("is-active", a.dataset.view === navView));
             $("[data-adm-title]").textContent = TITLES[view] || TITLES.overview;
-            $("[data-adm-eyebrow]").textContent = `${me.name || me.email} · ${me.role}`;
+            $("[data-adm-eyebrow]").textContent = `${me.name || me.email} · ${ROLE_LABEL[me.role] || me.role}`;
             const fresh = body.cloneNode(false); body.replaceWith(fresh); body = fresh; // drop listeners from the previous view
             body.innerHTML = `<div class="adm-card"><p>Loading…</p></div>`;
-            fn().catch(err => { body.innerHTML = `<div class="adm-card"><p class="form-error">${esc(err.message)}</p></div>`; });
-            const deep = location.hash.slice(1).split("/")[1]; // e.g. #applications/P-2611-AB12 from a WhatsApp alert
+            const deep = location.hash.slice(1).split("/")[1]; // e.g. #applications/P-2611-AB12 or #ticket/KCM-2026-000001
+            fn(deep ? decodeURIComponent(deep) : undefined).catch(err => { body.innerHTML = `<div class="adm-card"><p class="form-error">${esc(err.message)}</p></div>`; });
             if (view === "applications" && deep && !sample) openApp(decodeURIComponent(deep));
         }
 
@@ -178,7 +186,7 @@
                             <td>${esc(b.name)}<span><a href="tel:${esc(b.phone)}">${esc(b.phone)}</a> · <a href="mailto:${esc(b.email)}">${esc(b.email)}</a></span></td>
                             <td>${esc(b.tour)}<span>${b.nights ? b.nights + " nights · " : ""}${esc(b.room || "")}${b.extras ? " · " + esc(b.extras) : ""}</span></td>
                             <td>${fmtDate(b.startDate)}</td><td>${b.travellers}</td><td class="num">${R(b.total)}</td>
-                            <td>${me.canEdit ? `<select class="status-select" data-booking="${esc(b.reference)}" aria-label="Status for ${esc(b.reference)}">${BOOKING_STATUSES.map(s => `<option ${s === b.status ? "selected" : ""}>${s}</option>`).join("")}</select>` : esc(b.status)}</td></tr>`).join("")}</tbody></table></div>`
+                            <td>${can("bookings.update") ? `<select class="status-select" data-booking="${esc(b.reference)}" aria-label="Status for ${esc(b.reference)}">${BOOKING_STATUSES.map(s => `<option ${s === b.status ? "selected" : ""}>${s}</option>`).join("")}</select>` : esc(b.status)}</td></tr>`).join("")}</tbody></table></div>`
                         : empty("No booking requests", "Bookings made on the website appear here.");
                 };
                 body.addEventListener("click", e => {
@@ -218,7 +226,7 @@
                         </div>
                         <div class="adm-card">
                             <div class="card-head"><h2>Log a trip</h2><p>Payout = trip value − commission</p></div>
-                            ${me.canEdit ? (approved.length ? `<form class="invite" data-job novalidate>
+                            ${can("payouts.manage") ? (approved.length ? `<form class="invite" data-job novalidate>
                                 <div class="field"><label for="jb-p">Partner *</label><select id="jb-p" name="partnerId" required>${approved.map(a => `<option value="${esc(a.id)}">${esc(a.businessName)}</option>`).join("")}</select></div>
                                 <div class="field"><label for="jb-s">Service *</label><input id="jb-s" name="service" required placeholder="e.g. KMIA airport transfer"></div>
                                 <div class="field-row"><div class="field"><label for="jb-d">Date *</label><input id="jb-d" name="date" type="date" required value="${new Date().toISOString().slice(0, 10)}"></div>
@@ -242,7 +250,7 @@
                     $("[data-list]", body).innerHTML = rows.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Trip</th><th>Partner</th><th class="num">Value</th><th class="num">Payout</th><th>Status</th><th></th></tr></thead><tbody>
                         ${rows.map(j => `<tr><td><strong>${esc(j.service)}</strong><span>${fmtDate(j.date)} · ${esc(j.id)}${j.bookingRef ? " · " + esc(j.bookingRef) : ""} · ${j.guests} guests</span></td><td>${esc(j.business)}</td>
                         <td class="num">${R(j.gross)}<span>${j.commissionPct}%</span></td><td class="num"><strong>${R(j.payout)}</strong></td>
-                        <td>${me.canEdit ? `<select class="status-select" data-payout="${esc(j.id)}" aria-label="Payout status">${PAYOUT_STATUSES.map(s => `<option ${s === j.payoutStatus ? "selected" : ""}>${s}</option>`).join("")}</select>` : esc(j.payoutStatus)}${j.paidOn ? `<span>paid ${fmtDate(j.paidOn)}</span>` : ""}</td>
+                        <td>${can("payouts.manage") ? `<select class="status-select" data-payout="${esc(j.id)}" aria-label="Payout status">${PAYOUT_STATUSES.map(s => `<option ${s === j.payoutStatus ? "selected" : ""}>${s}</option>`).join("")}</select>` : esc(j.payoutStatus)}${j.paidOn ? `<span>paid ${fmtDate(j.paidOn)}</span>` : ""}</td>
                         <td>${j.bookingRef ? `<button type="button" class="btn btn--ghost btn--sm" data-ratelink="${esc(j.partnerId)}|${esc(j.bookingRef)}">Rating link</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
                         : empty("No trips", filter === "All" ? "Log the first trip on the right." : "Nothing with this status.");
                 };
@@ -292,7 +300,7 @@
                         <div class="adm-card adm-span-3"><div class="card-head"><h2>All ratings</h2><p>Hide anything abusive or unfair: hidden ratings aren't shown to partners or counted.</p></div>
                             ${list.length ? `<ul class="msg-list">${list.map(r => `<li class="${r.status === "Hidden" ? "is-hidden-rating" : ""}"><div>${starRow(r.stars)} <strong>${esc(r.business)}</strong> <span class="muted">· ${esc(r.guest)} · ${fmtDate(r.created)}${r.bookingRef ? " · " + esc(r.bookingRef) : ""}</span></div>
                                 <p>${r.comment ? esc(r.comment) : "<span class='muted'>No comment</span>"}</p>
-                                ${me.canEdit ? `<button type="button" class="btn btn--ghost btn--sm" data-rating="${esc(r.id)}" data-to="${r.status === "Hidden" ? "Published" : "Hidden"}">${r.status === "Hidden" ? "Show again" : "Hide"}</button>` : ""}</li>`).join("")}</ul>` : empty("No ratings yet", "Send guests a rating link after their trip.")}</div>
+                                ${can("ratings.moderate") ? `<button type="button" class="btn btn--ghost btn--sm" data-rating="${esc(r.id)}" data-to="${r.status === "Hidden" ? "Published" : "Hidden"}">${r.status === "Hidden" ? "Show again" : "Hide"}</button>` : ""}</li>`).join("")}</ul>` : empty("No ratings yet", "Send guests a rating link after their trip.")}</div>
                     </div>`;
                 body.addEventListener("click", async e => {
                     const b = e.target.closest("[data-rating]"); if (!b) return;
@@ -311,49 +319,60 @@
 
             async users() {
                 const list = await get("listUsers");
-                const staff = list.filter(u => u.role !== "partner"), partners = list.filter(u => u.role === "partner");
-                const roleOpts = r => (me.role === "owner" ? ["admin", "viewer", "partner"] : ["viewer", "partner"]).map(x => `<option ${x === r ? "selected" : ""}>${x}</option>`).join("");
+                const isStaffRole = r => ["SUPER_ADMIN", "ADMIN", "MANAGEMENT", "FINANCE", "OPERATIONS"].includes(r);
+                const staff = list.filter(u => isStaffRole(u.role)), partners = list.filter(u => !isStaffRole(u.role));
+                const assignable = me.role === "SUPER_ADMIN" ? ["ADMIN", "MANAGEMENT", "FINANCE", "OPERATIONS", "PARTNER"] : ["MANAGEMENT", "FINANCE", "OPERATIONS", "PARTNER"];
+                const roleOpts = r => assignable.map(x => `<option value="${x}" ${x === r ? "selected" : ""}>${ROLE_LABEL[x]}</option>`).join("");
+                const mfaRoles = ["SUPER_ADMIN", "ADMIN", "MANAGEMENT", "FINANCE"];
                 const row = u => {
-                    const locked = u.role === "owner" || u.email === me.email || (u.role === "admin" && me.role !== "owner") || !me.canEdit;
+                    const locked = u.role === "SUPER_ADMIN" || u.email === me.email || (u.role === "ADMIN" && me.role !== "SUPER_ADMIN") || !can("users.manage");
                     return `<tr><td><strong>${esc(u.name || "—")}</strong><span>${esc(u.email)}</span></td>
-                        <td>${locked ? `<span class="role-chip">${esc(u.role)}</span>` : `<select class="status-select" data-role="${esc(u.email)}" aria-label="Role for ${esc(u.email)}">${roleOpts(u.role)}</select>`}</td>
+                        <td>${locked ? `<span class="role-chip">${esc(ROLE_LABEL[u.role] || u.role)}</span>` : `<select class="status-select" data-role="${esc(u.email)}" aria-label="Role for ${esc(u.email)}">${roleOpts(u.role)}</select>`}</td>
                         <td>${locked ? esc(u.status) : `<select class="status-select" data-ustatus="${esc(u.email)}" aria-label="Status for ${esc(u.email)}"><option ${u.status === "active" ? "selected" : ""}>active</option><option ${u.status === "disabled" ? "selected" : ""}>disabled</option></select>`}</td>
+                        <td>${u.mfa ? `<span class="status status--good">On</span>${!locked ? ` <button type="button" class="link-btn" data-mfa-reset="${esc(u.email)}">Reset</button>` : ""}` : mfaRoles.includes(u.role) ? `<span class="status status--warn">Set up at next sign-in</span>` : `<span class="muted">Optional</span>`}</td>
                         <td>${u.lastLogin ? fmtWhen(u.lastLogin) : `<span class="muted">${u.provider === "invited" ? "Invited, not signed in yet" : "—"}</span>`}</td></tr>`;
                 };
                 body.innerHTML = `
                     <div class="adm-grid">
                         <div class="adm-card adm-span-2">
                             <div class="card-head"><h2>KCM team</h2><p>People who can open this dashboard</p></div>
-                            <div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>${staff.map(row).join("")}</tbody></table></div>
+                            <div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Two-step</th><th>Last sign-in</th></tr></thead><tbody>${staff.map(row).join("")}</tbody></table></div>
                         </div>
                         <div class="adm-card">
-                            <div class="card-head"><h2>Give someone access</h2><p>They sign in with this email to get access.</p></div>
-                            ${me.canEdit ? `<form class="invite" data-invite novalidate>
+                            <div class="card-head"><h2>Give someone access</h2><p>They'll get an email to set their password.</p></div>
+                            ${can("users.manage") ? `<form class="invite" data-invite novalidate>
                                 <div class="field"><label for="inv-email">Email *</label><input id="inv-email" name="email" type="email" required placeholder="name@example.com"></div>
                                 <div class="field"><label for="inv-name">Name</label><input id="inv-name" name="name"></div>
-                                <div class="field"><label for="inv-role">Access level</label><select id="inv-role" name="role">${me.role === "owner" ? `<option value="admin">Admin: full access, can review and manage users</option>` : ""}<option value="viewer" selected>Viewer: can see everything, change nothing</option></select></div>
+                                <div class="field"><label for="inv-role">Role</label><select id="inv-role" name="role">${assignable.filter(r => r !== "PARTNER").map(r => `<option value="${r}" ${r === "OPERATIONS" ? "selected" : ""}>${ROLE_LABEL[r]}</option>`).join("")}</select></div>
                                 <button class="btn btn--primary btn--block" type="submit">Give access</button>
-                            </form>` : `<p class="muted">Only owners and admins can give access.</p>`}
+                            </form>` : `<p class="muted">Only admins can give access.</p>`}
                             <dl class="roles">
-                                <div><dt>Owner</dt><dd>Everything, including adding and removing admins.</dd></div>
-                                <div><dt>Admin</dt><dd>Review applications, update bookings, add viewers.</dd></div>
-                                <div><dt>Viewer</dt><dd>Read-only access to the whole dashboard.</dd></div>
-                                <div><dt>Partner</dt><dd>Sees only their own applications.</dd></div>
+                                <div><dt>Super admin</dt><dd>Everything, including adding admins. Two-step sign-in required.</dd></div>
+                                <div><dt>Admin</dt><dd>Users, partners, operations and finance approvals. Two-step required.</dd></div>
+                                <div><dt>Management</dt><dd>All tickets, assigning work, approving quotations, confirming bookings. Two-step required.</dd></div>
+                                <div><dt>Finance</dt><dd>Verifies payments and approves refunds; reads tickets. Two-step required.</dd></div>
+                                <div><dt>Operations</dt><dd>Registers enquiries and works on tickets assigned to them. Records payments as unverified.</dd></div>
+                                <div><dt>Partner</dt><dd>Only their own listings in the partner portal.</dd></div>
                             </dl>
                         </div>
                         <div class="adm-card adm-span-3">
-                            <div class="card-head"><h2>Partner accounts</h2><p>${partners.length} signed-up partner${partners.length === 1 ? "" : "s"}</p></div>
-                            ${partners.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>${partners.map(row).join("")}</tbody></table></div>` : empty("No partner accounts yet", "Partners appear here after they confirm their email.")}
+                            <div class="card-head"><h2>Partner & customer accounts</h2><p>${partners.length} account${partners.length === 1 ? "" : "s"}</p></div>
+                            ${partners.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Two-step</th><th>Last sign-in</th></tr></thead><tbody>${partners.map(row).join("")}</tbody></table></div>` : empty("No partner accounts yet", "Partners appear here after they register.")}
                         </div>
                     </div>`;
                 const save = async (email, patch) => {
                     const u = list.find(x => x.email === email) || {};
-                    try { await get("saveUser", { email, name: u.name, role: patch.role || u.role, status: patch.status || u.status }); Object.assign(u, patch); toast("Access updated"); }
+                    try { await get("saveUser", { email, name: u.name, role: patch.role || u.role, status: patch.status || u.status }); Object.assign(u, patch); toast("Access updated. They'll need to sign in again."); }
                     catch (err) { toast(err.message, true); route(); }
                 };
                 body.addEventListener("change", e => {
                     const r = e.target.closest("[data-role]"); if (r) save(r.dataset.role, { role: r.value });
                     const s = e.target.closest("[data-ustatus]"); if (s) save(s.dataset.ustatus, { status: s.value });
+                });
+                body.addEventListener("click", async e => {
+                    const b = e.target.closest("[data-mfa-reset]"); if (!b) return;
+                    if (!confirm(`Reset two-step verification for ${b.dataset.mfaReset}? They'll set it up again at their next sign-in, and are signed out everywhere.`)) return;
+                    try { await get("resetUserMfa", { email: b.dataset.mfaReset }); toast("Two-step verification reset"); route(); } catch (err) { toast(err.message, true); }
                 });
                 $("[data-invite]", body)?.addEventListener("submit", async e => {
                     e.preventDefault();
@@ -367,7 +386,8 @@
 
             async activity() {
                 const list = await get("activity");
-                body.innerHTML = `<div class="adm-card">${list.length ? feed(list) : empty("No activity yet", "Sign-ins, applications and reviews are logged here.")}</div>`;
+                body.innerHTML = `<div class="adm-card"><div class="toolbar"><input class="search" type="search" placeholder="Filter by person, action or reference (e.g. KCM-2026-000001)" data-afilter aria-label="Filter activity"><span class="muted">Append-only record. Entries cannot be edited or deleted from the dashboard.</span></div><div data-alist>${list.length ? feed(list) : empty("No activity yet", "Sign-ins, applications and reviews are logged here.")}</div></div>`;
+                $("[data-afilter]", body).addEventListener("input", e => { const q = e.target.value.toLowerCase(); const f = list.filter(a => (a.actor + " " + a.action + " " + a.target + " " + a.details).toLowerCase().includes(q)); $("[data-alist]", body).innerHTML = f.length ? feed(f) : empty("Nothing matches", "Try another search."); });
             },
         };
 
@@ -412,7 +432,7 @@
                     <div><dt>Years</dt><dd>${esc(a.years || "—")}</dd></div><div><dt>Website</dt><dd>${esc(a.website || "—")}</dd></div></dl>
                     <p class="desc">${esc(a.description)}</p>
                     ${detailRows.length ? `<h3>${esc(t.detailsTitle || "Details")}</h3><dl class="kv">${detailRows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
-                    ${me.canEdit && a.status !== "Uploading" ? `<div class="review-box">
+                    ${can("partners.review") && a.status !== "Uploading" ? `<div class="review-box">
                         <h3>Decision</h3>
                         <label class="field"><span class="field-legend">Note to the partner (required for "needs info" and "reject")</span><textarea data-note maxlength="1000" placeholder="e.g. Please add a clearer photo of the rear seats.">${a.status === "Approved" ? "" : ""}</textarea></label>
                         <label class="field"><span class="field-legend">Standard if approved</span><select data-tier class="status-select">${TIERS.map(t => `<option ${t === (a.tier || "Premium") ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -463,6 +483,11 @@
         lb.addEventListener("click", e => { if (e.target === lb || e.target.closest("[data-lightbox-close]")) closeLightbox(); });
 
         /* ---------- small UI helpers ---------- */
+        /** Helpers shared with the Operations Centre module (ops.js). */
+        function opsCtx() {
+            return { get, esc, R, fmtDate, fmtWhen, toast, kpi, empty, hBars, segBar, lineChart, downloadCsv, $, $$, can, ROLE_LABEL, route,
+                body: () => body, me: () => me, sample: () => sample, setTitle: t => { $("[data-adm-title]").textContent = t; } };
+        }
         function kpi(label, value, sub, href) { return `<a class="kpi" href="${href}"><span class="kpi-label">${label}</span><strong class="kpi-value">${value}</strong><span class="kpi-sub">${sub}</span></a>`; }
         function setBadges(k) { $$("[data-badge]").forEach(b => { const v = k[b.dataset.badge] || 0; b.textContent = v; b.hidden = !v; }); }
         const ACTION_TEXT = {
@@ -564,10 +589,10 @@
             const weekly = Array.from({ length: 12 }, (_, i) => ({ week: ago((11 - i) * 7), applications: [0, 1, 0, 2, 1, 3, 2, 4, 3, 5, 4, 6][i], bookings: [1, 2, 2, 3, 2, 4, 5, 4, 6, 7, 6, 9][i] }));
             const count = (l, k) => l.reduce((a, x) => (a[x[k]] = (a[x[k]] || 0) + 1, a), {});
             const users = [
-                { email: "owner@example.com", name: "KCM Owner", role: "owner", status: "active", lastLogin: ago(0), provider: "google" },
-                { email: "ops@example.com", name: "Operations", role: "admin", status: "active", lastLogin: ago(1), provider: "email" },
-                { email: "finance@example.com", name: "Finance", role: "viewer", status: "active", lastLogin: "", provider: "invited" },
-                ...apps.slice(0, 6).map(a => ({ email: a.businessName.toLowerCase().replace(/\W+/g, ".") + "@example.com", name: a.businessName, role: "partner", status: "active", lastLogin: a.created, provider: "email" })),
+                { email: "owner@example.com", name: "KCM Owner", role: "SUPER_ADMIN", status: "active", lastLogin: ago(0), provider: "google", mfa: true },
+                { email: "ops@example.com", name: "Operations", role: "OPERATIONS", status: "active", lastLogin: ago(1), provider: "email" },
+                { email: "finance@example.com", name: "Finance", role: "FINANCE", status: "active", lastLogin: "", provider: "invited" },
+                ...apps.slice(0, 6).map(a => ({ email: a.businessName.toLowerCase().replace(/\W+/g, ".") + "@example.com", name: a.businessName, role: "PARTNER", status: "active", lastLogin: a.created, provider: "email" })),
             ];
             const recent = [
                 { time: ago(0.1), actor: "partner@example.com", action: "application_submitted", target: "P-2611-7QKD", details: "Lowveld Executive Transfers" },
@@ -580,7 +605,7 @@
             const ratingsS = jobs.slice(0, 12).map((j, i) => ({ id: "R-" + i, created: j.date, partnerId: j.partnerId, business: j.business, bookingRef: j.bookingRef, guest: ["Thandi M.", "Pieter V.", "Megan R.", "Lerato K."][i % 4], stars: [5, 5, 4, 5, 3, 5][i % 6], comment: ["Spotless and on time.", "Felt like VIPs the whole way.", "Comfortable, slightly late pickup.", "Would book again!", "", "Excellent host."][i % 6], status: i === 4 ? "Hidden" : "Published" }));
             const reject = () => Promise.reject(new K.ApiError("This is sample data, so changes aren't saved. Connect the Google Sheet to use the real dashboard."));
             return {
-                me: () => ({ email: "owner@example.com", name: "Sample owner", role: "owner", isStaff: true, canEdit: true }),
+                me: () => ({ email: "owner@example.com", name: "Sample owner", role: "SUPER_ADMIN", isStaff: true, canEdit: true, permissions: ["dashboard.view", "users.view", "users.manage", "audit.view", "partners.view", "partners.review", "payouts.view", "payouts.manage", "ratings.moderate", "messages.view", "bookings.view", "bookings.update"] }),
                 dashboard: async () => ({
                     kpis: { inReview: 2, trips: jobs.length, payoutsPending: jobs.filter(j => j.payoutStatus !== "Paid").reduce((s, j) => s + j.payout, 0), avgRating: 4.6, ratings: 11, pending: 4, needsInfo: 1, approved: 4, applications: apps.length, bookings: bookings.length, newBookings: bookings.filter(b => b.status === "New").length, bookingValue: bookings.filter(b => b.status !== "Cancelled").reduce((s, b) => s + b.total, 0), users: users.length, staff: 3 },
                     byStatus: count(apps, "status"), byType: count(apps, "partnerTypeLabel"), byProvince: count(apps, "province"), bookingsByStatus: count(bookings, "status"),

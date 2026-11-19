@@ -29,9 +29,14 @@ From a terminal instead: `cd KcmTravel` then `dotnet run`, and open the URL it p
 **Partners, sign-in and admin (pilot):** the header has **Sign in** and **Register** buttons.
 - **Register** opens a step-by-step partner application for vehicle owners, accommodation, tour operators and agencies, guides and activity providers. The partner first confirms their email with a 6-digit code or a Google account. Then they answer questions for their type and upload the photos we require (vehicles: front, rear, both sides, dashboard, rear seats and boot).
 - **`/account`**: partners see their application status and the KCM team's notes, and can add photos and resubmit.
-- **`/admin`**: the dashboard, for owner, admin and viewer roles. It has KPIs and charts, application review with photos (approve, ask for more info, reject; the partner is emailed), approved partners, bookings (status updates and CSV download), messages, users and access, and an activity log.
+- **`/admin`**: the staff dashboard, with two sections:
+  - **KCM Operations Centre**: My Workspace, incoming enquiries, all tickets (`KCM-2026-000001`), tasks and follow-ups, quotations (versions and approval), bookings, payments (Finance verifies), completed orders, workload, ops settings, and **+ Register enquiry** for phone, WhatsApp, email or walk-in enquiries. Each ticket has a summary, requirements, tasks, checklist, notes (internal and customer), quotations, payments, suppliers, files and history.
+  - **Website & partners**: overview with charts, application review with photos and ownership documents, approved partners, payouts, ratings, website requests, messages, users and access, and the activity log.
+  - Seven roles (Super Admin, Admin, Management, Finance, Operations, Partner, Customer), all enforced on the server. Super Admin, Admin, Management and Finance sign in with an authenticator app.
 - **`/partners`**: the public partner programme page.
 - The data lives in the Google Sheet **"KCM Travel & Tours – Pilot Database"** in Google Drive, through a Google Apps Script backend. **Setup guide: [`backend/SETUP.md`](backend/SETUP.md).** Until the backend URL is added (`Site:ApiUrl`), the forms show a "coming soon" note and `/admin` offers a sample-data preview.
+
+Security details, test results and known limits: **[`docs/SECURITY-AUDIT.md`](docs/SECURITY-AUDIT.md)**.
 
 The **Kaycee chat assistant** (bottom right) asks about trip style, province, dates, travellers, nights and budget. It then suggests 3 trips with a price estimate for the group, and a "Book this" link that fills in the booking form for you. It can also pass everything to a consultant on WhatsApp.
 

@@ -1121,3 +1121,15 @@ fieldset.field { border: 0; padding: 0; margin: 0 0 22px; min-width: 0; }
 [data-theme="dark"] .vbar-col, [data-theme="dark"] .star-bars .hbar-track { background: #232c28; }
 [data-theme="dark"] .sample-note { background: #2e2512; color: #f1d9a4; border-color: #6b5320; }
 [data-theme="dark"] .summary { border: 1px solid var(--line); }
+
+/* ---- POPIA consent in Kaycee, two-step verification ---- */
+.chat-consent { display: flex !important; flex-direction: row !important; gap: 8px; align-items: flex-start; font-weight: 500 !important; line-height: 1.35; }
+.chat-consent input { margin-top: 2px; flex-shrink: 0; padding: 0 !important; width: auto; }
+.mfa-steps { margin: 0 0 12px; padding-left: 20px; font-size: 14px; color: var(--ink-soft); }
+.mfa-steps li { margin-bottom: 4px; }
+.mfa-qr { width: 190px; height: 190px; margin: 0 auto 10px; background: #fff; border-radius: 14px; padding: 8px; display: grid; place-items: center; font-size: 12px; color: #555; text-align: center; }
+.mfa-qr svg { width: 100%; height: 100%; }
+.mfa-key { text-align: center; font-size: 13px; color: var(--ink-soft); margin: 0 0 14px; }
+.mfa-key code { font-size: 13px; letter-spacing: .06em; background: var(--bone); padding: 3px 8px; border-radius: 6px; color: var(--ink); word-break: break-all; }
+.recovery-codes { list-style: none; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.recovery-codes code { display: block; text-align: center; background: var(--bone); padding: 8px; border-radius: 8px; font-size: 14px; letter-spacing: .08em; color: var(--ink); }

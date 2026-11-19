@@ -5,44 +5,43 @@
  * Deploy as a Web app (Execute as: Me · Who has access: Anyone) and paste the
  * /exec URL into the website settings (Site:ApiUrl). See backend/SETUP.md.
  *
+ * Files (paste them into one Apps Script project, or paste dist/KCM-Backend.gs which combines them):
+ *   Vendor.gs (crypto library) · Security.gs · Pricing.gs (generated) · Code.gs (this) · Ops.gs (Operations Centre)
+ *
  * Security notes
- *  - No secrets live in this file. Settings live in Script Properties.
- *  - Users prove who they are with Google Sign-In (ID token checked with Google)
- *    or with a 6-digit code sent to their email. Both verify the email address.
+ *  - No secrets live in these files. Settings and keys live in Script Properties.
+ *  - Passwords: Argon2id (Security.gs). Privileged roles must use an authenticator app (TOTP MFA).
  *  - The script issues its own session token; only a SHA-256 hash is stored.
- *  - Every admin action checks the user's role in the Users tab.
- *  - Partner photos are stored privately in Drive and only served to admins
- *    and to the partner who uploaded them.
+ *  - Every protected action checks a permission server-side (PERMS in Security.gs).
+ *  - Partner photos and documents are stored privately in Drive; identity documents are only
+ *    served to the partner who uploaded them and to staff allowed to review partners.
  */
 
 const APP = {
   name: 'KCM Travel & Tours',
-  version: '1.3.0',
+  version: '1.4.0',
   sessionDays: 7,
+  privilegedSessionHours: 12,
   codeMinutes: 15,
   maxPhotoBytes: 4 * 1024 * 1024,
   maxDocBytes: 6 * 1024 * 1024,
-  passwordRounds: 1000,
   maxPhotosPerApplication: 30,
 };
 
-const ROLES = ['owner', 'admin', 'viewer', 'partner'];
-const STAFF = ['owner', 'admin', 'viewer'];
-const EDITORS = ['owner', 'admin'];
 
 const TABS = {
-  Users: ['Email', 'Name', 'Role', 'Status', 'Provider', 'Picture', 'Created', 'LastLogin', 'InvitedBy', 'PasswordHash', 'PasswordSalt'],
+  Users: ['Email', 'Name', 'Role', 'Status', 'Provider', 'Picture', 'Created', 'LastLogin', 'InvitedBy', 'PasswordHash', 'PasswordSalt', 'MfaSecret', 'MfaEnabledAt', 'RecoveryCodes'],
   Partners: ['ID', 'Created', 'Email', 'ContactName', 'Phone', 'BusinessName', 'PartnerType', 'Province', 'City',
     'Services', 'Description', 'RegNumber', 'Website', 'Social', 'YearsInBusiness', 'Summary', 'Details',
     'Status', 'PhotoCount', 'DriveFolderId', 'ReviewedBy', 'ReviewedAt', 'ReviewNote', 'Updated', 'Tier'],
   Photos: ['ID', 'PartnerID', 'Label', 'FileID', 'FileName', 'Uploaded', 'UploadedBy', 'Kind'],
   Bookings: ['Reference', 'Created', 'Tour', 'StartDate', 'Nights', 'Adults', 'Children', 'Infants', 'Pensioners',
-    'Room', 'Extras', 'Payment', 'EstimatedTotal', 'Name', 'Email', 'Phone', 'Notes', 'Status', 'Source'],
+    'Room', 'Extras', 'Payment', 'EstimatedTotal', 'Name', 'Email', 'Phone', 'Notes', 'Status', 'Source', 'TicketRef', 'ClientEstimate'],
   Messages: ['Created', 'Name', 'Email', 'Phone', 'Message', 'Status'],
   Jobs: ['JobID', 'Date', 'PartnerID', 'BookingRef', 'Service', 'Guests', 'Gross', 'CommissionPct', 'Payout', 'PayoutStatus', 'PaidOn', 'Notes', 'CreatedBy'],
   Ratings: ['ID', 'Created', 'PartnerID', 'BookingRef', 'GuestName', 'Stars', 'Comment', 'Status'],
   Activity: ['Time', 'Actor', 'Action', 'Target', 'Details'],
-  Sessions: ['TokenHash', 'Email', 'Created', 'Expires'],
+  Sessions: ['TokenHash', 'Email', 'Created', 'Expires', 'MFA'],
   Codes: ['Email', 'CodeHash', 'Expires', 'Attempts'],
 };
 
@@ -99,6 +98,8 @@ const ACTIONS = {
   registerPartner: registerPartner_,
   verifyCode: verifyCode_,
   googleSignIn: googleSignIn_,
+  mfaVerify: mfaVerify_,
+  mfaSetupConfirm: mfaSetupConfirm_,
   submitBooking: submitBooking_,
   submitMessage: submitMessage_,
   ratingInfo: ratingInfo_,
@@ -123,6 +124,7 @@ const ACTIONS = {
   listMessages: listMessages_,
   listUsers: listUsers_,
   saveUser: saveUser_,
+  resetUserMfa: resetUserMfa_,
   activity: activity_,
   listJobs: listJobs_,
   saveJob: saveJob_,
@@ -143,7 +145,7 @@ function requestCode_(b) {
   if (count >= 5) throw userError_('Too many codes requested. Please wait 15 minutes and try again.');
   cache.put(key, String(count + 1), 15 * 60);
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(100000 + randomInt_(900000));
   withLock_(() => {
     const sh = sheet_('Codes');
     deleteRowsWhere_(sh, r => r[0] === email);
@@ -158,7 +160,7 @@ function requestCode_(b) {
 function verifyCode_(b) {
   const email = cleanEmail_(b.email);
   verifyCodeOnly_(email, b.code);
-  return startSession_(email, { provider: 'email', name: b.name });
+  return finishLogin_(email, { provider: 'email', name: b.name });
 }
 
 function verifyCodeOnly_(email, rawCode) {
@@ -190,37 +192,26 @@ function googleSignIn_(b) {
   if (info.aud !== clientId || !issuerOk || String(info.email_verified) !== 'true' || Number(info.exp) * 1000 < Date.now()) {
     throw userError_('Google sign-in could not be verified.');
   }
-  return startSession_(cleanEmail_(info.email), { provider: 'google', name: info.name, picture: info.picture });
+  return finishLogin_(cleanEmail_(info.email), { provider: 'google', name: info.name, picture: info.picture });
 }
 
-/* ---------- passwords ---------- */
+/* ---------- passwords (hashing lives in Security.gs) ---------- */
 function pepper_() {
   const props = PropertiesService.getScriptProperties();
   let p = props.getProperty('PASSWORD_PEPPER');
-  if (!p) { p = Utilities.getUuid() + Utilities.getUuid(); props.setProperty('PASSWORD_PEPPER', p); }
+  if (!p) { p = randomToken_(); props.setProperty('PASSWORD_PEPPER', p); }
   return p;
-}
-function hashPassword_(password, salt) {
-  // 'np:' salts (the built-in test admin only) are hashed without the private pepper so the hash can ship in the code
-  let h = salt + ':' + password + ':' + (String(salt).indexOf('np:') === 0 ? '' : pepper_());
-  for (let i = 0; i < APP.passwordRounds; i++) h = hash_(h + ':' + salt);
-  return h;
 }
 function checkPassword_(password) {
   const pw = String(password || '');
-  if (pw.length < 8 || pw.length > 100) throw userError_('Your password must be at least 8 characters.');
+  if (pw.length < 10 || pw.length > 128) throw userError_('Your password must be at least 10 characters.');
   if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) throw userError_('Use letters and at least one number in your password.');
+  if (/^(password|kcm|admin|qwerty|123456)/i.test(pw)) throw userError_('Please choose a less common password.');
   return pw;
 }
 function setPassword_(email, password) {
-  const salt = Utilities.getUuid().replace(/-/g, '');
-  const hashed = hashPassword_(password, salt);
-  withLock_(() => {
-    const sh = sheet_('Users');
-    const rows = sh.getDataRange().getValues();
-    const idx = rows.findIndex((r, i) => i > 0 && r[0] === email);
-    if (idx > 0) sh.getRange(idx + 1, TABS.Users.indexOf('PasswordHash') + 1, 1, 2).setValues([[hashed, salt]]);
-  });
+  const h = newPasswordHash_(password);
+  setUserFields_(email, { PasswordHash: h.hash, PasswordSalt: h.scheme });
 }
 function loginRateLimit_(email) {
   const cache = CacheService.getScriptCache();
@@ -228,6 +219,11 @@ function loginRateLimit_(email) {
   const n = Number(cache.get(key) || 0);
   if (n >= 8) throw userError_('Too many sign-in attempts. Please wait 15 minutes, or reset your password.');
   cache.put(key, String(n + 1), 15 * 60);
+  // global brake against password spraying across many accounts (Apps Script cannot see client IPs)
+  const g = 'login-global:' + Math.floor(Date.now() / 60000);
+  const gn = Number(cache.get(g) || 0);
+  if (gn >= 60) throw userError_('Sign-in is busy. Please try again in a minute.');
+  cache.put(g, String(gn + 1), 120);
 }
 
 /** Email + password sign-in. Partners can only sign in once an application has been approved (or we asked them for more info). */
@@ -235,14 +231,13 @@ function signIn_(b) {
   const email = cleanEmail_(b.email);
   loginRateLimit_(email);
   const user = findUser_(email);
-  const wrong = userError_('That email or password is incorrect.');
-  if (!user || !user.PasswordHash) {
-    if (user && STAFF.indexOf(user.Role) !== -1) throw userError_('You haven\'t set a password yet. Tap "Forgot or set password" to create one.');
-    throw wrong;
-  }
-  if (hashPassword_(String(b.password || ''), String(user.PasswordSalt)) !== user.PasswordHash) throw wrong;
+  const wrong = userError_('That email or password is incorrect. First time signing in? Use "Forgot or set password".');
+  const password = String(b.password || '').slice(0, 128);
+  if (!user || !user.PasswordHash) { if (!user) argonHash_(password, randomBytes_(16), false); throw wrong; } // same work either way (timing)
+  if (!verifyPassword_(user, password)) { log_(email, 'sign_in_failed', email, ''); throw wrong; }
   CacheService.getScriptCache().remove('login-rate:' + email);
-  return startSession_(email, { provider: 'password' });
+  if (String(user.PasswordHash).indexOf('$argon2id$') !== 0) { setPassword_(email, password); log_(email, 'password_rehashed', email, 'argon2id'); }
+  return finishLogin_(email, { provider: 'password' });
 }
 
 /** Forgot / first-time password: verify the emailed code, then save the new password and sign in. */
@@ -252,30 +247,32 @@ function resetPassword_(b) {
   verifyCodeOnly_(email, b.code);
   if (!findUser_(email)) throw userError_('We couldn\'t find an account for that email. New partners: please register first.');
   setPassword_(email, password);
+  revokeSessions_(email); // a password reset signs out every other device
   log_(email, 'password_set', email, '');
-  return startSession_(email, { provider: 'password' });
+  return finishLogin_(email, { provider: 'password' });
 }
 
 /** Who may open a session. Pending partners get a clear status message instead of a session. */
 function accessGate_(user) {
   if (user.Status === 'disabled') throw userError_('This account has been disabled. Please contact KCM Travel & Tours.');
-  if (user.Role !== 'partner' || user.Status === 'active') return;
+  if (roleOf_(user) !== 'PARTNER' || user.Status === 'active') return;
   const apps = readTable_('Partners').filter(p => p.Email === user.Email);
   if (apps.some(p => p.Status === 'Approved' || p.Status === 'Needs info')) return;
   if (apps.length && apps.every(p => p.Status === 'Rejected')) throw userError_('Your application was not approved. Please check your email for feedback, or contact us on WhatsApp.', 'pending');
   throw userError_('Thanks! Your application is still being reviewed. You can sign in as soon as it\'s approved, and we\'ll email you then.', 'pending');
 }
 
+/** Only called after every required factor has been checked (finishLogin_ in Security.gs, or registration). */
 function startSession_(email, opts) {
-  const user = upsertUser_(email, opts);
-  if (!opts.registering) accessGate_(user);
-  const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  const user = findUser_(email) || upsertUser_(email, opts);
+  const token = randomToken_();
+  const ms = needsMfa_(user) ? APP.privilegedSessionHours * 3600000 : APP.sessionDays * 86400000;
   withLock_(() => {
     const sh = sheet_('Sessions');
     deleteRowsWhere_(sh, r => new Date(r[3]).getTime() < Date.now()); // tidy expired sessions
-    sh.appendRow([hash_(token), email, new Date(), new Date(Date.now() + APP.sessionDays * 86400000)]);
+    sh.appendRow([hash_(token), email, new Date(), new Date(Date.now() + ms), opts.mfa ? 'yes' : '']);
   });
-  log_(email, 'sign_in', email, opts.provider);
+  log_(email, 'sign_in', email, (opts.provider || '') + (opts.mfa ? ' + MFA' : ''));
   return { token, user: publicUser_(user) };
 }
 
@@ -291,25 +288,24 @@ function requireUser_(token, allowPending) {
   if (!token) throw userError_('Please sign in.', 'auth');
   const h = hash_(String(token));
   const cache = CacheService.getScriptCache();
-  let email = cache.get('sess:' + h);
-  if (!email) {
+  let sess = cache.get('sess:' + h);
+  if (!sess) {
     const rows = sheet_('Sessions').getDataRange().getValues();
     const row = rows.find((r, i) => i > 0 && r[0] === h && new Date(r[3]).getTime() > Date.now());
     if (!row) throw userError_('Your session has expired. Please sign in again.', 'auth');
-    email = row[1];
-    cache.put('sess:' + h, email, 600);
+    sess = row[1] + '|' + (row[4] === 'yes' ? 'mfa' : '') + '|' + new Date(row[3]).getTime();
+    cache.put('sess:' + h, sess, 300);
   }
+  const [email, mfa, expires] = sess.split('|');
+  if (Number(expires) < Date.now()) throw userError_('Your session has expired. Please sign in again.', 'auth');
   const user = findUser_(email);
   if (!user || user.Status === 'disabled') throw userError_('Please sign in.', 'auth');
+  // a session opened before the user became privileged (or without MFA) cannot use a privileged role
+  if (needsMfa_(user) && mfa !== 'mfa') throw userError_('Please sign in again with your authenticator app.', 'auth');
   if (user.Status === 'pending' && !allowPending) accessGate_(user);
   return user;
 }
 
-function requireRole_(token, roles) {
-  const user = requireUser_(token);
-  if (roles.indexOf(user.Role) === -1) throw userError_('You do not have access to this.', 'forbidden');
-  return user;
-}
 
 /* =====================================================================
  * Users & access
@@ -329,13 +325,13 @@ function upsertUser_(email, opts) {
     const idx = rows.findIndex((r, i) => i > 0 && r[0] === email);
     const now = new Date();
     if (idx === -1) {
-      const role = email === owner ? 'owner' : 'partner';
-      const row = [email, safe_(opts.name || ''), role, opts.status || 'active', opts.provider || '', safe_(opts.picture || ''), now, now, '', '', ''];
+      const role = email === owner ? 'SUPER_ADMIN' : (opts.role || 'PARTNER');
+      const row = [email, safe_(opts.name || ''), role, opts.status || 'active', opts.provider || '', safe_(opts.picture || ''), now, now, '', '', '', '', '', ''];
       sh.appendRow(row);
       result = rowToObj_(TABS.Users, row);
     } else {
       const r = rows[idx];
-      if (email === owner && r[2] !== 'owner') r[2] = 'owner';
+      if (email === owner && roleOf_({ Role: r[2] }) !== 'SUPER_ADMIN') r[2] = 'SUPER_ADMIN';
       if (!r[1] && opts.name) r[1] = safe_(opts.name);
       if (opts.picture) r[5] = safe_(opts.picture);
       if (opts.provider) r[4] = opts.provider;
@@ -347,27 +343,29 @@ function upsertUser_(email, opts) {
   return result;
 }
 
+/** What the browser may know about a user. Never includes hashes, secrets or recovery codes. */
 function publicUser_(u) {
-  return { email: u.Email, name: u.Name || '', role: u.Role, picture: u.Picture || '', isStaff: STAFF.indexOf(u.Role) !== -1, canEdit: EDITORS.indexOf(u.Role) !== -1 };
+  return { email: u.Email, name: u.Name || '', role: roleOf_(u), picture: u.Picture || '', isStaff: isStaff_(u), canEdit: can_(u, 'partners.review'),
+    permissions: permissionsOf_(u), mfaRequired: needsMfa_(u), mfaEnabled: !!u.MfaSecret };
 }
 
 function listUsers_(b) {
-  requireRole_(b.token, STAFF);
-  return readTable_('Users').map(u => ({ email: u.Email, name: u.Name, role: u.Role, status: u.Status, provider: u.Provider, created: iso_(u.Created), lastLogin: iso_(u.LastLogin), invitedBy: u.InvitedBy }));
+  requirePerm_(b.token, 'users.view');
+  return readTable_('Users').map(u => ({ email: u.Email, name: u.Name, role: roleOf_(u), status: u.Status, provider: u.Provider, created: iso_(u.Created), lastLogin: iso_(u.LastLogin), invitedBy: u.InvitedBy, mfa: !!u.MfaSecret }));
 }
 
-/** Invite a new user or change an existing user's role/status. Owners manage admins; admins manage viewers and partners. */
+/** Invite a new user or change an existing user's role/status. Only the super admin manages admins; nobody changes their own access. */
 function saveUser_(b) {
-  const actor = requireRole_(b.token, EDITORS);
+  const actor = requirePerm_(b.token, 'users.manage');
   const email = cleanEmail_(b.email);
-  const role = String(b.role || 'viewer');
+  const role = LEGACY_ROLES[String(b.role)] || String(b.role || 'OPERATIONS').toUpperCase();
   const status = String(b.status || 'active');
-  if (ROLES.indexOf(role) === -1 || ['active', 'disabled'].indexOf(status) === -1) throw userError_('Invalid role or status.');
-  if (role === 'owner') throw userError_('The owner role cannot be assigned here.');
-  const target = findUser_(email);
-  if (target && target.Role === 'owner') throw userError_('The owner account cannot be changed.');
-  if (actor.Role !== 'owner' && (role === 'admin' || (target && target.Role === 'admin'))) throw userError_('Only the owner can add or change admins.');
+  if (ALL_ROLES.indexOf(role) === -1 || ['active', 'disabled'].indexOf(status) === -1) throw userError_('Invalid role or status.');
   if (email === actor.Email) throw userError_('You cannot change your own access.');
+  if (role === 'SUPER_ADMIN') throw userError_('The super admin role cannot be assigned here.');
+  const target = findUser_(email);
+  if (target && roleOf_(target) === 'SUPER_ADMIN') throw userError_('The super admin account cannot be changed.');
+  if (roleOf_(actor) !== 'SUPER_ADMIN' && (role === 'ADMIN' || (target && roleOf_(target) === 'ADMIN'))) throw userError_('Only the super admin can add or change admins.');
 
   withLock_(() => {
     const sh = sheet_('Users');
@@ -380,11 +378,12 @@ function saveUser_(b) {
       if (b.name) sh.getRange(idx + 1, 2).setValue(safe_(b.name));
     }
   });
-  log_(actor.Email, target ? 'user_updated' : 'user_invited', email, role + ' / ' + status);
-  if (!target && STAFF.indexOf(role) !== -1) {
+  if (target && (roleOf_(target) !== role || status === 'disabled')) revokeSessions_(email); // role changes apply immediately
+  log_(actor.Email, target ? 'user_updated' : 'user_invited', email, (target ? roleOf_(target) + ' → ' : '') + role + ' / ' + status);
+  if (!target && STAFF_ROLES.indexOf(role) !== -1) {
     sendMail_(email, `You've been given access to ${APP.name}`,
       `<p>Hi${b.name ? ' ' + esc_(b.name) : ''},</p><p>${esc_(actor.Name || actor.Email)} has given you <strong>${role}</strong> access to the ${APP.name} admin dashboard.</p>
-       <p>Go to the website, click <strong>Sign in</strong>, then <strong>Forgot or set password</strong> to create your password with this email address (${esc_(email)}).</p>${siteLink_('/admin', 'Open the admin dashboard')}`);
+       <p>Go to the website, click <strong>Sign in</strong>, then <strong>Forgot or set password</strong> to create your password with this email address (${esc_(email)}).${MFA_ROLES.indexOf(role) !== -1 ? ' You\'ll also be asked to set up an authenticator app (such as Google Authenticator or Microsoft Authenticator) on your phone.' : ''}</p>${siteLink_('/admin', 'Open the admin dashboard')}`);
   }
   return { saved: true };
 }
@@ -405,7 +404,7 @@ function registerPartner_(b) {
   const name = safe_(a.name || (b.application || {}).contactName || '');
   upsertUser_(email, { name, provider: 'password', status: 'pending' });
   setPassword_(email, password);
-  const session = startSession_(email, { provider: 'password', registering: true });
+  const session = startSession_(email, { provider: 'password', registering: true }); // pending partner: may only upload + submit
   const app = createApplication_(findUser_(email), b.application || {});
   log_(email, 'partner_registered', app.id, name);
   return Object.assign(app, { token: session.token });
@@ -439,7 +438,7 @@ function uploadPhoto_(b) {
   const app = findApplication_(b.id);
   if (!app) throw userError_('Application not found.');
   const isOwner = app.row.Email === user.Email;
-  if (!isOwner && EDITORS.indexOf(user.Role) === -1) throw userError_('You do not have access to this.', 'forbidden');
+  if (!isOwner && !can_(user, 'partners.review')) throw userError_('You do not have access to this.', 'forbidden');
   if (['Uploading', 'Pending', 'In review', 'Needs info'].indexOf(app.row.Status) === -1) throw userError_('Photos can no longer be added to this application.');
   if (Number(app.row.PhotoCount || 0) >= APP.maxPhotosPerApplication) throw userError_('You have reached the maximum number of files.');
 
@@ -448,6 +447,7 @@ function uploadPhoto_(b) {
   if (!m) throw userError_(isDoc ? 'Please upload the document as a PDF or a photo (JPG or PNG).' : 'Please upload a JPG, PNG or WebP image.');
   const bytes = Utilities.base64Decode(m[m.length - 1]);
   if (bytes.length > (isDoc ? APP.maxDocBytes : APP.maxPhotoBytes)) throw userError_(isDoc ? 'That document is too large (max 6 MB).' : 'That photo is too large. Please use a smaller image.');
+  if (!fileMatchesType_(bytes, m[1])) throw userError_('That file does not look like a real ' + (m[1] === 'application/pdf' ? 'PDF' : 'image') + '. Please upload the original file.');
   const label = safe_(b.label || (isDoc ? 'Document' : 'Photo'), 60);
   const ext = m[3] === 'pdf' ? 'pdf' : m[2] === 'jpeg' ? 'jpg' : m[2];
   const name = (isDoc ? 'DOC ' : '') + label.replace(/[^\w &-]/g, '') + '.' + ext;
@@ -481,7 +481,7 @@ function finalizeApplication_(b) {
     `<p>Hi ${esc_(app.row.ContactName)},</p><p>Thank you for applying to partner with ${APP.name}. Your application <strong>${app.row.ID}</strong> for <strong>${esc_(app.row.BusinessName)}</strong> is now with our team.</p>
      <p>We review every partner carefully, including the photos and documents, and usually reply within 3 working days. Once you're approved you can sign in with this email address and the password you chose.</p>`);
   whatsapp_(`${wasNeedsInfo ? '🔁 Partner application updated' : '🆕 New partner application'} (${app.row.ID})\n${app.row.BusinessName}\n${t.label}\n${app.row.City}, ${app.row.Province}\nContact: ${app.row.ContactName} · ${app.row.Phone}\n${files.length} photos & documents\n\nReview it: ${siteUrl_('/admin#applications/' + app.row.ID)}`);
-  staffEmails_(['owner', 'admin']).forEach(to => sendMail_(to, `New partner application: ${app.row.BusinessName}`,
+  staffEmails_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT']).forEach(to => sendMail_(to, `New partner application: ${app.row.BusinessName}`,
     `<p>A new ${esc_(PARTNER_TYPES[app.row.PartnerType].label.toLowerCase())} application is waiting for review.</p>
      <p><strong>${esc_(app.row.BusinessName)}</strong> · ${esc_(app.row.City)}, ${esc_(app.row.Province)}<br>${esc_(app.row.Summary)}</p>${siteLink_('/admin#applications', 'Review it in the dashboard')}`));
   return { status: 'Pending' };
@@ -493,7 +493,7 @@ function myApplications_(b) {
 }
 
 function listApplications_(b) {
-  requireRole_(b.token, STAFF);
+  requirePerm_(b.token, 'partners.view');
   return readTable_('Partners').map(p => applicationView_(p, false)).reverse();
 }
 
@@ -501,8 +501,9 @@ function getApplication_(b) {
   const user = requireUser_(b.token);
   const app = findApplication_(b.id);
   if (!app) throw userError_('Application not found.');
-  if (app.row.Email !== user.Email && STAFF.indexOf(user.Role) === -1) throw userError_('You do not have access to this.', 'forbidden');
-  if (app.row.Status === 'Pending' && EDITORS.indexOf(user.Role) !== -1) {
+  const own = app.row.Email === user.Email;
+  if (!own && !can_(user, 'partners.view')) throw userError_('You do not have access to this.', 'forbidden');
+  if (app.row.Status === 'Pending' && can_(user, 'partners.review')) {
     setApplicationFields_(app.index, { Status: 'In review', ReviewedBy: user.Email, Updated: new Date() });
     app.row.Status = 'In review'; app.row.ReviewedBy = user.Email;
     log_(user.Email, 'application_opened', app.row.ID, app.row.BusinessName);
@@ -510,7 +511,8 @@ function getApplication_(b) {
   const view = applicationView_(app.row, true);
   const files = photosFor_(app.row.ID).map(p => ({ id: p.ID, label: p.Label, fileId: p.FileID, uploaded: iso_(p.Uploaded), kind: p.Kind || 'photo', name: p.FileName }));
   view.photos = files.filter(f => f.kind !== 'document');
-  view.documents = files.filter(f => f.kind === 'document');
+  // identity / ownership documents: only the applicant and partner reviewers
+  view.documents = own || can_(user, 'partners.review') ? files.filter(f => f.kind === 'document') : [];
   return view;
 }
 
@@ -518,16 +520,17 @@ function getPhoto_(b) {
   const user = requireUser_(b.token);
   const photo = readTable_('Photos').find(p => p.FileID === b.fileId);
   if (!photo) throw userError_('Photo not found.');
-  if (STAFF.indexOf(user.Role) === -1) {
-    const app = findApplication_(photo.PartnerID);
-    if (!app || app.row.Email !== user.Email) throw userError_('You do not have access to this.', 'forbidden');
-  }
+  const app = findApplication_(photo.PartnerID);
+  const own = app && app.row.Email === user.Email;
+  const allowed = own || (photo.Kind === 'document' ? can_(user, 'partners.review') : can_(user, 'partners.view'));
+  if (!allowed) throw userError_('You do not have access to this.', 'forbidden');
+  if (photo.Kind === 'document' && !own) log_(user.Email, 'document_viewed', photo.PartnerID, photo.Label); // audit access to ID documents
   const blob = DriveApp.getFileById(photo.FileID).getBlob();
   return { dataUrl: 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes()) };
 }
 
 function reviewApplication_(b) {
-  const actor = requireRole_(b.token, EDITORS);
+  const actor = requirePerm_(b.token, 'partners.review');
   const app = findApplication_(b.id);
   if (!app) throw userError_('Application not found.');
   const decision = { approve: 'Approved', reject: 'Rejected', needs_info: 'Needs info' }[b.decision];
@@ -560,21 +563,55 @@ function reviewApplication_(b) {
  * Bookings & messages (from the public website)
  * ===================================================================== */
 
+/**
+ * Public: website booking form and Kaycee chat. Everything from the browser is untrusted:
+ * fields are validated and length-limited, the price is recalculated here (priceQuote_ in Pricing.gs),
+ * the reference is generated here, and a retry with the same idempotency key returns the same ticket.
+ */
 function submitBooking_(b) {
   if (b.website) return { saved: true }; // honeypot
   publicRateLimit_();
   const d = b.booking || {};
-  if (!d.reference || !d.tour || !(d.email || d.phone)) throw userError_('Please add your email or cell number.');
-  const row = [safe_(d.reference, 30), new Date(), safe_(d.tour), safe_(d.startDate), num_(d.nights), num_(d.adults), num_(d.children), num_(d.infants), num_(d.pensioners),
-    safe_(d.room), safe_((d.extras || []).join(', ')), safe_(d.payment), num_(d.total), safe_(d.name), safe_(d.email), safe_(d.phone), safe_(d.notes, 600), 'New', safe_(d.source || 'website')];
+  const idem = String(b.idempotencyKey || '').replace(/[^A-Za-z0-9-]/g, '').slice(0, 64);
+  const cache = CacheService.getScriptCache();
+  if (idem) { const prev = cache.get('idem:booking:' + idem); if (prev) return JSON.parse(prev); }
+
+  const name = safe_(d.name, 80), phone = safe_(d.phone, 30), email = String(d.email || '').trim().toLowerCase().slice(0, 120);
+  if (!name) throw userError_('Please add your name.');
+  if (!email && !phone) throw userError_('Please add your email or cell number.');
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw userError_('Please check your email address.');
+  if (phone && !/^[0-9 +()-]{9,20}$/.test(phone)) throw userError_('Please check your cell number.');
+  if (d.consent !== true) throw userError_('Please agree to the privacy notice so we can contact you.');
+  const source = d.source === 'chat' ? 'chat' : 'website';
+  const est = priceQuote_({ tourSlug: d.tourSlug, tour: d.tour, nights: d.nights, adults: d.adults, children: d.children, infants: d.infants,
+    pensioners: d.pensioners, room: d.room, extras: d.extraCodes, payment: d.payment });
+  const tourTitle = est ? est.title : safe_(d.tour, 120) || 'Trip enquiry';
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(d.startDate || '')) ? String(d.startDate) : '';
+  const k = d.kaycee && typeof d.kaycee === 'object' ? d.kaycee : {};
+
+  const ticket = opsCreateTicketFromPublic_({
+    source: source === 'chat' ? 'Kaycee AI' : 'Website booking form',
+    customer: { name, email, phone, consentSource: source === 'chat' ? 'Kaycee chat' : 'Website booking form' },
+    package: tourTitle, packageSlug: est ? est.slug : '', destination: safe_(k.region, 60), activities: safe_(k.style, 80),
+    departDate: startDate, nights: est ? est.nights : num_(d.nights), adults: num_(d.adults), children: num_(d.children), infants: num_(d.infants), pensioners: num_(d.pensioners),
+    rooms: safe_(d.room, 40), extras: est ? est.extras : [], budget: safe_(k.budget, 40), paymentPref: safe_(d.payment, 30),
+    description: safe_(d.notes, 1500), estimate: est ? est.total : 0, dayTour: est ? est.nights === 0 : false,
+  });
+  const ref = ticket.ref;
+  const row = [ref, new Date(), tourTitle, startDate || safe_(d.startDate, 30), est ? est.nights : num_(d.nights), num_(d.adults), num_(d.children), num_(d.infants), num_(d.pensioners),
+    safe_(d.room), safe_((est ? est.extras : []).join(', ')), safe_(d.payment), est ? est.total : 0, name, email, phone, safe_(d.notes, 600), 'New', source, ref, num_(d.total)];
   withLock_(() => sheet_('Bookings').appendRow(row));
-  log_(String(d.email), 'booking_request', d.reference, d.tour);
-  staffEmails_(['owner', 'admin']).forEach(to => sendMail_(to, `New booking request ${d.reference}: ${d.tour}`,
-    `<p><strong>${esc_(d.name)}</strong> (${esc_(d.phone)}, ${esc_(d.email)}) requested <strong>${esc_(d.tour)}</strong> from ${esc_(d.startDate)} for ${num_(d.adults) + num_(d.children) + num_(d.pensioners)} travellers. Estimate: R${num_(d.total).toLocaleString('en-ZA')}.</p>${siteLink_('/admin#bookings', 'Open bookings')}`));
+  log_(email || phone, 'booking_request', ref, tourTitle + (est && num_(d.total) && num_(d.total) !== est.total ? ' · browser total ignored (R' + num_(d.total) + ' vs R' + est.total + ')' : ''));
+
   const travellers = num_(d.adults) + num_(d.children) + num_(d.pensioners) + num_(d.infants);
-  whatsapp_(`🧳 New booking ${d.reference}${d.source === 'chat' ? ' (via Kaycee chat)' : ''}\n${d.tour}\nWhen: ${d.startDate || 'flexible'}${d.nights ? ' · ' + num_(d.nights) + ' nights' : ''}\nTravellers: ${travellers || '-'}\n${num_(d.total) ? 'Estimate: R' + num_(d.total).toLocaleString('en-ZA') + '\n' : ''}${d.name || ''} · ${d.phone || ''}${d.email ? ' · ' + d.email : ''}${d.notes ? '\nNotes: ' + String(d.notes).slice(0, 300) : ''}\n\nOpen: ${siteUrl_('/admin#bookings')}`);
-  if (d.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(d.email))) sendMail_(String(d.email).trim(), `Your KCM trip quote ${d.reference}`, quoteHtml_(d, travellers));
-  return { saved: true, reference: d.reference, emailed: !!d.email };
+  const q = { reference: ref, tour: tourTitle, startDate: startDate || 'flexible', nights: est ? est.nights : num_(d.nights), room: d.room, extras: est ? est.extras : [], total: est ? est.total : 0, name };
+  staffEmails_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT']).forEach(to => sendMail_(to, `New enquiry ${ref}: ${tourTitle}`,
+    `<p><strong>${esc_(name)}</strong> (${esc_(phone)}${email ? ', ' + esc_(email) : ''}) asked about <strong>${esc_(tourTitle)}</strong> from ${esc_(q.startDate)} for ${travellers} travellers via ${source === 'chat' ? 'Kaycee' : 'the booking form'}.${est ? ' Website estimate: R' + est.total.toLocaleString('en-ZA') + '.' : ''}</p>${siteLink_('/admin#ticket/' + ref, 'Open the ticket')}`));
+  whatsapp_(`🧳 New enquiry ${ref}${source === 'chat' ? ' (via Kaycee)' : ''}\n${tourTitle}\nWhen: ${q.startDate}${q.nights ? ' · ' + q.nights + ' nights' : ''}\nTravellers: ${travellers || '-'}\n${est ? 'Estimate: R' + est.total.toLocaleString('en-ZA') + '\n' : ''}${name} · ${phone}${email ? ' · ' + email : ''}\n\nOpen: ${siteUrl_('/admin#ticket/' + ref)}`);
+  if (email) sendMail_(email, `Your KCM trip quote ${ref}`, quoteHtml_(q, travellers));
+  const out = { saved: true, reference: ref, estimate: est ? est.total : null, emailed: !!email };
+  if (idem) cache.put('idem:booking:' + idem, JSON.stringify(out), 3600);
+  return out;
 }
 
 /** The quote the traveller receives by email (prices are estimates until a consultant confirms availability). */
@@ -586,7 +623,7 @@ function quoteHtml_(d, travellers) {
     <table style="border-collapse:collapse;margin:12px 0">
       ${row('Reference', d.reference)}${row('Trip', d.tour)}${row('Travel date', d.startDate)}${row('Nights', num_(d.nights) ? String(num_(d.nights)) : '')}
       ${row('Travellers', travellers ? String(travellers) : '')}${row('Room', d.room)}${row('Extras', (d.extras || []).join(', '))}
-      ${row('Estimated total', total ? 'R' + total.toLocaleString('en-ZA') : 'Your consultant will price this for you')}
+      ${row('Estimated total', total ? 'R' + total.toLocaleString('en-ZA') + ' (estimate)' : 'Your consultant will price this for you')}
     </table>
     <p>Questions or changes? Reply to this email or WhatsApp us on <a href="https://wa.me/27764360010?text=${encodeURIComponent('Hi KCM, about my quote ' + d.reference)}">076 436 0010</a> and quote <strong>${esc_(d.reference)}</strong>.</p>`;
 }
@@ -602,7 +639,7 @@ function submitMessage_(b) {
 }
 
 function listBookings_(b) {
-  requireRole_(b.token, STAFF);
+  requirePerm_(b.token, 'bookings.view');
   return readTable_('Bookings').map(r => ({
     reference: r.Reference, created: iso_(r.Created), tour: r.Tour, startDate: iso_(r.StartDate) || String(r.StartDate), nights: r.Nights,
     travellers: num_(r.Adults) + num_(r.Children) + num_(r.Infants) + num_(r.Pensioners), adults: r.Adults, children: r.Children,
@@ -611,7 +648,7 @@ function listBookings_(b) {
 }
 
 function updateBooking_(b) {
-  const actor = requireRole_(b.token, EDITORS);
+  const actor = requirePerm_(b.token, 'bookings.update');
   if (BOOKING_STATUSES.indexOf(b.status) === -1) throw userError_('Invalid status.');
   let found = false;
   withLock_(() => {
@@ -626,7 +663,7 @@ function updateBooking_(b) {
 }
 
 function listMessages_(b) {
-  requireRole_(b.token, STAFF);
+  requirePerm_(b.token, 'messages.view');
   return readTable_('Messages').map(m => ({ created: iso_(m.Created), name: m.Name, email: m.Email, phone: m.Phone, message: m.Message, status: m.Status })).reverse();
 }
 
@@ -635,7 +672,7 @@ function listMessages_(b) {
  * ===================================================================== */
 
 function dashboard_(b) {
-  const user = requireRole_(b.token, STAFF);
+  const user = requirePerm_(b.token, 'dashboard.view');
   const partners = readTable_('Partners').filter(p => p.Status !== 'Uploading');
   const bookings = readTable_('Bookings');
   const users = readTable_('Users');
@@ -668,7 +705,7 @@ function dashboard_(b) {
       newBookings: bookings.filter(x => x.Status === 'New').length,
       bookingValue: value,
       users: users.length,
-      staff: users.filter(u => STAFF.indexOf(u.Role) !== -1).length,
+      staff: users.filter(u => isStaff_(u)).length,
       inReview: partners.filter(p => p.Status === 'In review').length,
       trips: jobs.length,
       payoutsPending,
@@ -683,12 +720,12 @@ function dashboard_(b) {
     valueByTour: byTour,
     weekly: weeks,
     recent: readTable_('Activity').slice(-15).reverse().map(a => ({ time: iso_(a.Time), actor: a.Actor, action: a.Action, target: a.Target, details: a.Details })),
-    sheetUrl: EDITORS.indexOf(user.Role) !== -1 ? SpreadsheetApp.getActiveSpreadsheet().getUrl() : '',
+    sheetUrl: can_(user, 'users.manage') ? SpreadsheetApp.getActiveSpreadsheet().getUrl() : '',
   };
 }
 
 function activity_(b) {
-  requireRole_(b.token, STAFF);
+  requirePerm_(b.token, 'audit.view');
   return readTable_('Activity').slice(-300).reverse().map(a => ({ time: iso_(a.Time), actor: a.Actor, action: a.Action, target: a.Target, details: a.Details }));
 }
 
@@ -748,14 +785,14 @@ function jobView_(j, names) {
 }
 
 function listJobs_(b) {
-  requireRole_(b.token, STAFF);
+  requirePerm_(b.token, 'payouts.view');
   const names = {}; readTable_('Partners').forEach(p => { names[p.ID] = p.BusinessName; });
   return readTable_('Jobs').map(j => jobView_(j, names)).reverse();
 }
 
 /** Record a trip/job done by a partner. Payout = gross minus KCM commission. */
 function saveJob_(b) {
-  const actor = requireRole_(b.token, EDITORS);
+  const actor = requirePerm_(b.token, 'payouts.manage');
   const j = b.job || {};
   const partner = findApplication_(j.partnerId);
   if (!partner || partner.row.Status !== 'Approved') throw userError_('Choose an approved partner.');
@@ -771,7 +808,7 @@ function saveJob_(b) {
 }
 
 function setPayoutStatus_(b) {
-  const actor = requireRole_(b.token, EDITORS);
+  const actor = requirePerm_(b.token, 'payouts.manage');
   if (PAYOUT_STATUSES.indexOf(b.status) === -1) throw userError_('Invalid payout status.');
   let job = null;
   withLock_(() => {
@@ -818,13 +855,13 @@ function submitRating_(b) {
 }
 
 function listRatings_(b) {
-  requireRole_(b.token, STAFF);
+  requireAnyPerm_(b.token, ['partners.view', 'ratings.moderate']);
   const names = {}; readTable_('Partners').forEach(p => { names[p.ID] = p.BusinessName; });
   return readTable_('Ratings').map(r => ({ id: r.ID, created: iso_(r.Created), partnerId: r.PartnerID, business: names[r.PartnerID] || r.PartnerID, bookingRef: r.BookingRef, guest: r.GuestName, stars: num_(r.Stars), comment: r.Comment, status: r.Status })).reverse();
 }
 
 function setRatingStatus_(b) {
-  const actor = requireRole_(b.token, EDITORS);
+  const actor = requirePerm_(b.token, 'ratings.moderate');
   if (['Published', 'Hidden'].indexOf(b.status) === -1) throw userError_('Invalid status.');
   let ok = false;
   withLock_(() => {
@@ -906,7 +943,17 @@ function partnersFolder_() {
 }
 
 function staffEmails_(roles) {
-  return readTable_('Users').filter(u => roles.indexOf(u.Role) !== -1 && u.Status !== 'disabled' && !/\.test$/.test(u.Email)).map(u => u.Email);
+  return readTable_('Users').filter(u => roles.indexOf(roleOf_(u)) !== -1 && u.Status !== 'disabled' && !/\.test$/.test(u.Email)).map(u => u.Email);
+}
+
+/** Checks the file's real signature (magic bytes), not just the type the browser claims. */
+function fileMatchesType_(bytes, mime) {
+  const b = i => bytes[i] & 255;
+  if (mime === 'image/jpeg') return b(0) === 0xFF && b(1) === 0xD8 && b(2) === 0xFF;
+  if (mime === 'image/png') return b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4E && b(3) === 0x47;
+  if (mime === 'image/webp') return b(0) === 0x52 && b(1) === 0x49 && b(2) === 0x46 && b(3) === 0x46 && b(8) === 0x57 && b(9) === 0x45 && b(10) === 0x42 && b(11) === 0x50;
+  if (mime === 'application/pdf') return b(0) === 0x25 && b(1) === 0x50 && b(2) === 0x44 && b(3) === 0x46;
+  return false;
 }
 
 function publicRateLimit_() {
@@ -945,14 +992,19 @@ function deleteRowsWhere_(sh, pred) {
   for (let i = rows.length - 1; i >= 1; i--) if (pred(rows[i])) sh.deleteRow(i + 1);
 }
 
+/** One script-wide lock serialises every write (Sheets has no transactions). Re-entrant within one request. */
+let LOCK_DEPTH = 0;
 function withLock_(fn) {
+  if (LOCK_DEPTH > 0) { LOCK_DEPTH++; try { return fn(); } finally { LOCK_DEPTH--; } }
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
-  try { return fn(); } finally { lock.releaseLock(); }
+  LOCK_DEPTH = 1;
+  try { return fn(); } finally { LOCK_DEPTH = 0; lock.releaseLock(); }
 }
 
+/** Append-only audit trail. There is no API to edit or delete Activity rows. */
 function log_(actor, action, target, details) {
-  try { sheet_('Activity').appendRow([new Date(), safe_(actor), action, safe_(target), safe_(details, 300)]); } catch (e) { console.error(e); }
+  try { sheet_('Activity').appendRow([new Date(), safe_(actor), action, safe_(target), safe_(details, 2000)]); } catch (e) { console.error(e); }
 }
 
 function sendMail_(to, subject, html) {
@@ -1007,7 +1059,7 @@ function siteLink_(path, label) {
 function prop_(key) { return PropertiesService.getScriptProperties().getProperty(key); }
 function json_(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }
 function hash_(s) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s).map(b => ('0' + (b & 255).toString(16)).slice(-2)).join(''); }
-function randomCode_(n) { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < n; i++) s += c[Math.floor(Math.random() * c.length)]; return s; }
+function randomCode_(n) { const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < n; i++) s += c[randomInt_(c.length)]; return s; }
 function iso_(v) { if (!v) return ''; const d = v instanceof Date ? v : new Date(v); return isNaN(d.getTime()) ? '' : d.toISOString(); }
 function num_(v) { const n = Number(v); return isFinite(n) ? n : 0; }
 function esc_(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -1036,14 +1088,14 @@ function safe_(v, max) {
  * Email: admin@kcm.test (password shared with the owner privately). Remove it before going live:
  * Sheet menu KCM → Remove test admin (or disable it in the dashboard under Users & access).
  */
-const TEST_ADMIN = { email: 'admin@kcm.test', name: 'Test Admin', salt: 'np:cf895a9d6b1dd637c904f89a', hash: '24853ddcedc507e5b8f0149a298f5c05594b84cedb0e6d79577738037141a97b' };
+const TEST_ADMIN = { email: 'admin@kcm.test', name: 'Test Admin', salt: 'argon2id-np', hash: '$argon2id$v=19$m=19456,t=2,p=1$AT5zVv7vHoW/6Q6sQ1nCPg$JzSaFKqceqkfit+IkMB/XdFP7/lUVaOhOnyJJVjrLf0' };
 function ensureTestAdmin_() {
   if (prop_('TEST_ADMIN_REMOVED') === '1') return;
   withLock_(() => {
     const sh = sheet_('Users');
     const rows = sh.getDataRange().getValues();
     const idx = rows.findIndex((r, i) => i > 0 && r[0] === TEST_ADMIN.email);
-    const row = [TEST_ADMIN.email, TEST_ADMIN.name, 'admin', 'active', 'test', '', new Date(), '', 'setup', TEST_ADMIN.hash, TEST_ADMIN.salt];
+    const row = [TEST_ADMIN.email, TEST_ADMIN.name, 'ADMIN', 'active', 'test', '', new Date(), '', 'setup', TEST_ADMIN.hash, TEST_ADMIN.salt];
     if (idx > 0) sh.getRange(idx + 1, 1, 1, row.length).setValues([[row[0], row[1], row[2], rows[idx][3] === 'disabled' ? 'disabled' : 'active', row[4], row[5], rows[idx][6] || row[6], rows[idx][7], row[8], row[9], row[10]]]);
     else sh.appendRow(row);
   });
@@ -1072,7 +1124,9 @@ function setup() {
   if (!props.getProperty('SITE_URL')) props.setProperty('SITE_URL', 'https://mathonsimm.github.io/KCMTravel-Tours');
   partnersFolder_();
   pepper_();
+  dataKey_();
   ensureTestAdmin_();
+  if (typeof opsSetup_ === 'function') opsSetup_();
   upsertUser_(props.getProperty('OWNER_EMAIL'), { provider: 'owner' });
   // hide technical tabs
   ['Sessions', 'Codes'].forEach(n => sheet_(n).hideSheet());
@@ -1108,10 +1162,18 @@ function onOpen() {
     .addItem('Set website address', 'menuSiteUrl_')
     .addItem('WhatsApp alerts…', 'menuWhatsApp_')
     .addItem('Remove test admin', 'menuRemoveTestAdmin_')
+    .addSeparator()
+    .addItem('Create tickets from existing bookings', 'menuBackfillTickets_')
+    .addItem('Rotate data-encryption key', 'menuRotateKey_')
     .addToUi();
 }
 
 function menuSetup_() { SpreadsheetApp.getUi().alert(setup()); }
+function menuRotateKey_() {
+  const ui = SpreadsheetApp.getUi();
+  if (ui.alert('Rotate the data-encryption key?', 'Stored secrets are re-encrypted with a new key. Older key versions are kept so backups stay readable.', ui.ButtonSet.OK_CANCEL) !== ui.Button.OK) return;
+  ui.alert('Done. Now using key version ' + rotateDataKey_() + '.');
+}
 
 function menuClientId_() {
   const ui = SpreadsheetApp.getUi();
