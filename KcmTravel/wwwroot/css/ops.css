@@ -175,3 +175,6 @@ tr.is-overdue td:first-child { box-shadow: inset 3px 0 0 #b42318; }
     .q-lines tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); }
     .q-lines td { padding: 0 !important; border: 0 !important; }
 }
+
+.adm-legacy { margin-bottom: 20px; border-left: 4px solid var(--warn, #c98a1b); line-height: 1.6; }
+.adm-legacy code { font-size: .9em; }

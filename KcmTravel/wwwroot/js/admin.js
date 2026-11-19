@@ -41,10 +41,23 @@
             if (!user) return gate("signin");
             me = await K.session.refresh(true) || user;
             if (!me || !me.isStaff) return gate("noaccess");
-            if (window.KCMOps) { const o = window.KCMOps(opsCtx()); Object.assign(VIEWS, o.views); Object.assign(TITLES, o.titles); o.start?.(); }
+            /* An older backend (before v1.4) sends no permission list. Show the website & partner pages it supports,
+               keep the Operations Centre switched off, and say what to update. The backend still enforces access. */
+            const legacy = !Array.isArray(me.permissions);
+            if (legacy) {
+                const view = ["dashboard.view", "partners.view", "payouts.view", "messages.view", "bookings.view"];
+                const edit = ["partners.review", "payouts.manage", "ratings.moderate", "bookings.update", "audit.view"];
+                const r = String(me.role || "").toLowerCase();
+                me.permissions = r === "owner" || r === "admin" ? view.concat(edit, ["users.view", "users.manage"]) : view;
+                const note = document.createElement("div");
+                note.className = "adm-card adm-legacy";
+                note.innerHTML = `<strong>The Operations Centre isn't switched on yet.</strong> Your Google Apps Script is still the previous version. In the Sheet: <em>Extensions → Apps Script</em>, replace everything in <code>Code.gs</code> with <code>backend/apps-script/dist/KCM-Backend.gs</code>, run <code>setup</code>, then <em>Deploy → Manage deployments → Edit → New version</em>. Refresh this page afterwards.`;
+                body.before(note);
+            }
+            if (window.KCMOps && !legacy) { const o = window.KCMOps(opsCtx()); Object.assign(VIEWS, o.views); Object.assign(TITLES, o.titles); o.start?.(); }
             $$("[data-perm]").forEach(a => { a.hidden = !a.dataset.perm.split("|").some(can); });
             $$("[data-nav-group]").forEach(g => { let n = g.nextElementSibling, any = false; while (n && !n.hasAttribute("data-nav-group")) { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; });
-            if (!location.hash) location.replace("#" + (can("ops.edit.own") || can("ops.view.all") ? "workspace" : "overview"));
+            if (!location.hash || !VIEWS[location.hash.slice(1).split("/")[0]]) location.replace("#" + (can("ops.edit.own") || can("ops.view.all") ? "workspace" : "overview"));
             route();
         }
 
