@@ -99,23 +99,23 @@ sec('layout', 'Finding your way around', f'''
 <li>{btn('+ Register enquiry')}: record an enquiry that came in by WhatsApp, phone, email or in person.</li>
 <li><b>The bell</b>: your notifications, such as a ticket assigned to you, a quotation waiting for approval or a payment to verify. A red number shows how many are unread.</li>
 <li>{btn('Refresh')}: reload the page with the latest data.</li>
-<li><b>Ask KC Assist</b> (bottom right): ask how to do anything, in your own words.</li>
+<li><b>Ask Kaycee</b> (bottom right): ask how to do anything, or how much work is on your name, in your own words.</li>
 <li><b>The sun / moon button</b> in the header switches between light and dark mode.</li>
 </ul>
 {fig('28-notifications', 'The notification bell opened.', 'half')}
 {tip('The dashboard also works on a phone. The menu then runs across the top of the screen.', 'note')}
 ''')
 
-sec('assist', 'Getting help: KC Assist', f'''
-<p><b>KC Assist</b> is the help assistant inside the dashboard. Click <b>Ask KC Assist</b> at the bottom right and ask in your own words, for example "how do I give a ticket to Sipho?" or "the customer paid, what now?". Small typos are fine.</p>
+sec('assist', 'Getting help: Kaycee, the dashboard assistant', f'''
+<p><b>Kaycee</b> is the assistant inside the dashboard (the same name as the trip planner customers see on the website). Click <b>Ask Kaycee</b> at the bottom right, or the "How can I assist you today?" bubble, and ask in your own words, for example "how do I give a ticket to Sipho?" or "the customer paid, what now?". Small typos are fine.</p>
 <ul>
 <li>It answers with the steps and a button that opens the right page.</li>
-<li>Ask <b>"what's on my plate today?"</b> for a summary of your own tickets, overdue tasks and what's due.</li>
+<li>Ask <b>"how many tickets are on my name?"</b> or <b>"what's on my plate today?"</b> for your own tickets, overdue tasks and what's due. Managers can ask about a colleague, for example "how many tickets does Sipho have?".</li>
 <li>Type a <b>ticket number</b> (for example KCM-2026-000014) to see its status, owner and next action.</li>
 <li>If your role can't do something, it tells you who can.</li>
 </ul>
-{fig('kca-assign', 'KC Assist answering a reworded question, with a button to the right page.')}
-{tip('When an admin adds an AI key in the backend settings, KC Assist uses AI to understand any wording. Answers then show "Answered by AI from the KCM staff guide". Without the key it uses its built-in assistant.', 'note')}
+{fig('kca-assign', 'Kaycee answering a reworded question, with a button to the right page.')}
+{tip('When an admin adds an AI key in the backend settings, Kaycee uses AI to understand any wording. Answers then show "Answered by AI from the KCM staff guide". Without the key it uses its built-in assistant.', 'note')}
 ''')
 
 sec('website', 'How enquiries arrive from the website', f'''
@@ -442,7 +442,7 @@ table.status-table td:nth-child(2) {{ font-weight: 800; font-size: 8.5pt; white-
 </div>
 <div class="toc"><h2>Contents</h2><ol>{toc}</ol>
 <div class="howto"><h3 style="margin-top:0">How to read this guide</h3>
-<p><b>Orange numbered circles</b> on the pictures show where to click, in order. Button names appear like {btn('this')}. Section 4 shows how to ask KC Assist for help. Sections 6 to 11 cover everyday work for consultants, managers and finance; sections 13 and 14 are for admins.</p>
+<p><b>Orange numbered circles</b> on the pictures show where to click, in order. Button names appear like {btn('this')}. Section 4 shows how to ask Kaycee, the dashboard assistant, for help. Sections 6 to 11 cover everyday work for consultants, managers and finance; sections 13 and 14 are for admins.</p>
 <p>All names, numbers and amounts in the pictures are <b>demo data</b> created for testing. They are not real customers or real money.</p>
 <div class="credit"><img src="{MTECH_URI}" alt="M-Tech Business Solutions"><p style="margin:0">The KCM Travel &amp; Tours website, Operations Centre and this guide were designed and built by <b>M-Tech Business Solutions</b>.</p></div></div></div>
 {body}

@@ -1,4 +1,4 @@
-/* KC Assist: the staff assistant in the dashboard.
+/* Kaycee (dashboard assistant): the staff assistant in the dashboard.
    Answers "how do I…" questions about the KCM Operations Centre in plain language, however they are phrased.
    How it understands paraphrases (no AI service, no running cost, works offline):
      1. phrases and synonyms are mapped to one meaning ("give a ticket to", "allocate", "hand over" → assign)
@@ -281,10 +281,14 @@
     root.className = "kca";
     root.innerHTML = `
         <button type="button" class="kca-launch" aria-expanded="false" aria-controls="kca-panel">
-            <img src="${BASE}/images/brand/kcm-logo.svg" alt="" width="40" height="40"><span><strong>Ask KC Assist</strong><small>Help with the system</small></span>
+            <img src="${BASE}/images/brand/kcm-logo.svg" alt="" width="40" height="40"><span><strong>Ask Kaycee</strong><small>Your dashboard assistant</small></span>
         </button>
-        <section class="kca-panel" id="kca-panel" role="dialog" aria-label="KC Assist, help for staff" hidden>
-            <header><img src="${BASE}/images/brand/kcm-logo.svg" alt="" width="34" height="34"><div><strong>KC Assist</strong><small>Ask in your own words</small></div><button type="button" class="kca-x" aria-label="Close">×</button></header>
+        <div class="kca-teaser" hidden>
+            <button type="button" class="kca-teaser-msg"><span class="kca-teaser-hi"></span><span>How can I assist you today?</span><span class="kca-teaser-cta">Ask Kaycee →</span></button>
+            <button type="button" class="kca-teaser-x" aria-label="Hide this message">×</button>
+        </div>
+        <section class="kca-panel" id="kca-panel" role="dialog" aria-label="Kaycee, dashboard assistant" hidden>
+            <header><img src="${BASE}/images/brand/kcm-logo.svg" alt="" width="34" height="34"><div><strong>Kaycee</strong><small>Dashboard assistant · ask in your own words</small></div><button type="button" class="kca-x" aria-label="Close">×</button></header>
             <div class="kca-log" aria-live="polite"></div>
             <form class="kca-form"><input name="q" autocomplete="off" placeholder="e.g. how do I give a ticket to Sipho?" aria-label="Your question"><button type="submit" aria-label="Ask">Ask</button></form>
         </section>`;
@@ -293,7 +297,7 @@
     const add = (html, who = "bot") => { const m = document.createElement("div"); m.className = "kca-msg kca-" + who; m.innerHTML = html; log.append(m); log.scrollTop = log.scrollHeight; return m; };
     const chips = list => `<div class="kca-chips">${list.map(t => `<button type="button" data-ask="${esc(t)}">${esc(t)}</button>`).join("")}</div>`;
     const starters = () => {
-        const s = ["What's on my plate today?", "How do I register a WhatsApp enquiry?", "How do I prepare a quotation?", "How do I record a payment?"];
+        const s = ["How many tickets are on my name?", "How do I register a WhatsApp enquiry?", "How do I prepare a quotation?", "How do I record a payment?"];
         if (can("ops.assign")) s.splice(1, 0, "How do I assign a ticket?");
         if (can("pay.verify")) s.splice(1, 0, "How do I verify a payment?");
         if (can("users.manage")) s.push("How do I give someone access?");
@@ -302,11 +306,22 @@
     let greeted = false;
     const open = () => {
         panel.hidden = false; launch.setAttribute("aria-expanded", "true"); launch.hidden = true;
-        if (!greeted) { greeted = true; add(`<p>Hi ${esc(firstName() || "there")}, I'm KC Assist. Ask me how to do anything in the dashboard, in your own words. You can also type a ticket number.</p>${chips(starters())}`); }
+        if (!greeted) { greeted = true; add(`<p>Hi, ${esc(firstName() || "there")}. I'm Kaycee. How can I assist you today on the dashboard?</p><p class="kca-sub">Ask in your own words, for example "how many tickets are on my name?", or type a ticket number.</p>${chips(starters())}`); }
         setTimeout(() => input.focus(), 50);
     };
     const close = () => { panel.hidden = true; launch.hidden = false; launch.setAttribute("aria-expanded", "false"); launch.focus(); };
     launch.addEventListener("click", open);
+    const teaser = root.querySelector(".kca-teaser");
+    const teaserOff = () => { try { return sessionStorage.getItem("kca-teaser") === "off"; } catch { return false; } };
+    const hideTeaser = (instant) => { teaser.classList.remove("is-in"); if (instant === true) teaser.hidden = true; else setTimeout(() => { teaser.hidden = true; }, 300); try { sessionStorage.setItem("kca-teaser", "off"); } catch { /* storage unavailable */ } };
+    if (!teaserOff()) setTimeout(() => {
+        if (!panel.hidden) return;
+        teaser.querySelector(".kca-teaser-hi").textContent = `Hi, ${firstName() || "there"}`;
+        teaser.hidden = false; requestAnimationFrame(() => teaser.classList.add("is-in"));
+    }, 2500);
+    teaser.querySelector(".kca-teaser-msg").addEventListener("click", () => { hideTeaser(true); open(); });
+    teaser.querySelector(".kca-teaser-x").addEventListener("click", hideTeaser);
+    launch.addEventListener("click", () => { if (!teaser.hidden) hideTeaser(true); });
     root.querySelector(".kca-x").addEventListener("click", close);
     document.addEventListener("keydown", e => { if (e.key === "Escape" && !panel.hidden) close(); });
 
@@ -317,11 +332,30 @@
         html += d.a + (can(d.perm) ? goBtn(d.go) : "");
         return html;
     }
+    /* "how many tickets are on my name?", "what's assigned to me", "do I have overdue tasks": answered from live data.
+       "how do I add a task to my ticket?" stays a how-to question. */
+    const WORK = /\b(tickets?|tasks?|work|jobs?|enquir\w*|bookings?|overdue|due|assigned|follow[- ]?ups?|deadlines?|plate|load)\b/i;
+    const HOWTO = /\b(how (?:do|can|to|should|would)|where (?:do|can)|what (?:is|does|are the steps)|explain|steps to)\b/i;
+    const SELF = /\b(my|me|mine|i have|i'?ve got|do i|have i|on my name|under my name|assigned to me|for me)\b/i;
+    const ACTION = /\b(pass|give|assign|reassign|allocate|move|hand|transfer|send|share|delegate|add|create|change|delete|remove|record|approve|verify|cancel|complete|close)\b/i; // doing something = a how-to question
+    const isMyWork = q => WORK.test(q) && SELF.test(q) && !HOWTO.test(q) && !ACTION.test(q);
+    let wl = null, wlAt = 0;
+    const workload = async () => { if (!wl || Date.now() - wlAt > 60000) { wl = await KCM.call("workload"); wlAt = Date.now(); } return wl; };
+    async function colleagueWork(q) {
+        if (!can("ops.workload") || !WORK.test(q) || HOWTO.test(q) || ACTION.test(q)) return null;
+        const words = norm(q).split(/\s+/).filter(w => w.length > 2);
+        const list = await workload();
+        const hit = list.find(p => { const first = String(p.name || "").replace(/\(.*?\)/g, "").trim().split(/\s+/)[0].toLowerCase(); return first.length > 2 && words.includes(first); });
+        if (!hit) return null;
+        const nm = String(hit.name).replace(/\s*\(.*?\)/g, "");
+        return `<h4>${esc(nm)}'s work</h4><p><b>${hit.activeTickets}</b> active ticket${hit.activeTickets === 1 ? "" : "s"}${hit.supporting ? ` (plus ${hit.supporting} supporting)` : ""}, <b>${hit.openTasks || 0}</b> open task${hit.openTasks === 1 ? "" : "s"}${hit.overdueTasks ? `, <b class="kca-bad">${hit.overdueTasks} overdue</b>` : ""}${hit.overdueTickets ? ` and ${hit.overdueTickets} ticket${hit.overdueTickets === 1 ? "" : "s"} past their next-action date` : ""}.</p>${goBtn(["#workload", "Open Employee Workload"])}`;
+    }
     async function liveToday() {
         const w = await KCM.call("myWorkspace");
         const od = w.overdue || [], up = w.upcoming || [], tk = w.tickets || [];
         const item = k => `<li>${esc(k.title || k.nextAction || "")} <a href="#ticket/${esc(k.ref)}">${esc(k.ref)}</a></li>`;
-        let h = `<h4>Your work right now</h4><p>${tk.length} open ticket${tk.length === 1 ? "" : "s"}, ${od.length} overdue task${od.length === 1 ? "" : "s"}, ${up.length} due this week.</p>`;
+        let h = `<h4>Your work right now</h4><p>You have <b>${tk.length}</b> open ticket${tk.length === 1 ? "" : "s"} on your name, <b>${od.length}</b> overdue task${od.length === 1 ? "" : "s"} and <b>${up.length}</b> thing${up.length === 1 ? "" : "s"} due this week.</p>`;
+        if (tk.length) h += `<p><b>Your tickets:</b></p><ul>${tk.slice(0, 6).map(t => `<li><a href="#ticket/${esc(t.ref)}">${esc(t.ref)}</a> · ${esc(t.opStatus)}${t.overdue ? ' · <b class="kca-bad">overdue</b>' : ""}</li>`).join("")}${tk.length > 6 ? `<li>and ${tk.length - 6} more</li>` : ""}</ul>`;
         if (od.length) h += `<p><b>Do these first:</b></p><ul>${od.slice(0, 5).map(item).join("")}</ul>`;
         else if (up.length) h += `<p><b>Coming up:</b></p><ul>${up.slice(0, 5).map(item).join("")}</ul>`;
         else if (!tk.length) h += `<p>Nothing is assigned to you yet.${can("ops.assign") ? " Check <a href=\"#unassigned\">Unassigned Tickets</a>." : ""}</p>`;
@@ -368,7 +402,8 @@
             if (ref) { thinking.innerHTML = await liveTicket(ref.toUpperCase()); return; }
             if (/\b(?:hi|hello|hey|sawubona|molo|dumela|good (?:morning|afternoon|evening))\b/i.test(q) && q.split(/\s+/).length <= 4) { thinking.innerHTML = `<p>Hello ${esc(firstName())}! What can I help you with?</p>${chips(starters())}`; return; }
             if (/\b(?:thank|thanks|ngiyabonga|dankie|enkosi)\b/i.test(q)) { thinking.innerHTML = `<p>You're welcome. Ask me anything else about the system.</p>`; return; }
-            if (tokens(q).includes("mytoday")) { thinking.innerHTML = await liveToday(); return; }
+            if (tokens(q).includes("mytoday") || isMyWork(q)) { thinking.innerHTML = await liveToday(); return; }
+            const col = await colleagueWork(q); if (col) { thinking.innerHTML = col; return; }
             const r = rank(q);
             const ai = await askAi(q, r);
             if (ai) { thinking.innerHTML = ai; return; }

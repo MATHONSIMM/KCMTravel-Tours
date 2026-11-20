@@ -164,9 +164,9 @@ Please don't rename tabs or column headers: the script relies on them.
 - Apps Script runs for up to 6 minutes per request, which is plenty here.
 - Comfortable for a pilot with hundreds of partners and a few thousand bookings. When you outgrow it, the website only talks to the backend through `kcm-api.js`, so moving to Supabase or a server means replacing the Apps Script, not the pages.
 
-## KC Assist: the staff assistant (optional AI mode)
+## Kaycee in the dashboard: the staff assistant (optional AI mode)
 
-The dashboard has a help assistant (**Ask KC Assist**, bottom right). It works straight away with a built-in, free assistant that understands most rewordings and typos.
+The dashboard has a help assistant (**Ask Kaycee**, bottom right). It works straight away with a built-in, free assistant that understands most rewordings and typos.
 
 For fully flexible answers, switch on AI mode:
 

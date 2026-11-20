@@ -27,7 +27,7 @@ Object.assign(ACTIONS, {
     const titles = (Array.isArray(b.titles) ? b.titles : []).slice(0, 80).map(t => String(t).slice(0, 100));
     const role = roleOf_(user), name = String(user.name || '').split(' ')[0];
     const system = [
-      'You are KC Assist, the help assistant inside the KCM Travel & Tours staff dashboard (the KCM Operations Centre).',
+      'You are Kaycee, the dashboard assistant inside the KCM Travel & Tours staff dashboard (the KCM Operations Centre).',
       'Answer the employee\'s question using ONLY the help articles provided. Do not invent buttons, pages, rules or numbers.',
       'If the articles do not answer it, say you are not sure and suggest which of the listed topics to ask about.',
       'The employee\'s role is ' + role + '. If an article says only certain roles can do something and this role is not one of them, say so and say who can.',

@@ -71,7 +71,24 @@ const H = [
   console.log(`  i holdout (unseen) questions: ${hok}/${ho.length}`);
   // UI
   check('public Kaycee and WhatsApp buttons are hidden on the dashboard', !(await a.isVisible('.chat-launcher')) && !(await a.isVisible('.wa-float')));
-  await a.click('.kca-launch'); await a.waitForSelector('.kca-panel:not([hidden]) .kca-chips');
+  await a.waitForSelector('.kca-teaser.is-in', { timeout: 6000 });
+  check('a "How can I assist you today?" bubble appears next to the button', /Hi, Nomsa.*How can I assist you today\?/s.test(await a.textContent('.kca-teaser')));
+  await a.screenshot({ path: '/home/claude/ops-shots/kca-teaser.png' });
+  await a.click('.kca-teaser-msg'); await a.waitForSelector('.kca-panel:not([hidden]) .kca-chips');
+  check('the intro says "Hi, Nomsa. I\'m Kaycee. How can I assist you today on the dashboard?"', /Hi, Nomsa\. I'm Kaycee\. How can I assist you today on the dashboard\?/.test(await a.textContent('.kca-log')));
+  const mine = (await call('myWorkspace', {}, NOMSA)).data.tickets.length;
+  await a.fill('.kca-form input', 'How many tickets are on my name?'); await a.press('.kca-form input', 'Enter');
+  await a.waitForFunction(() => /Your work right now/.test(document.querySelector('.kca-log').textContent));
+  check(`"How many tickets are on my name?" answers with her real count (${mine})`, new RegExp(`You have ${mine} open tickets? on your name`).test((await a.textContent('.kca-log')).replace(/\s+/g, ' ')));
+  await a.screenshot({ path: '/home/claude/ops-shots/kca-myname.png' });
+  for (const q of ['do I have anything overdue?', "what's assigned to me", 'show me my tickets']) {
+    const before = (await a.$$('.kca-log h4')).length;
+    await a.fill('.kca-form input', q); await a.press('.kca-form input', 'Enter'); await a.waitForTimeout(900);
+    const last = await a.$$eval('.kca-log h4', hs => hs[hs.length - 1].textContent);
+    check(`"${q}" is answered from her own work`, /Your work right now/.test(last), last);
+  }
+  await a.fill('.kca-form input', 'how do I add a task to my ticket?'); await a.press('.kca-form input', 'Enter'); await a.waitForTimeout(700);
+  check('"how do I add a task to my ticket?" still gives the how-to steps', /Create a task or follow-up/.test(await a.$$eval('.kca-log h4', hs => hs[hs.length - 1].textContent)));
   await a.screenshot({ path: '/home/claude/ops-shots/kca-open.png' });
   await a.fill('.kca-form input', "what's on my plate today?"); await a.press('.kca-form input', 'Enter');
   await a.waitForFunction(() => /Your work right now/.test(document.querySelector('.kca-log').textContent));
@@ -86,10 +103,14 @@ const H = [
   check('unrelated questions get "not sure" with suggestions instead of a wrong answer', /not sure I understood/.test(await a.textContent('.kca-log')));
   await a.screenshot({ path: '/home/claude/ops-shots/kca-chat.png' });
   // manager: answer with a link that navigates
-  const o = await asUser(OWNER); await o.goto(S + '/admin#workspace'); await o.waitForSelector('.ws-greeting'); await o.click('.kca-launch');
-  await o.fill('.kca-form input', 'can i pass a ticket over to Nomsa'); await o.press('.kca-form input', 'Enter'); await o.waitForSelector('.kca-go');
+  const o = await asUser(OWNER); await o.goto(S + '/admin#workspace'); await o.waitForSelector('.ws-greeting'); await o.click('.kca-launch'); await o.waitForSelector('.kca-panel:not([hidden])');
+  await o.fill('.kca-form input', 'how many tickets does Sipho have?'); await o.press('.kca-form input', 'Enter');
+  await o.waitForFunction(() => /Sipho Dlamini's work/.test(document.querySelector('.kca-log').textContent));
+  check("a manager asking about a colleague gets that person's live numbers", /active tickets?/.test(await o.textContent('.kca-log')));
+  await o.fill('.kca-form input', 'can i pass a ticket over to Nomsa'); await o.press('.kca-form input', 'Enter'); await o.waitForSelector('.kca-msg:last-child .kca-go');
+  check('"can I pass a ticket over to Nomsa" gives the assign steps (not her workload)', /Assign or reassign a ticket/.test(await o.textContent('.kca-msg:last-child h4')));
   await o.screenshot({ path: '/home/claude/ops-shots/kca-assign.png' });
-  await o.click('.kca-go'); await o.waitForTimeout(1200);
+  await o.click('.kca-msg:last-child .kca-go'); await o.waitForTimeout(1200);
   check('the answer\'s button opens the right page (Unassigned Tickets)', o.url().endsWith('#unassigned'));
   // AI mode (emulator stand-in for the Anthropic API; the real API was not called)
   await fetch(M + '/__aikey');
