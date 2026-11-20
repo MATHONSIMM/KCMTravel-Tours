@@ -1133,3 +1133,19 @@ fieldset.field { border: 0; padding: 0; margin: 0 0 22px; min-width: 0; }
 .mfa-key code { font-size: 13px; letter-spacing: .06em; background: var(--bone); padding: 3px 8px; border-radius: 6px; color: var(--ink); word-break: break-all; }
 .recovery-codes { list-style: none; padding: 0; margin: 0 0 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .recovery-codes code { display: block; text-align: center; background: var(--bone); padding: 8px; border-radius: 8px; font-size: 14px; letter-spacing: .08em; color: var(--ink); }
+
+/* ---------- Careers ---------- */
+.careers-perks { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.careers-perks li { padding-left: 18px; border-left: 3px solid var(--earth); color: var(--ink-soft); }
+.careers-perks strong { display: block; color: var(--ink); font-size: 17px; margin-bottom: 2px; }
+.careers-roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; margin-top: 30px; }
+.careers-role { display: flex; flex-direction: column; gap: 10px; padding: 28px; border-radius: 22px; background: var(--card, #fff); border: 1px solid var(--line); }
+.careers-role h3 { font-family: var(--font-display, Fraunces, serif); font-weight: 500; font-size: 26px; margin: 0; }
+.careers-role p { margin: 0; color: var(--ink-soft); }
+.careers-role ul { margin: 4px 0 8px; padding-left: 18px; color: var(--ink-soft); font-size: 15px; }
+.careers-role li { margin-bottom: 4px; }
+.careers-role .btn { margin-top: auto; align-self: flex-start; }
+.careers-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.careers-meta span { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--earth) 12%, transparent); color: var(--earth); }
+form[data-careers] .check { margin: 6px 0 16px; }
+@media (max-width: 860px) { .careers-roles { grid-template-columns: 1fr; } }

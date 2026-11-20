@@ -10,7 +10,7 @@ with entry.mjs = import {argon2id} from '@noble/hashes/argon2'; ... globalThis.K
 """
 import pathlib, datetime
 root = pathlib.Path(__file__).resolve().parent.parent / "backend" / "apps-script"
-order = ["Vendor.gs", "Security.gs", "Pricing.gs", "Code.gs", "Ops.gs", "Demo.gs"]
+order = ["Vendor.gs", "Security.gs", "Pricing.gs", "Code.gs", "Ops.gs", "Assistant.gs", "Demo.gs"]
 out = root / "dist" / "KCM-Backend.gs"
 out.parent.mkdir(exist_ok=True)
 parts = [f"/* KCM Travel & Tours backend, combined {datetime.date.today().isoformat()} from {', '.join(order)}.\n   Paste this whole file into Code.gs in the Apps Script editor (replace everything), save, run setup, then\n   Deploy > Manage deployments > Edit > New version. Source: backend/apps-script/ in the repository. */\n"]

@@ -218,6 +218,33 @@
         }));
     }
 
+    /* ---------- Careers: "Apply for this role" pre-selects the role; the form goes to the team's Messages ---------- */
+    $$("[data-apply-role]").forEach(a => a.addEventListener("click", () => {
+        const sel = $("form[data-careers] select[name=role]");
+        if (sel) sel.value = a.dataset.applyRole;
+        setTimeout(() => $("form[data-careers] input[name=name]")?.focus(), 400);
+    }));
+    $$("form[data-careers]").forEach(f => f.addEventListener("submit", async e => {
+        e.preventDefault();
+        const el = f.elements, err = $("[data-careers-error]", f), done = $("[data-careers-done]", f), btn = $("button[type=submit]", f);
+        const fail = (msg, field) => { err.textContent = msg; err.hidden = false; field?.focus(); };
+        err.hidden = true;
+        if (el.website.value) return;                                    // bot trap
+        if (!el.name.value.trim()) return fail("Please add your name.", el.name);
+        if (!/^\S+@\S+\.\S+$/.test(el.email.value.trim())) return fail("Please add a valid email address.", el.email);
+        if (el.phone.value.replace(/\D/g, "").length < 9) return fail("Please add your cell number.", el.phone);
+        if (!el.about.value.trim()) return fail("Please tell us a little about yourself.", el.about);
+        if (!el.consent.checked) return fail("Please tick the box so we may keep your application.", el.consent);
+        const message = [`[CAREERS] Role: ${el.role.value}`, el.town.value && `Lives in: ${el.town.value}`, el.cv.value && `CV / LinkedIn: ${el.cv.value}`, "", el.about.value.trim()].filter(x => x !== false && x !== "").join("\n");
+        btn.disabled = true;
+        try {
+            if (window.KCM?.configured) await window.KCM.call("submitMessage", { message: { name: el.name.value.trim(), email: el.email.value.trim(), phone: el.phone.value.trim(), message } });
+            else { window.location.href = `mailto:${doc.dataset.email || ""}?subject=${encodeURIComponent("Job application: " + el.role.value)}&body=${encodeURIComponent(message)}`; }
+            f.querySelectorAll(".field, .field-row, .check, button[type=submit]").forEach(x => { x.hidden = true; });
+            done.hidden = false; done.scrollIntoView({ behavior: "smooth", block: "center" });
+        } catch (x) { fail(x.message || "We couldn't send your application. Please try again."); btn.disabled = false; }
+    }));
+
     /* ---------- Season planner ---------- */
     const season = $("[data-season]");
     if (season) {

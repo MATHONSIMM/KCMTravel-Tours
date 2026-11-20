@@ -16,6 +16,9 @@ public class HomeController : Controller
     [HttpGet("/about")]
     public IActionResult About() => View();
 
+    [HttpGet("/careers")]
+    public IActionResult Careers() => View();
+
     [HttpGet("/contact")]
     public IActionResult Contact() => View(new ContactMessage());
 

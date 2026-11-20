@@ -235,6 +235,18 @@
         }
 
         /* =================== MY WORKSPACE =================== */
+        /* "Good afternoon, Thandi" in South African time, with a one-line summary of the day */
+        function greeting(w) {
+            const h = Number(new Intl.DateTimeFormat("en-ZA", { hour: "numeric", hourCycle: "h23", timeZone: "Africa/Johannesburg" }).format(new Date()));
+            const part = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+            const u = me() || {};
+            const first = String(u.name || "").replace(/\(.*?\)/g, "").trim().split(/\s+/)[0] || String(u.email || "").split("@")[0].split(/[._-]/)[0].replace(/^./, c => c.toUpperCase());
+            const today = new Intl.DateTimeFormat("en-ZA", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Johannesburg" }).format(new Date());
+            const open = w.tickets.length, od = w.overdue.length, due = w.upcoming.length;
+            const line = od ? `You have <b>${od} overdue task${od === 1 ? "" : "s"}</b>; start there.` : open ? `You have ${open} open ticket${open === 1 ? "" : "s"}${due ? ` and ${due} thing${due === 1 ? "" : "s"} due this week` : ""}.` : "Nothing is assigned to you yet.";
+            return `<div class="ws-greeting"><h2>${part}, ${esc(first)}.</h2><p>${esc(today)} · ${line}</p></div>`;
+        }
+
         async function workspace() {
             await config();
             const w = await get("myWorkspace");
@@ -243,6 +255,7 @@
                 <div><strong>${esc(k.title)}</strong><span>${ticketLink(k.ref)}${k.due ? ` · ${k.overdue ? "<b class='overdue-txt'>overdue</b> · " : "due "}${fmtDate(k.due)}` : ""}${k.priority && k.priority !== "Normal" ? " · " + priBadge(k.priority) : ""}</span></div>
                 ${k.id ? `<div class="task-actions"><select class="status-select" data-task-status="${esc(k.id)}" aria-label="Task status">${opt(cfg.taskStatuses, k.status)}</select><button type="button" class="btn btn--ghost btn--sm" data-task-done="${esc(k.id)}">Done</button></div>` : ""}</li>`;
             b.innerHTML = `
+                ${greeting(w)}
                 <div class="kpis kpis--4">
                     ${kpi("My open tickets", w.tickets.length, "assigned or supporting", "#mine")}
                     ${kpi("Overdue tasks", w.overdue.length, w.overdue.length ? "needs attention now" : "nothing overdue", "#tasks")}

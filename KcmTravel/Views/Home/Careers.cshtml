@@ -1,0 +1,113 @@
+@{
+    ViewData["Title"] = "Careers at KCM Travel & Tours: Tourism Jobs in Nelspruit";
+    ViewData["Description"] = "Join KCM Travel & Tours in Nelspruit, Mpumalanga. We are building a team of young tourism professionals: tourism managers, travel consultants, driver-guides and marketing talent.";
+    ViewData["HeroHeader"] = true;
+    var roles = new (string Title, string Type, string Place, string Summary, string[] Points)[] {
+        ("Junior Tourism Manager", "Full time", "Nelspruit",
+         "Run day-to-day trip operations: plan itineraries, book lodges and transport, and look after groups from the first enquiry until they are home.",
+         new[] { "Diploma or degree in tourism, hospitality or travel management", "1–2 years in tourism, hospitality or a travel agency (internships count)", "Calm with customers on WhatsApp, phone and email", "Valid driver's licence is an advantage" }),
+        ("Travel Consultant", "Full time", "Nelspruit",
+         "Turn enquiries into great trips: understand what customers want, prepare quotations, follow up and keep every booking on track in our operations system.",
+         new[] { "Matric; a tourism qualification is an advantage", "Organised, quick on a computer, good at following up", "Speaks English plus siSwati, isiZulu, Xitsonga or Sepedi", "Knows the Lowveld and the Kruger area" }),
+        ("Driver-Guide", "Contract / partner", "Mpumalanga",
+         "Drive and guide guests on safaris, Panorama Route tours and airport transfers in your own or a partner vehicle.",
+         new[] { "Professional driving permit (PrDP)", "FGASA or CATHSSETA guiding qualification, or working towards one", "Clean, roadworthy vehicle if you have your own", "Friendly, punctual and safety-first" }),
+        ("Marketing and Social Media Intern", "Internship", "Nelspruit / hybrid",
+         "Tell the KCM story: photos and short videos from trips, posts for Facebook, Instagram and TikTok, and simple campaigns that bring in bookings.",
+         new[] { "Studying or recently finished marketing, media or a related field", "Owns a smartphone and enjoys creating content", "Writes clearly in English", "Interested in travel and the outdoors" }),
+    };
+}
+
+<partial name="_PageHero" model="@(("Careers", "Build South African travel <em>with us.</em>", "KCM Travel & Tours is a young, growing tour company in Nelspruit. We are looking for people who love the Lowveld and want to grow a career in tourism.", Catalog.P.LowveldHills))" />
+
+<section class="section">
+    <div class="container two-col">
+        <div>
+            <h2 class="section-title reveal" style="font-size: clamp(30px, 3.4vw, 44px)">Why work <em>with KCM?</em></h2>
+            <p class="lead reveal">We plan safaris, heritage routes, group tours and holidays across South Africa, with a small team that does real work from day one.</p>
+        </div>
+        <ul class="careers-perks reveal">
+            <li><strong>Learn the whole business.</strong> From the first WhatsApp message to the guest's safe return: planning, suppliers, quotations and operations.</li>
+            <li><strong>Work with modern tools.</strong> Our own booking website and operations system, so less paperwork and more time with customers.</li>
+            <li><strong>Grow with the company.</strong> We are early in our journey. People who join now help shape how KCM works.</li>
+            <li><strong>Local first.</strong> We hire from Mpumalanga and work with local drivers, guides and lodges.</li>
+        </ul>
+    </div>
+</section>
+
+<section class="section section--sand" id="roles">
+    <div class="container">
+        <p class="eyebrow reveal">Open roles</p>
+        <h2 class="section-title reveal">Where you could <em>fit in.</em></h2>
+        <div class="careers-roles">
+            @foreach (var r in roles)
+            {
+                <article class="careers-role reveal">
+                    <p class="careers-meta"><span>@r.Type</span><span>@r.Place</span></p>
+                    <h3>@r.Title</h3>
+                    <p>@r.Summary</p>
+                    <ul>
+                        @foreach (var pnt in r.Points) { <li>@pnt</li> }
+                    </ul>
+                    <a class="btn btn--ghost" href="#apply" data-apply-role="@r.Title">Apply for this role</a>
+                </article>
+            }
+        </div>
+    </div>
+</section>
+
+<section class="section" id="apply">
+    <div class="container two-col">
+        <div>
+            <p class="eyebrow reveal">Talent pool</p>
+            <h2 class="section-title reveal" style="font-size: clamp(30px, 3.4vw, 44px)">Don't see your role? <em>Tell us about you.</em></h2>
+            <p class="lead reveal">We keep a talent pool for tourism graduates, guides, drivers, chefs, hospitality staff and creative people. When something opens up, we look there first.</p>
+            <p class="reveal">Share a link to your CV (Google Drive, OneDrive or LinkedIn). Please don't send ID numbers or bank details.</p>
+        </div>
+        <div class="step-card reveal">
+            <h2>Apply or join the talent pool</h2>
+            <form data-careers novalidate>
+                <div class="field">
+                    <label for="c-name">Full name</label>
+                    <input id="c-name" name="name" autocomplete="name" required />
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="c-email">Email</label>
+                        <input id="c-email" name="email" type="email" autocomplete="email" required />
+                    </div>
+                    <div class="field">
+                        <label for="c-phone">Cell</label>
+                        <input id="c-phone" name="phone" type="tel" autocomplete="tel" required />
+                    </div>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="c-role">Role</label>
+                        <select id="c-role" name="role">
+                            @foreach (var r in roles) { <option>@r.Title</option> }
+                            <option selected>Talent pool (any suitable role)</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="c-town">Where do you live?</label>
+                        <input id="c-town" name="town" placeholder="e.g. Nelspruit, White River" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="c-cv">Link to your CV or LinkedIn</label>
+                    <input id="c-cv" name="cv" type="url" placeholder="https://" />
+                </div>
+                <div class="field">
+                    <label for="c-about">Tell us about yourself</label>
+                    <textarea id="c-about" name="about" required placeholder="Your qualifications, experience, languages and why you'd like to work in tourism."></textarea>
+                </div>
+                <div class="hp" aria-hidden="true"><label for="c-website">Leave this empty</label><input id="c-website" name="website" tabindex="-1" autocomplete="off" /></div>
+                <label class="check"><input type="checkbox" name="consent" required /> <span>I agree that KCM Travel &amp; Tours may keep my details for up to 12 months to consider me for jobs. See our <a href="/privacy">privacy notice</a>.</span></label>
+                <p class="form-error" data-careers-error hidden></p>
+                <button class="btn btn--primary btn--block" type="submit">Send application</button>
+                <p class="notice" role="status" data-careers-done hidden>Thank you. Your application is in. If your profile matches a role, we'll contact you.</p>
+            </form>
+        </div>
+    </div>
+</section>

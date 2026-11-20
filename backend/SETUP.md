@@ -164,6 +164,18 @@ Please don't rename tabs or column headers: the script relies on them.
 - Apps Script runs for up to 6 minutes per request, which is plenty here.
 - Comfortable for a pilot with hundreds of partners and a few thousand bookings. When you outgrow it, the website only talks to the backend through `kcm-api.js`, so moving to Supabase or a server means replacing the Apps Script, not the pages.
 
+## KC Assist: the staff assistant (optional AI mode)
+
+The dashboard has a help assistant (**Ask KC Assist**, bottom right). It works straight away with a built-in, free assistant that understands most rewordings and typos.
+
+For fully flexible answers, switch on AI mode:
+
+1. Create an API key at [console.anthropic.com](https://console.anthropic.com) (add a small amount of credit; each question costs a fraction of a cent with the default model).
+2. In Apps Script: **Project Settings → Script Properties → Add script property**: `ANTHROPIC_API_KEY` = your key. Optional: `ASSISTANT_MODEL` (default `claude-haiku-5-5`).
+3. No redeploy is needed for a property change.
+
+Rules: only signed-in staff can use it, 40 questions per person per hour, questions are not stored, and the model may only answer from the KCM help articles. Remove the property to switch AI mode off. Never put the key in the code or on GitHub.
+
 ## Demo data (for testing)
 
 To try every screen with realistic examples, open the Sheet and click **KCM Admin → Load demo data (testing only)**. It creates about 33 tickets at every stage (9 left unassigned so you can practise assigning) (new, assigned, quoting, awaiting deposit, payment verification, confirmed, travelling, completed, lost, cancelled, on hold, refund pending), customers, tasks, notes, quotations, payments, suppliers, partner applications, payouts, ratings, website messages and demo staff accounts. It takes a few minutes; if it says "Part loaded", click it again to continue.

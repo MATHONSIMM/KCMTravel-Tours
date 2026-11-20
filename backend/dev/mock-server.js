@@ -102,7 +102,13 @@ const context = {
         },
     },
     UrlFetchApp: {
-        fetch: url => {
+        fetch: (url, opts) => {
+            if (String(url).startsWith("https://api.anthropic.com/")) {
+                const body = JSON.parse(opts.payload); context.__lastAi = body;
+                const first = (/\[([a-z0-9-]+)\]/.exec(body.messages[0].content) || [])[1] || "none";
+                const text = `Here is how to do it.\n1. First step from the article.\n2. Second step.\nARTICLE: ${first}`;
+                return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ content: [{ type: "text", text }] }) };
+            }
             const tok = decodeURIComponent((/id_token=([^&]+)/.exec(url) || [])[1] || "");
             const m = /^test-google:(.+)$/.exec(tok);
             const ok = !!m;
@@ -121,7 +127,7 @@ const context = {
 };
 vm.createContext(context);
 // same order as scripts/build_backend.py (dist/KCM-Backend.gs)
-const FILES = ["Vendor.gs", "Security.gs", "Pricing.gs", "Code.gs", "Ops.gs", "Demo.gs"];
+const FILES = ["Vendor.gs", "Security.gs", "Pricing.gs", "Code.gs", "Ops.gs", "Assistant.gs", "Demo.gs"];
 const code = FILES.map(f => fs.readFileSync(path.join(__dirname, "..", "apps-script", f), "utf8")).join("\n;\n");
 vm.runInContext(code + "\n;this.__api = { doGet, doPost, setup, opsSweep, backfillTickets_, setUserFields_, legacyHashPassword_, upsertUser_, loadDemoData_, removeDemoData_ };", context, { filename: "KCM-Backend.gs" });
 props.set("GOOGLE_CLIENT_ID", CLIENT_ID);
@@ -136,6 +142,8 @@ http.createServer((req, res) => {
     if (req.method === "GET" && req.url.startsWith("/__mail")) { res.end(JSON.stringify(mail)); return; }
     if (req.method === "GET" && req.url.startsWith("/__whatsapp")) { res.end(JSON.stringify(whatsapp)); return; }
     // TEST ONLY (mock): plant a pre-1.4 password hash to prove it is upgraded to Argon2id on sign-in
+    if (req.method === "GET" && req.url.startsWith("/__aikey")) { props.set("ANTHROPIC_API_KEY", "test-key"); res.end("ok"); return; } // test-only
+    if (req.method === "GET" && req.url.startsWith("/__lastai")) { res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(context.__lastAi || null)); return; }
     if (req.method === "GET" && req.url.startsWith("/__demo")) { // test-only: same functions as the Sheet menu items
         const t0 = Date.now(); let out;
         try { out = req.url.includes("remove") ? context.__api.removeDemoData_() : context.__api.loadDemoData_(); } catch (e) { out = { error: e.message, stack: e.stack }; }
