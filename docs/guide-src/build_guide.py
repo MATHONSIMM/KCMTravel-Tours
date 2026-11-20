@@ -2,9 +2,17 @@
 """Builds the KCM Travel & Tours user guide (HTML -> PDF via Chrome)."""
 import html, pathlib, datetime
 
-ROOT = pathlib.Path(__file__).resolve().parent  # docs/guide-src
-FONTS = ROOT.parents[1] / 'KcmTravel/wwwroot/fonts'
-LOGO = ROOT.parents[1] / 'KcmTravel/wwwroot/images/brand/kcm-logo.svg'
+import base64, sys
+ROOT = pathlib.Path(__file__).resolve().parent  # docs/guide-src (images in ROOT/img)
+REPO = next((p for p in [ROOT, *ROOT.parents] if (p / 'KcmTravel/wwwroot').is_dir()), None)
+if not REPO: sys.exit('Run this from inside the KCMTravel-Tours repository (KcmTravel/wwwroot not found).')
+WWW = REPO / 'KcmTravel/wwwroot'
+# logo and fonts are embedded, so guide.html and the PDF never depend on where they are opened from
+def data_uri(path, mime): return f'data:{mime};base64,' + base64.b64encode(path.read_bytes()).decode()
+LOGO_URI = data_uri(WWW / 'images/brand/kcm-logo.svg', 'image/svg+xml')
+FRAUNCES_URI = data_uri(WWW / 'fonts/fraunces.woff2', 'font/woff2')
+MANROPE_URI = data_uri(WWW / 'fonts/manrope.woff2', 'font/woff2')
+FRAUNCES_I_URI = data_uri(WWW / 'fonts/fraunces-italic.woff2', 'font/woff2')
 E = html.escape
 
 sections = []          # (id, title, html)
@@ -354,8 +362,9 @@ body = ''.join(f'<section id="{i}" class="chapter"><h2><span class="num">{n+1}</
 today = datetime.date(2026, 11, 19).strftime('%d %B %Y')
 doc = f'''<!DOCTYPE html><html lang="en-ZA"><head><meta charset="utf-8"><title>KCM Travel &amp; Tours: User Guide</title>
 <style>
-@font-face {{ font-family: Fraunces; src: url("file://{FONTS}/fraunces.woff2") format("woff2"); font-weight: 100 900; }}
-@font-face {{ font-family: Manrope; src: url("file://{FONTS}/manrope.woff2") format("woff2"); font-weight: 200 800; }}
+@font-face {{ font-family: Fraunces; src: url("{FRAUNCES_URI}") format("woff2"); font-weight: 100 900; }}
+@font-face {{ font-family: Fraunces; font-style: italic; src: url("{FRAUNCES_I_URI}") format("woff2"); font-weight: 100 900; }}
+@font-face {{ font-family: Manrope; src: url("{MANROPE_URI}") format("woff2"); font-weight: 200 800; }}
 @page {{ size: A4; margin: 16mm 15mm 18mm; }}
 :root {{ --ink: #14201b; --soft: #5b6a63; --accent: #b4542a; --line: #e5ddd1; --paper: #fbf8f3; --green: #1f5f45; }}
 * {{ box-sizing: border-box; }}
@@ -406,7 +415,7 @@ table.status-table td:nth-child(2) {{ font-weight: 800; font-size: 8.5pt; white-
 .callout.warn {{ border-color: var(--accent); background: #fbf0e9; }} .callout.warn b {{ color: var(--accent); }}
 </style></head><body>
 <div class="cover">
-  <div><img class="logo" src="file://{LOGO}" alt="KCM Travel &amp; Tours"></div>
+  <div><img class="logo" src="{LOGO_URI}" alt="KCM Travel &amp; Tours"></div>
   <div><h1>User Guide<br><em>KCM Operations Centre</em></h1><p class="lead">How to use the KCM Travel &amp; Tours website and staff dashboard: from a customer's first enquiry to a completed trip. Written for the whole team, with pictures.</p></div>
   <img class="shot" src="img/10-ops-overview.jpg" alt="" style="max-height:105mm;object-fit:cover;object-position:top">
   <div class="meta"><span>Version 1.4 · {today}</span><span>Screenshots show demo data, not real customers</span></div>
