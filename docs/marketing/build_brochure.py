@@ -29,12 +29,12 @@ tours = [
    ('Sun City & Pilanesberg Getaway', '2 nights', 4750)]),
 ]
 rand = lambda n: 'R' + f'{n:,}'.replace(',', ' ')
-tour_rows = ''.join(f'<tr class="grp"><td colspan="3">{E(g)}</td></tr>' + ''.join(f'<tr><td>{E(t)}</td><td>{d}</td><td class="r">from <b>{rand(p)}</b></td></tr>' for t, d, p in rows) for g, rows in tours)
+tour_rows = ''.join(f'<tr class="grp"><td colspan="2">{E(g)}</td></tr>' + ''.join(f'<tr><td>{E(t)}</td><td>{d}</td></tr>' for t, d, p in rows) for g, rows in tours)
 
 asks = [
- ('Want to see the Big Five?', 'Open-vehicle safaris into the Kruger National Park leave Mbombela at first light, with a guide who knows where the animals were yesterday.'),
- ('Planning a school trip?', 'Learners, teachers and a bus: we plan the route, the park bookings, the meals and the safety briefing, at a group price per learner.'),
- ('Organising a church outing or stokvel trip?', 'One price per person, one contact person, and a programme that fits your group, whether it is 15 people or 60.'),
+ ('Want to see the Big Five?', 'Open-vehicle safaris into the Kruger National Park leave Nelspruit at first light, with a guide who knows where the animals were yesterday.'),
+ ('Planning a school trip?', 'Learners, teachers and a bus: we plan the route, the park bookings, the meals and the safety briefing, with a group rate for learners.'),
+ ('Organising a church outing or stokvel trip?', 'One contact person and a programme that fits your group, whether it is 15 people or 60.'),
  ('Looking for a romantic weekend?', 'A Winelands escape, a private lodge in the Greater Kruger, or a quiet guesthouse on the Panorama Route.'),
  ('Taking the family on holiday?', 'Durban beaches, Sun City and the Pilanesberg, or a self-drive along the Garden Route, with child rates built in.'),
  ('Need something different?', 'Tell us your dates, your budget and what you love. We put together a trip that is yours alone.'),
@@ -44,10 +44,10 @@ ask_html = ''.join(f'<div class="ask"><h3>{E(q)}</h3><p>{E(a)}</p></div>' for q,
 
 scenes = [
  ('0:00 – 0:05', 'Sunrise over the bushveld; an open safari vehicle rolls out. KCM logo fades in.', 'Imagine meeting the Big Five before breakfast.', 'KCM Travel & Tours'),
- ('0:05 – 0:15', 'Quick cuts: elephants at a waterhole, God\'s Window viewpoint, Blyde River Canyon.', 'From the Kruger National Park to the Panorama Route, we know the Lowveld because it is home.', 'Born in Mbombela'),
+ ('0:05 – 0:15', 'Quick cuts: elephants at a waterhole, God\'s Window viewpoint, Blyde River Canyon.', 'From the Kruger National Park to the Panorama Route, we know the Lowveld because it is home.', 'Born in Nelspruit'),
  ('0:15 – 0:25', 'Group shots: learners stepping off a bus, a church group at a viewpoint, friends laughing.', 'Planning a school trip, a church outing or a stokvel getaway? We handle the transport, the bookings and the details.', 'Groups, schools, churches, stokvels'),
- ('0:25 – 0:35', 'Couple at a wine farm; a family on Durban beach; Table Mountain cableway.', 'A romantic weekend in the Winelands. A family holiday in Durban. Cape Town, the Garden Route, the Drakensberg.', 'Trips from R1 250 per person'),
- ('0:35 – 0:47', 'Screen recording: the KCM website, choosing a tour, the price updating as travellers are added.', 'Choose your trip online and see the price straight away. No waiting for a quote.', 'See your price instantly'),
+ ('0:25 – 0:35', 'Couple at a wine farm; a family on Durban beach; Table Mountain cableway.', 'A romantic weekend in the Winelands. A family holiday in Durban. Cape Town, the Garden Route, the Drakensberg.', 'Cape, coast and mountains'),
+ ('0:35 – 0:47', 'Screen recording: the KCM website, choosing a tour and adding travellers.', 'Choose your trip online, add your dates and travellers, and send your request in minutes.', 'Book online in minutes'),
  ('0:47 – 0:57', 'Screen recording: Kaycee chat asking about dates, group size and budget.', 'Not sure where to go? Ask Kaycee, our trip assistant. Answer a few questions and she sends your plan to our team.', 'Meet Kaycee'),
  ('0:57 – 1:07', 'Venda and Mapungubwe: Lake Fundudzi, the Sagole baobab, Mapungubwe at sunset.', 'Go further: the sacred sites of Venda and the ancient kingdom of Mapungubwe.', 'Heritage routes'),
  ('1:07 – 1:15', 'Lodge owner and a driver shaking hands with a KCM guide.', 'Own a lodge, a vehicle or a tour business? Grow with us as a KCM partner.', 'Partner with KCM'),
@@ -104,8 +104,8 @@ ul.ticks li::before {{ content: ""; position: absolute; left: 0; top: 1.6mm; wid
 table {{ width: 100%; border-collapse: collapse; }}
 .tours td {{ padding: 2.3mm 2mm; border-bottom: 1px solid var(--line); font-size: 10pt; }}
 .tours tr.grp td {{ padding-top: 5mm; font-size: 8.5pt; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); border-bottom: 1.5px solid var(--accent); }}
-.tours td:nth-child(2) {{ color: var(--soft); white-space: nowrap; width: 22mm; }}
-.tours td.r {{ text-align: right; white-space: nowrap; width: 34mm; }}
+.tours td:nth-child(2) {{ color: var(--soft); white-space: nowrap; width: 28mm; text-align: right; }}
+
 .small {{ font-size: 8.6pt; color: var(--soft); }}
 .strip {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; margin-bottom: 7mm; }}
 .strip img {{ height: 38mm; }}
@@ -142,10 +142,10 @@ figcaption {{ font-size: 8.4pt; color: var(--soft); margin-top: 1.5mm; }}
   <img class="logo" src="{LOGO}" alt="KCM Travel &amp; Tours">
   <div class="body">
     <h1>Your trip,<br><em>planned properly.</em></h1>
-    <p class="lead">Safaris, heritage routes, beach holidays and group tours across South Africa, planned by a local team from Mbombela.</p>
+    <p class="lead">Safaris, heritage routes, beach holidays and group tours across South Africa, planned by a local team from Nelspruit.</p>
   </div>
   <div class="soon">LAUNCHING SOON</div>
-  <div class="where">KCM Travel &amp; Tours<br>Msogwaba, Mbombela, Mpumalanga</div>
+  <div class="where">KCM Travel &amp; Tours<br>Nelspruit, Mpumalanga</div>
 </section>
 
 <section class="page">
@@ -153,10 +153,10 @@ figcaption {{ font-size: 8.4pt; color: var(--soft); margin-top: 1.5mm; }}
   <div class="split">
     <div>
       <h2>A Lowveld tour company that does the planning for you.</h2>
-      <p class="lead">KCM Travel &amp; Tours is a South African tour operator based in Msogwaba, Mbombela, on the doorstep of the Kruger National Park and the Panorama Route.</p>
+      <p class="lead">KCM Travel &amp; Tours is a South African tour operator based in Nelspruit, on the doorstep of the Kruger National Park and the Panorama Route.</p>
       <p>We work with trusted local drivers, guides, lodges and guesthouses, so every trip is run by people who know the area. You get one team that plans the route, books the stays, arranges transport and stays in touch with you until you are home.</p>
       <ul class="ticks">
-        <li>Clear prices per person, shown before you book</li>
+        <li>Clear, upfront costs before you commit</li>
         <li>Day trips, weekends and multi-day tours</li>
         <li>Schools, churches, stokvels, families, couples and companies</li>
         <li>Your personal details handled under POPIA</li>
@@ -165,8 +165,8 @@ figcaption {{ font-size: 8.4pt; color: var(--soft); margin-top: 1.5mm; }}
     <div><img class="ph" src="{img('mapungubwe-heritage-centre')}" alt="" style="height:118mm"></div>
   </div>
   <div class="facts">
-    <div><b>14</b><span>ready-made trips across five provinces</span></div>
-    <div><b>R1 250</b><span>starting price per person for a day tour</span></div>
+    <div><b>5</b><span>provinces: Mpumalanga, Limpopo, Western Cape, KwaZulu-Natal and North West</span></div>
+    <div><b>Any size</b><span>from couples to groups of 60 and more</span></div>
     <div><b>1 team</b><span>from first question to safe return</span></div>
   </div>
   <div class="foot"><span>KCM Travel &amp; Tours</span><span>2</span></div>
@@ -182,10 +182,10 @@ figcaption {{ font-size: 8.4pt; color: var(--soft); margin-top: 1.5mm; }}
 
 <section class="page">
   <div class="kicker">Our trips</div>
-  <h2>Ready-made trips, <em>priced per person.</em></h2>
+  <h2>Ready-made trips, <em>or your own.</em></h2>
   <div class="strip"><img class="ph" src="{img('lake-fundudzi-venda')}" alt=""><img class="ph" src="{img('thathe-vondo-forest')}" alt=""><img class="ph" src="{img('vondo-lodge-view')}" alt=""></div>
   <table class="tours">{tour_rows}</table>
-  <p class="small" style="margin-top:4mm">Prices are per adult, sharing, and are indicative before launch. Children, pensioners, room upgrades, airport transfers and car hire are priced on the website when you book. Custom trips are quoted on request.</p>
+  <p class="small" style="margin-top:4mm">Every trip can be adjusted: change the dates, add nights, upgrade rooms, add airport transfers or car hire. Custom trips are planned on request, and current prices are always on the website.</p>
   <div class="foot"><span>KCM Travel &amp; Tours</span><span>4</span></div>
 </section>
 
@@ -193,17 +193,14 @@ figcaption {{ font-size: 8.4pt; color: var(--soft); margin-top: 1.5mm; }}
   <div class="kicker">How it works</div>
   <h2>Booking takes a few minutes.</h2>
   <div class="steps">
-    <div><b>1</b><span>Choose a trip on the website, or ask Kaycee to suggest one.</span></div>
-    <div><b>2</b><span>Add your dates and travellers and see the price straight away.</span></div>
+    <div><b>1</b><span>Choose a trip on the website, or ask Kaycee, our trip assistant, to suggest one.</span></div>
+    <div><b>2</b><span>Add your dates, travellers and any extras you need.</span></div>
     <div><b>3</b><span>Send your request. You get a reference number immediately.</span></div>
     <div><b>4</b><span>Our team confirms the details with you and sends your quotation.</span></div>
   </div>
-  <div class="shots">
-    <figure><img src="{img('02-booking-form')}" alt=""><figcaption>The booking form shows your estimate as you add travellers and extras.</figcaption></figure>
-    <figure><img src="{img('03-kaycee')}" alt=""><figcaption>Kaycee, our trip assistant, asks a few questions and sends your plan to the team.</figcaption></figure>
-  </div>
+  <img class="ph" src="{img('sagole-baobab-venda')}" alt="" style="height:78mm">
   <h3 style="font-size:16pt;margin:9mm 0 3mm">Groups and partners</h3>
-  <p><b>Groups:</b> schools, churches, stokvels and companies get one contact person, one price per person and a programme built around the group.</p>
+  <p><b>Groups:</b> schools, churches, stokvels and companies get one contact person and a programme built around the group.</p>
   <p><b>Partners:</b> lodges, guesthouses, drivers, guides and tour businesses can register on the website. Once approved, partners see their trips, payouts and guest ratings in their own account.</p>
   <div class="foot"><span>KCM Travel &amp; Tours</span><span>5</span></div>
 </section>
@@ -215,11 +212,11 @@ figcaption {{ font-size: 8.4pt; color: var(--soft); margin-top: 1.5mm; }}
   <div class="notes">
     <div><h3>Short versions</h3><ul>
       <li><b>30 seconds:</b> scenes 1, 3, 5 and 9.</li>
-      <li><b>15 seconds (reels, status):</b> scene 1, then "Safaris, school trips and getaways from Mbombela. KCM Travel &amp; Tours, launching soon."</li></ul></div>
+      <li><b>15 seconds (reels, status):</b> scene 1, then "Safaris, school trips and getaways from Nelspruit. KCM Travel &amp; Tours, launching soon."</li></ul></div>
     <div><h3>Production notes</h3><ul>
       <li>Warm, calm voice; light acoustic or marimba music.</li>
       <li>Use real KCM and partner footage where possible; screen-record the live website for scenes 5 and 6.</li>
-      <li>End every version on the "Launching soon" card.</li></ul></div>
+      <li>Before launch, end on the "Launching soon" card; after launch, swap it for the website address. Everything else stays the same, so the video never goes out of date.</li><li>Prices are left out on purpose: show trips and experiences, not rand amounts.</li></ul></div>
   </div>
   <div class="foot"><span>KCM Travel &amp; Tours</span><span>6</span></div>
 </section>
@@ -230,7 +227,7 @@ figcaption {{ font-size: 8.4pt; color: var(--soft); margin-top: 1.5mm; }}
     <img class="logo" src="{LOGO}" alt="KCM Travel &amp; Tours">
     <h2>Launching <em>soon</em></h2>
     <p>Safaris, heritage routes, beach holidays and group tours, planned properly by a local team.</p>
-    <p style="font-size:10.5pt;color:#b9c3bd">KCM Travel &amp; Tours · Msogwaba, Mbombela, Mpumalanga</p>
+    <p style="font-size:10.5pt;color:#b9c3bd">KCM Travel &amp; Tours · Nelspruit, Mpumalanga</p>
     <div class="tag">COMING SOON</div>
   </div>
 </section>
