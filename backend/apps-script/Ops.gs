@@ -85,7 +85,8 @@ Object.assign(ACTIONS, {
   updateTicket: updateTicket_,
   setTicketStatus: setTicketStatus_,
   setResponseStatus: setResponseStatus_,
-  assignTicket: assignTicket_,
+  assignTicket: b => assignTicket_(b),
+  claimTicket: claimTicket_,
   addNote: addNote_,
   createTask: createTask_,
   updateTask: updateTask_,
@@ -176,7 +177,20 @@ function involved_(user, t) {
   const me = user.Email;
   return t.AssignedTo === me || t.CreatedBy === me || String(t.SupportBy || '').split(',').map(s => s.trim()).indexOf(me) !== -1;
 }
-function canSeeTicket_(user, t) { return can_(user, 'ops.view.all') || (can_(user, 'ops.edit.own') && involved_(user, t)); }
+function isUnassignedOpen_(t) { return !t.AssignedTo && CLOSED_STATUSES.indexOf(t.OpStatus) === -1; }
+/** Tickets with money: a quotation exists or the payment status has moved past "Not invoiced". quoteRefs (optional) = set of refs with quotes. */
+function hasMoney_(t, quoteRefs) {
+  if (t.PaymentStatus && t.PaymentStatus !== 'Not invoiced') return true;
+  if (quoteRefs) return !!quoteRefs[t.Ref];
+  return readTable_('Quotes').some(q => q.TicketRef === t.Ref);
+}
+function quoteRefs_() { const o = {}; readTable_('Quotes').forEach(q => { o[q.TicketRef] = 1; }); return o; }
+function canSeeTicket_(user, t, quoteRefs) {
+  return can_(user, 'ops.view.all') || (can_(user, 'ops.edit.own') && involved_(user, t)) || (can_(user, 'ops.view.unassigned') && isUnassignedOpen_(t))
+    || (can_(user, 'ops.view.money') && hasMoney_(t, quoteRefs));
+}
+/** Sees this ticket only through the finance (money) view: a read-only money summary, no notes, tasks or files. */
+function moneyOnlyView_(user, t) { return !can_(user, 'ops.view.all') && !(can_(user, 'ops.edit.own') && involved_(user, t)); }
 function canEditTicket_(user, t) { return can_(user, 'ops.edit.any') || (can_(user, 'ops.edit.own') && involved_(user, t)); }
 /** Loads a ticket the user may see; a ticket the user may not see looks exactly like one that doesn't exist (no IDOR hints). */
 function loadTicket_(user, ref, needEdit) {
@@ -187,7 +201,7 @@ function loadTicket_(user, ref, needEdit) {
 }
 function requireOpsUser_(token) {
   const user = requireUser_(token);
-  if (!can_(user, 'ops.view.all') && !can_(user, 'ops.edit.own')) throw userError_('You do not have access to this.', 'forbidden');
+  if (!['ops.view.all', 'ops.edit.own', 'ops.view.unassigned', 'ops.view.money'].some(p => can_(user, p))) throw userError_('You do not have access to this.', 'forbidden');
   return user;
 }
 function touchTicket_(f, actor, extra) {
@@ -208,15 +222,16 @@ function checkVersion_(f, version) {
  * ===================================================================== */
 
 function staffList_() {
-  return readTable_('Users').filter(u => isStaff_(u) && u.Status !== 'disabled').map(u => ({ email: u.Email, name: u.Name || u.Email, role: roleOf_(u) }));
+  return readTable_('Users').filter(u => isStaff_(u) && u.Status !== 'disabled').map(u => ({ email: u.Email, name: u.Name || u.Email, role: roleOf_(u), jobTitle: u.JobTitle || '', canOwn: can_(u, 'ops.edit.own') }));
 }
 function notify_(email, type, ref, message, dedupKey) {
   if (!email) return;
   if (dedupKey && readTable_('Notifications').some(n => n.DedupKey === dedupKey && n.UserEmail === email)) return;
   appendObj_('Notifications', { NotifID: newId_('N'), Created: new Date(), UserEmail: email, Type: type, TicketRef: ref || '', Message: safe_(message, 300), ReadAt: '', DedupKey: dedupKey || '' });
 }
-function notifyRoles_(roles, type, ref, message, dedupKey, exceptEmail) {
-  staffList_().filter(s => roles.indexOf(s.role) !== -1 && s.email !== exceptEmail).forEach(s => notify_(s.email, type, ref, message, dedupKey ? dedupKey + ':' + s.email : ''));
+/** Notify every active staff member holding a permission (e.g. 'ops.assign' = the people who hand out work). */
+function notifyPerm_(perm, type, ref, message, dedupKey, exceptEmail) {
+  staffWith_(perm).filter(u => u.Email !== exceptEmail).forEach(u => notify_(u.Email, type, ref, message, dedupKey ? dedupKey + ':' + u.Email : ''));
 }
 function listNotifications_(b) {
   const user = requireUser_(b.token);
@@ -253,8 +268,8 @@ function opsConfig_(b) {
     enquiryTypes: ENQUIRY_TYPES, customerTypes: CUSTOMER_TYPES, comms: COMMS, taskStatuses: TASK_STATUSES, noteKinds: NOTE_KINDS,
     paymentTypes: PAYMENT_TYPES, paymentMethods: PAYMENT_METHODS, quoteCategories: QUOTE_CATEGORIES, vatRate: VAT_RATE,
     depositPct: Math.round(CATALOG.depositRate * 100), packages: Object.keys(CATALOG.tours).map(k => ({ slug: k, title: CATALOG.tours[k].title, nights: CATALOG.tours[k].nights })),
-    staff: staffList_().filter(s => PERMS['ops.edit.own'].indexOf(s.role) !== -1), templates: templates_().map(t => ({ id: t.TemplateID, name: t.Name })),
-    me: { email: user.Email, permissions: permissionsOf_(user), role: roleOf_(user) },
+    staff: staffList_().filter(s => s.canOwn), templates: templates_().map(t => ({ id: t.TemplateID, name: t.Name })),
+    me: { email: user.Email, permissions: permissionsOf_(user), role: roleOf_(user), jobTitle: user.JobTitle || '' },
   };
 }
 
@@ -323,7 +338,7 @@ function getCustomer_(b) {
   const user = requireOpsUser_(b.token);
   const f = findRow_('Customers', String(b.ref || ''));
   if (!f) throw userError_('Customer not found.', 'notfound');
-  const tickets = readTable_('Tickets').filter(t => t.CustomerRef === f.row.CustomerRef && canSeeTicket_(user, t));
+  const tickets = readTable_('Tickets').filter(t => t.CustomerRef === f.row.CustomerRef && canSeeTicket_(user, t) && !moneyOnlyView_(user, t));
   if (!can_(user, 'ops.view.all') && !tickets.length) throw userError_('Customer not found.', 'notfound');
   return { customer: customerView_(f.row), tickets: tickets.map(t => ticketSummary_(t, null)) };
 }
@@ -389,7 +404,7 @@ function opsCreateTicketFromPublic_(d) {
     WebsiteEstimate: d.estimate || 0, NextAction: 'Review enquiry and assign', NextActionDue: new Date(Date.now() + 4 * 3600000), Template: TEMPLATE_BY_TYPE[type], Version: 1, LastActivity: new Date() };
   withLock_(() => { appendObj_('Tickets', t); createChecklist_(ref, TEMPLATE_BY_TYPE[type]); });
   audit_(t.CreatedBy, ref, 'ticket_created', { source: d.source, customer: cust.ref, existingCustomer: cust.existing });
-  notifyRoles_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT'], 'new_enquiry', ref, `New enquiry ${ref} via ${d.source}: ${d.package || 'trip enquiry'}`);
+  notifyPerm_('ops.assign', 'new_enquiry', ref, `New enquiry ${ref} via ${d.source}: ${d.package || 'trip enquiry'}`);
   return { ref, customerRef: cust.ref };
 }
 
@@ -449,7 +464,7 @@ function createTicket_(b) {
   t.Template = TEMPLATE_BY_TYPE[t.EnquiryType] || 'general';
   let assignee = String(b.assignTo || '').toLowerCase();
   if (assignee && !mgr && assignee !== actor.Email) throw userError_('Only management can assign tickets to other people.', 'forbidden');
-  if (assignee && !staffList_().some(s => s.email === assignee && PERMS['ops.edit.own'].indexOf(s.role) !== -1)) throw userError_('Choose a valid employee.');
+  if (assignee && !staffList_().some(s => s.email === assignee && s.canOwn)) throw userError_('Choose a valid employee.');
   if (!assignee && !mgr) assignee = actor.Email; // agents own what they register
   if (assignee) { t.AssignedTo = assignee; t.OpStatus = 'ASSIGNED'; }
   if (!t.NextAction) t.NextAction = assignee ? 'Contact the customer' : 'Review enquiry and assign';
@@ -457,7 +472,7 @@ function createTicket_(b) {
   withLock_(() => { appendObj_('Tickets', t); createChecklist_(ref, t.Template); });
   audit_(actor.Email, ref, 'ticket_created', { source: t.Source, customer: cust.ref, existingCustomer: cust.existing, assignedTo: assignee || '' });
   if (assignee) afterAssign_(t, assignee, '', actor);
-  else notifyRoles_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT'], 'new_enquiry', ref, `New enquiry ${ref} (${t.Source}) registered by ${actor.Name || actor.Email}`, '', actor.Email);
+  else notifyPerm_('ops.assign', 'new_enquiry', ref, `New enquiry ${ref} (${t.Source}) registered by ${actor.Name || actor.Email}`, '', actor.Email);
   return { ref, customerRef: cust.ref, existingCustomer: cust.existing };
 }
 
@@ -588,14 +603,22 @@ function setResponseStatus_(b) {
 
 /* ---------- assignment & handover ---------- */
 
-function assignTicket_(b) {
-  const actor = requirePerm_(b.token, 'ops.assign');
+/** Pick up: a consultant takes an unassigned ticket for themselves. */
+function claimTicket_(b) {
+  const user = requirePerm_(b.token, 'ops.claim');
+  return assignTicket_(Object.assign({}, b, { assignee: user.Email, supporters: undefined }), true);
+}
+/** claim is only ever set by claimTicket_ (server side), never from the request body. */
+function assignTicket_(b, claim) {
+  claim = claim === true;
+  const actor = claim ? requirePerm_(b.token, 'ops.claim') : requirePerm_(b.token, 'ops.assign');
   const to = String(b.assignee || '').trim().toLowerCase();
-  const staff = staffList_().filter(s => PERMS['ops.edit.own'].indexOf(s.role) !== -1);
+  const staff = staffList_().filter(s => s.canOwn);
   if (to && !staff.some(s => s.email === to)) throw userError_('Choose a valid employee.');
   const supporters = (Array.isArray(b.supporters) ? b.supporters : []).map(s => String(s).toLowerCase().trim()).filter(s => s && s !== to && staff.some(x => x.email === s)).slice(0, 5);
   return withLock_(() => {
     const f = loadTicket_(actor, b.ref, false);
+    if (claim && !isUnassignedOpen_(f.row)) throw userError_('Someone already picked up this ticket. Refresh the list.', 'conflict');
     checkVersion_(f, b.version);
     const prev = f.row.AssignedTo || '';
     const extra = { AssignedTo: to };
@@ -613,8 +636,9 @@ function assignTicket_(b) {
       if (b.moveTasks !== false) reassignOpenTasks_(f.row.Ref, prev, to, actor.Email);
       notify_(prev, 'reassigned', f.row.Ref, `${f.row.Ref} was reassigned to ${to}`);
     }
-    audit_(actor.Email, f.row.Ref, prev && prev !== to ? 'ticket_reassigned' : 'ticket_assigned', { from: prev, to, supporters, priority: f.row.Priority });
-    if (to && to !== prev) afterAssign_(f.row, to, prev, actor);
+    audit_(actor.Email, f.row.Ref, claim ? 'ticket_picked_up' : prev && prev !== to ? 'ticket_reassigned' : 'ticket_assigned', { from: prev, to, supporters, priority: f.row.Priority });
+    if (to && to !== prev && !claim) afterAssign_(f.row, to, prev, actor);
+    if (claim) { const hasContactTask = readTable_('Tasks').some(k => k.TicketRef === f.row.Ref && k.Source === 'workflow:contact'); if (!hasContactTask) autoTask_(f.row, 'Contact the customer and confirm requirements', to, new Date(Date.now() + 24 * 3600000), 'workflow:contact'); }
     supporters.forEach(s => notify_(s, 'supporting', f.row.Ref, `You were added as support on ${f.row.Ref}`, 'support:' + f.row.Ref + ':' + s));
     return { ticket: ticketSummary_(f.row), version: f.row.Version };
   });
@@ -726,7 +750,7 @@ function updateTask_(b) {
 function listTasks_(b) {
   const user = requireOpsUser_(b.token);
   const tickets = {}; readTable_('Tickets').forEach(t => { tickets[t.Ref] = t; });
-  let tasks = readTable_('Tasks').filter(k => tickets[k.TicketRef] && (canSeeTicket_(user, tickets[k.TicketRef]) || k.AssignedTo === user.Email));
+  let tasks = readTable_('Tasks').filter(k => tickets[k.TicketRef] && ((canSeeTicket_(user, tickets[k.TicketRef]) && !moneyOnlyView_(user, tickets[k.TicketRef])) || k.AssignedTo === user.Email));
   if (b.mine) tasks = tasks.filter(k => k.AssignedTo === user.Email);
   if (b.assignee && can_(user, 'ops.view.all')) tasks = tasks.filter(k => k.AssignedTo === b.assignee);
   if (b.open) tasks = tasks.filter(k => ['COMPLETED', 'CANCELLED'].indexOf(k.Status) === -1);
@@ -895,7 +919,7 @@ function quoteAction_(b) {
     if (a === 'submit') {
       if (q.Status !== 'Draft') throw userError_('Only drafts can be submitted for approval.');
       q.Status = 'Awaiting approval';
-      notifyRoles_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT'], 'quote_approval', q.TicketRef, `Quotation v${q.Version} on ${q.TicketRef} needs approval (R${zar_(num_(q.FinalAmount))})`, '', user.Email);
+      notifyPerm_('quote.approve', 'quote_approval', q.TicketRef, `Quotation v${q.Version} on ${q.TicketRef} needs approval (R${zar_(num_(q.FinalAmount))})`, '', user.Email);
     } else if (a === 'approve') {
       if (!can_(user, 'quote.approve')) throw userError_('Only management can approve quotations.', 'forbidden');
       if (['Draft', 'Awaiting approval'].indexOf(q.Status) === -1) throw userError_('This quotation is not waiting for approval.');
@@ -923,7 +947,7 @@ function quoteAction_(b) {
       tickChecklist_(q.TicketRef, ['Customer response recorded'], user.Email);
       autoTask_(f.row, 'Send invoice and payment instructions for the deposit', f.row.AssignedTo || user.Email, new Date(Date.now() + 86400000), 'workflow:invoice');
       notifyOthers_(f.row, user, 'quote_accepted', `Quotation v${q.Version} on ${q.TicketRef} was accepted by the customer`);
-      notifyRoles_(['FINANCE'], 'quote_accepted', q.TicketRef, `${q.TicketRef}: quotation accepted (R${zar_(num_(q.FinalAmount))}). Expect a deposit.`, 'qa:' + q.QuoteID);
+      notifyPerm_('pay.verify', 'quote_accepted', q.TicketRef, `${q.TicketRef}: quotation accepted (R${zar_(num_(q.FinalAmount))}). Expect a deposit.`, 'qa:' + q.QuoteID);
     } else if (a === 'decline') {
       if (['Sent', 'Approved'].indexOf(q.Status) === -1) throw userError_('Only a sent quotation can be declined.');
       q.Status = 'Declined'; q.DeclinedAt = new Date(); extra.ResponseStatus = 'Declined'; extra.OpStatus = 'AWAITING CUSTOMER RESPONSE';
@@ -1002,7 +1026,7 @@ function recordPayment_(b) {
     if (type !== 'refund' && ['ACCEPTED BY CUSTOMER', 'AWAITING DEPOSIT'].indexOf(f.row.OpStatus) !== -1) extra.OpStatus = 'PAYMENT VERIFICATION';
     touchTicket_(f, user, extra);
     audit_(user.Email, f.row.Ref, type === 'refund' ? 'refund_requested' : 'payment_recorded', { payment: id, amount, method, verification: 'Unverified' });
-    notifyRoles_(type === 'refund' ? ['SUPER_ADMIN', 'ADMIN', 'FINANCE'] : ['FINANCE'], type === 'refund' ? 'refund_approval' : 'payment_verify', f.row.Ref,
+    notifyPerm_(type === 'refund' ? 'pay.refund.approve' : 'pay.verify', type === 'refund' ? 'refund_approval' : 'payment_verify', f.row.Ref,
       `${f.row.Ref}: ${type === 'refund' ? 'refund of' : 'payment of'} R${zar_(amount)} ${type === 'refund' ? 'needs approval' : 'needs verification'}`, '', user.Email);
     const ps = refreshPaymentStatus_(f.row.Ref, user.Email);
     return { id, paymentStatus: ps.status };
@@ -1039,7 +1063,7 @@ function approveRefund_(b) {
     const pf = findRow_('Payments', String(b.id || ''));
     if (!pf || pf.row.Type !== 'refund') throw userError_('Refund not found.', 'notfound');
     if (pf.row.ApprovalStatus !== 'Pending approval') throw userError_('This refund is not waiting for approval.');
-    if (pf.row.RecordedBy === user.Email) throw userError_('A different person must approve a refund (two-person rule).', 'forbidden');
+    if (pf.row.RecordedBy === user.Email) throw userError_('You recorded this refund, so someone else must approve it (two-person rule).', 'forbidden');
     const approve = b.decision !== 'reject';
     const p = Object.assign({}, pf.row, { ApprovalStatus: approve ? 'Approved' : 'Rejected', ApprovedBy: user.Email, ApprovedAt: new Date(), Verification: approve ? 'Verified' : 'Rejected', VerifiedBy: user.Email, VerifiedAt: new Date(), VerificationSource: safe_(b.source || 'Refund approval', 120) });
     writeRow_('Payments', pf.index, p);
@@ -1163,8 +1187,9 @@ function getTicketFile_(b) {
   const user = requireOpsUser_(b.token);
   const af = findRow_('Attachments', String(b.id || ''));
   if (!af) throw userError_('File not found.', 'notfound');
-  loadTicket_(user, af.row.TicketRef, false);
+  const tf = loadTicket_(user, af.row.TicketRef, false);
   if (af.row.LinkKind === 'payment' && !can_(user, 'pay.view')) throw userError_('File not found.', 'notfound');
+  if (af.row.LinkKind !== 'payment' && moneyOnlyView_(user, tf.row)) throw userError_('File not found.', 'notfound');
   const blob = DriveApp.getFileById(af.row.DriveID).getBlob();
   return { name: af.row.Name, dataUrl: 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes()) };
 }
@@ -1209,6 +1234,13 @@ function getTicket_(b) {
       refundApprove: can_(user, 'pay.refund.approve'), management: can_(user, 'ops.edit.any') },
   });
   if (!cust) view.customer = { ref: t.CustomerRef, name: '(customer record missing)' };
+  if (moneyOnlyView_(user, t) && !(can_(user, 'ops.view.unassigned') && isUnassignedOpen_(t))) {
+    // finance view: money only, read-only. No notes, tasks, checklist, supplier details, files or contact details.
+    Object.assign(view, { limited: true, tasks: [], checklist: [], notes: [], supplierQuotes: [], files: view.files.filter(a => a.linkKind === 'payment'),
+      history: view.history.filter(h => /payment|refund|quote/.test(h.action)), fields: {} });
+    if (view.customer) view.customer = { ref: view.customer.ref, name: view.customer.name };
+  }
+  view.allowed.claim = can_(user, 'ops.claim') && isUnassignedOpen_(t);
   return view;
 }
 
@@ -1216,8 +1248,10 @@ function listTickets_(b) {
   const user = requireOpsUser_(b.token);
   const customers = {}; readTable_('Customers').forEach(c => { customers[c.CustomerRef] = c; });
   const tasks = {}; readTable_('Tasks').forEach(k => { (tasks[k.TicketRef] = tasks[k.TicketRef] || []).push(k); });
-  let list = readTable_('Tickets').filter(t => canSeeTicket_(user, t));
+  const qr = quoteRefs_();
+  let list = readTable_('Tickets').filter(t => canSeeTicket_(user, t, qr));
   const view = String(b.view || 'all');
+  if (view === 'money') list = list.filter(t => hasMoney_(t, qr));
   if (view === 'incoming') list = list.filter(t => ['NEW ENQUIRY', 'AWAITING REVIEW'].indexOf(t.OpStatus) !== -1);
   if (view === 'unassigned') list = list.filter(t => !t.AssignedTo && CLOSED_STATUSES.indexOf(t.OpStatus) === -1);
   if (view === 'mine') list = list.filter(t => t.AssignedTo === user.Email || String(t.SupportBy || '').indexOf(user.Email) !== -1);
@@ -1245,7 +1279,11 @@ function listTickets_(b) {
     : sort === 'due' ? (day_(a.NextActionDue) || 9e15) - (day_(c.NextActionDue) || 9e15)
       : sort === 'created' ? day_(c.Created) - day_(a.Created) : day_(c.LastActivity || c.Updated) - day_(a.LastActivity || a.Updated));
   const total = list.length;
-  return { total, tickets: list.slice(0, Math.min(500, Number(b.limit) || 200)).map(t => ticketSummary_(t, { customers, tasks })) };
+  return { total, tickets: list.slice(0, Math.min(500, Number(b.limit) || 200)).map(t => {
+    const v = ticketSummary_(t, { customers, tasks });
+    if (moneyOnlyView_(user, t) && !(can_(user, 'ops.view.unassigned') && isUnassignedOpen_(t))) { v.limited = true; delete v.customerPhone; delete v.customerEmail; delete v.openTasks; delete v.overdueTasks; }
+    return v;
+  }) };
 }
 
 function myWorkspace_(b) {
@@ -1293,7 +1331,7 @@ function opsOverview_(b) {
   const keyOf = d => { const x = new Date(d); if (bucket === 'day') return Utilities.formatDate(x, 'Africa/Johannesburg', 'yyyy-MM-dd'); if (bucket === 'month') return Utilities.formatDate(x, 'Africa/Johannesburg', 'yyyy-MM'); const m = new Date(x); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return Utilities.formatDate(m, 'Africa/Johannesburg', 'yyyy-MM-dd'); };
   const series = {}; for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) series[keyOf(d)] = 0;
   created.forEach(t => { const k = keyOf(t.Created); series[k] = (series[k] || 0) + 1; });
-  const staff = staffList_().filter(s => PERMS['ops.edit.own'].indexOf(s.role) !== -1);
+  const staff = staffList_().filter(s => s.canOwn);
   const workload = staff.map(s => ({ email: s.email, name: s.name, active: open.filter(t => t.AssignedTo === s.email).length,
     overdue: open.filter(t => t.AssignedTo === s.email && ticketSummary_(t).overdue).length + tasks.filter(k => k.AssignedTo === s.email && taskView_(k).overdue).length }));
   const sent = quotes.filter(q => inRange(q.SentAt)), accepted = quotes.filter(q => inRange(q.AcceptedAt));
@@ -1332,7 +1370,7 @@ function workload_(b) {
   requirePerm_(b.token, 'ops.workload');
   const tickets = readTable_('Tickets'), tasks = readTable_('Tasks');
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
-  return staffList_().filter(s => PERMS['ops.edit.own'].indexOf(s.role) !== -1).map(s => {
+  return staffList_().filter(s => s.canOwn).map(s => {
     const mineOpen = tickets.filter(t => t.AssignedTo === s.email && CLOSED_STATUSES.indexOf(t.OpStatus) === -1);
     const myTasks = tasks.filter(k => k.AssignedTo === s.email);
     const last = readTable_('Activity').filter(a => a.Actor === s.email).slice(-1)[0];
@@ -1360,12 +1398,12 @@ function opsSweep() {
       else if (due - now < 24 * 3600000) notify_(k.AssignedTo, 'deadline_soon', k.TicketRef, `Due within 24 hours on ${k.TicketRef}: ${k.Title}`, 'soon:' + k.TaskID);
     });
     tickets.forEach(t => {
-      if (!t.AssignedTo && now - day_(t.Created) > 4 * 3600000) notifyRoles_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT'], 'unassigned', t.Ref, `${t.Ref} has been unassigned for more than 4 hours`, 'unassigned:' + t.Ref + ':' + dayKey);
-      if (pastDue_(t.Deadline)) notifyRoles_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT'], 'deadline_missed', t.Ref, `${t.Ref} missed its processing deadline`, 'missed:' + t.Ref + ':' + dayKey);
+      if (!t.AssignedTo && now - day_(t.Created) > 4 * 3600000) notifyPerm_('ops.assign', 'unassigned', t.Ref, `${t.Ref} has been unassigned for more than 4 hours`, 'unassigned:' + t.Ref + ':' + dayKey);
+      if (pastDue_(t.Deadline)) notifyPerm_('ops.assign', 'deadline_missed', t.Ref, `${t.Ref} missed its processing deadline`, 'missed:' + t.Ref + ':' + dayKey);
       if (t.AssignedTo && t.NextActionDue && day_(t.NextActionDue) < now) notify_(t.AssignedTo, 'next_action_overdue', t.Ref, `${t.Ref}: next action is overdue (${t.NextAction || 'follow up'})`, 'nextdue:' + t.Ref + ':' + dayKey);
       if (now - day_(t.LastActivity || t.Updated) > 3 * 86400000) {
         notify_(t.AssignedTo, 'inactive', t.Ref, `${t.Ref} has had no activity for 3 days`, 'inactive:' + t.Ref + ':' + dayKey);
-        notifyRoles_(['MANAGEMENT'], 'inactive', t.Ref, `${t.Ref} has had no activity for 3 days`, 'inactive-m:' + t.Ref + ':' + dayKey);
+        notifyPerm_('ops.workload', 'inactive', t.Ref, `${t.Ref} has had no activity for 3 days`, 'inactive-m:' + t.Ref + ':' + dayKey);
       }
       if (t.PaymentStatus && ['Deposit pending', 'Awaiting payment'].indexOf(t.PaymentStatus) !== -1) refreshPaymentStatus_(t.Ref, 'system');
     });

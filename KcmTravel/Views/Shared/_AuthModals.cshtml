@@ -4,8 +4,8 @@
     <div class="signin" data-signin>
         <form class="signin-step" data-step-password novalidate>
             <div class="field">
-                <label>Email address</label>
-                <input type="email" name="email" autocomplete="username" inputmode="email" placeholder="you@example.com" required />
+                <label>Email or username</label>
+                <input type="text" name="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="you@example.com or your username" required />
             </div>
             <div class="field">
                 <label>Password</label>
@@ -36,6 +36,19 @@
             </div>
             <button class="btn btn--primary btn--block" type="submit">Save password &amp; sign in</button>
             <p class="signin-links"><button type="button" class="link-btn" data-change-email>Use a different email</button> · <button type="button" class="link-btn" data-resend>Resend code</button></p>
+        </form>
+        <form class="signin-step" data-step-newpw novalidate hidden>
+            <p class="signin-sent"><strong data-newpw-hi>Welcome.</strong> You signed in with a temporary password. Choose your own password now. Only you will know it.</p>
+            <div class="field">
+                <label>New password</label>
+                <div class="pw-wrap"><input type="password" name="password" autocomplete="new-password" minlength="10" required /><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div>
+                <p class="field-hint">At least 10 characters, with letters and a number. Not the temporary password.</p>
+            </div>
+            <div class="field">
+                <label>Type it again</label>
+                <input type="password" name="password2" autocomplete="new-password" minlength="10" required />
+            </div>
+            <button class="btn btn--primary btn--block" type="submit">Save my password</button>
         </form>
         <form class="signin-step" data-step-mfa novalidate hidden>
             <p class="signin-sent"><strong>Two-step verification.</strong> Open your authenticator app (Google Authenticator, Microsoft Authenticator…) and enter the 6-digit code for KCM Travel &amp; Tours.</p>

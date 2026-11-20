@@ -14,45 +14,99 @@
 const ROLE = { SUPER_ADMIN: 'SUPER_ADMIN', ADMIN: 'ADMIN', MANAGEMENT: 'MANAGEMENT', FINANCE: 'FINANCE', OPERATIONS: 'OPERATIONS', PARTNER: 'PARTNER', CUSTOMER: 'CUSTOMER' };
 const ALL_ROLES = Object.keys(ROLE);
 const STAFF_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT', 'FINANCE', 'OPERATIONS'];
-/** Privileged roles must use multi-factor authentication (authenticator app). */
-const MFA_ROLES = ['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT', 'FINANCE'];
 /** Roles stored by earlier versions of the Sheet are read as their new equivalents (no data rewrite needed). */
 const LEGACY_ROLES = { owner: 'SUPER_ADMIN', admin: 'ADMIN', viewer: 'OPERATIONS', partner: 'PARTNER', customer: 'CUSTOMER' };
 
-const SA = 'SUPER_ADMIN', AD = 'ADMIN', MG = 'MANAGEMENT', FI = 'FINANCE', OP = 'OPERATIONS';
-/** permission -> roles that hold it (least privilege). "own" permissions are further limited to the user's own records in code. */
-const PERMS = {
-  'dashboard.view': [SA, AD, MG, FI, OP],
-  'users.view': [SA, AD],
-  'users.manage': [SA, AD],
-  'audit.view': [SA, AD, MG],
-  'partners.view': [SA, AD, MG, FI],
-  'partners.review': [SA, AD, MG],              // includes identity / ownership documents
-  'payouts.view': [SA, AD, MG, FI],
-  'payouts.manage': [SA, AD, FI],
-  'ratings.moderate': [SA, AD, MG],
-  'messages.view': [SA, AD, MG, OP],
-  'bookings.view': [SA, AD, MG, FI, OP],
-  'bookings.update': [SA, AD, MG],
-  // Operations Centre
-  'ops.intake': [SA, AD, MG, OP],
-  'ops.view.all': [SA, AD, MG, FI],              // OPERATIONS only see tickets they own or support
-  'ops.edit.any': [SA, AD, MG],
-  'ops.edit.own': [SA, AD, MG, OP],
-  'ops.assign': [SA, AD, MG],
-  'ops.workload': [SA, AD, MG],
-  'ops.templates': [SA, AD, MG],
-  'ops.statuses': [SA, AD, MG],
-  'ops.confirm': [SA, AD, MG],                   // confirm bookings, cancel confirmed bookings
-  'quote.prepare': [SA, AD, MG, OP],
-  'quote.approve': [SA, AD, MG],
-  'pay.view': [SA, AD, MG, FI],
-  'pay.record': [SA, AD, MG, FI, OP],             // recorded payments are UNVERIFIED until finance verifies
-  'pay.verify': [SA, AD, FI],
-  'pay.refund.approve': [SA, AD, FI],
-  'customers.erase': [SA, AD],
-  'suppliers.manage': [SA, AD, MG, OP],
-};
+/* ---------------------------------------------------------------------
+ * Access profiles. A ROLE says what kind of account it is (staff, partner, customer, super admin).
+ * What a staff member can SEE and DO comes from the access profiles they hold (one or more):
+ * effective permissions = union of their profiles. Admins and managers build profiles by ticking
+ * menu tabs and actions; built-in profiles can be edited, the Administrator profile is fixed.
+ * --------------------------------------------------------------------- */
+
+/** Every permission, grouped for the profile builder. kind 'tab' = shows a left-panel tab; 'action' = something they can do. */
+const PERM_CATALOG = [
+  // menu tabs
+  { id: 'ops.edit.own', kind: 'tab', group: 'Operations Centre', label: 'My Workspace and my tickets', help: 'My Workspace, My Assigned Tickets, tasks, quotations and bookings for tickets they own or support. They can work on those tickets.' },
+  { id: 'ops.view.unassigned', kind: 'tab', group: 'Operations Centre', label: 'Unassigned Tickets', help: 'See tickets nobody owns yet.' },
+  { id: 'ops.view.all', kind: 'tab', group: 'Operations Centre', label: 'Operations Overview and all tickets', help: 'See every ticket (read). Changing other people\'s tickets needs "Edit any ticket".' },
+  { id: 'ops.view.money', kind: 'tab', group: 'Operations Centre', label: 'Tickets with money (read-only)', help: 'A read-only summary of tickets that have a quotation or payment. For finance.' },
+  { id: 'pay.view', kind: 'tab', group: 'Operations Centre', label: 'Payments', help: 'Payment timeline, balances and refunds.' },
+  { id: 'ops.workload', kind: 'tab', group: 'Operations Centre', label: 'Employee Workload', help: 'How many tickets and tasks each person has.' },
+  { id: 'audit.view', kind: 'tab', group: 'Operations Centre', label: 'Activity & Audit History', help: 'Who did what, when.' },
+  { id: 'ops.templates', kind: 'tab', group: 'Operations Centre', label: 'Checklists & statuses', help: 'Edit checklist templates.' },
+  { id: 'dashboard.view', kind: 'tab', group: 'Website & partners', label: 'Website overview', help: 'Website figures and charts.' },
+  { id: 'partners.view', kind: 'tab', group: 'Website & partners', label: 'Partner applications, Partners, Ratings', help: 'See partner applications and partners.' },
+  { id: 'bookings.view', kind: 'tab', group: 'Website & partners', label: 'Website requests', help: 'Booking requests from the website.' },
+  { id: 'payouts.view', kind: 'tab', group: 'Website & partners', label: 'Partner trips & payouts', help: 'Trips done by partners and what we owe them.' },
+  { id: 'messages.view', kind: 'tab', group: 'Website & partners', label: 'Messages', help: 'Contact-form and careers messages.' },
+  { id: 'users.view', kind: 'tab', group: 'Website & partners', label: 'Users & access', help: 'See staff accounts and access profiles.' },
+  // actions
+  { id: 'ops.intake', kind: 'action', group: 'Tickets', label: 'Register enquiries', help: 'Create a ticket from a call, WhatsApp or walk-in.' },
+  { id: 'ops.claim', kind: 'action', group: 'Tickets', label: 'Pick up unassigned tickets', help: 'Take an unassigned ticket for themselves.' },
+  { id: 'ops.assign', kind: 'action', group: 'Tickets', label: 'Assign and reassign tickets', help: 'Give tickets to anyone, hand over work.' },
+  { id: 'ops.edit.any', kind: 'action', group: 'Tickets', label: 'Edit any ticket', help: 'Change tickets they do not own, reopen closed tickets.' },
+  { id: 'ops.confirm', kind: 'action', group: 'Tickets', label: 'Confirm and cancel bookings', help: 'Mark a booking confirmed or cancel a confirmed booking.' },
+  { id: 'ops.statuses', kind: 'action', group: 'Tickets', label: 'Manage custom statuses', help: 'Add or rename ticket statuses.' },
+  { id: 'suppliers.manage', kind: 'action', group: 'Tickets', label: 'Manage suppliers', help: 'Add suppliers and supplier quotes.' },
+  { id: 'quote.prepare', kind: 'action', group: 'Quotations', label: 'Prepare quotations', help: 'Draft quotations on tickets they can edit.' },
+  { id: 'quote.approve', kind: 'action', group: 'Quotations', label: 'Approve quotations', help: 'Approve a quotation before it goes to the customer.' },
+  { id: 'pay.record', kind: 'action', group: 'Money', label: 'Record payments received', help: 'Recorded payments stay unverified until finance checks them.' },
+  { id: 'pay.verify', kind: 'action', group: 'Money', label: 'Verify payments and record refunds', help: 'Check payments against the bank, record refunds (refunds then need approval).' },
+  { id: 'pay.refund.approve', kind: 'action', group: 'Money', label: 'Approve refunds (money out)', help: 'Approve a refund someone else recorded. Never their own.' },
+  { id: 'payouts.manage', kind: 'action', group: 'Money', label: 'Record partner trips and payouts', help: 'Record trips and mark approved payouts as paid.' },
+  { id: 'payouts.approve', kind: 'action', group: 'Money', label: 'Approve partner payouts (money out)', help: 'Approve a payout someone else recorded. Never their own.' },
+  { id: 'partners.review', kind: 'action', group: 'Website & partners', label: 'Review partner applications', help: 'Approve, reject or ask for more info, see ID documents.' },
+  { id: 'ratings.moderate', kind: 'action', group: 'Website & partners', label: 'Moderate ratings', help: 'Publish or hide guest ratings.' },
+  { id: 'bookings.update', kind: 'action', group: 'Website & partners', label: 'Update website requests', help: 'Change the status of website booking requests.' },
+  { id: 'users.manage', kind: 'action', group: 'People', label: 'Create and manage staff accounts', help: 'Add employees, set temporary passwords, give profiles, disable accounts.' },
+  { id: 'profiles.manage', kind: 'action', group: 'People', label: 'Build access profiles', help: 'Create and edit access profiles like this one.' },
+  { id: 'customers.erase', kind: 'action', group: 'People', label: 'Erase customer data (POPIA)', help: 'Permanently anonymise a customer on request.' },
+];
+const ALL_PERMS = PERM_CATALOG.map(p => p.id);
+/** Holding any of these means the account must use an authenticator app. */
+const PRIVILEGED_PERMS = ['users.manage', 'profiles.manage', 'pay.verify', 'pay.refund.approve', 'payouts.manage', 'payouts.approve', 'customers.erase', 'ops.view.all', 'ops.view.money'];
+
+const BUILTIN_PROFILES = [
+  { id: 'administrator', name: 'Administrator', description: 'Everything, including staff accounts and access profiles. Cannot be edited.', perms: ALL_PERMS.slice(), locked: true },
+  { id: 'manager', name: 'Manager', description: 'Runs operations: sees all tickets, assigns work, approves quotations, refunds and payouts, manages staff accounts.',
+    perms: ALL_PERMS.filter(p => ['customers.erase', 'pay.verify', 'payouts.manage', 'ops.view.money'].indexOf(p) === -1) },
+  { id: 'finance', name: 'Finance Administrator', description: 'Payments, balances, refunds and partner payouts. Sees only tickets that have money on them, read-only.',
+    perms: ['ops.view.money', 'pay.view', 'pay.record', 'pay.verify', 'payouts.view', 'payouts.manage'] },
+  { id: 'consultant', name: 'Travel Consultant', description: 'Works on their own and assigned tickets, can see and pick up unassigned tickets.',
+    perms: ['ops.edit.own', 'ops.view.unassigned', 'ops.claim', 'ops.intake', 'quote.prepare', 'pay.record', 'suppliers.manage', 'messages.view', 'bookings.view'] },
+  { id: 'web', name: 'Website & Partners Officer', description: 'Website requests, messages, partner applications and ratings. No access to the Operations Centre.',
+    perms: ['dashboard.view', 'partners.view', 'partners.review', 'ratings.moderate', 'bookings.view', 'bookings.update', 'messages.view'] },
+  { id: 'readonly', name: 'Read-only', description: 'Can look at operations, payments and the website pages but cannot change anything.',
+    perms: ['dashboard.view', 'ops.view.all', 'pay.view', 'payouts.view', 'partners.view', 'bookings.view', 'messages.view'] },
+];
+/** Accounts from before access profiles (no Profiles value) get the profile matching their old role. */
+const ROLE_DEFAULT_PROFILE = { ADMIN: 'administrator', MANAGEMENT: 'manager', FINANCE: 'finance', OPERATIONS: 'consultant' };
+
+let PROFILE_CACHE_ = null;
+function profiles_() {
+  if (PROFILE_CACHE_) return PROFILE_CACHE_;
+  const stored = {};
+  readTable_('AccessProfiles').forEach(r => { stored[r.ProfileID] = r; });
+  const list = BUILTIN_PROFILES.map(b => {
+    const r = stored[b.id];
+    return { id: b.id, name: r && !b.locked ? r.Name : b.name, description: r && !b.locked ? r.Description : b.description,
+      perms: r && !b.locked ? cleanPerms_(r.Permissions) : b.perms.slice(), builtIn: true, locked: !!b.locked };
+  });
+  Object.keys(stored).filter(id => !BUILTIN_PROFILES.some(b => b.id === id)).forEach(id => {
+    const r = stored[id];
+    list.push({ id, name: r.Name, description: r.Description, perms: cleanPerms_(r.Permissions), builtIn: false, locked: false });
+  });
+  PROFILE_CACHE_ = list;
+  return list;
+}
+function cleanPerms_(v) { return (Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()).filter(x => ALL_PERMS.indexOf(x) !== -1); }
+function profileIdsOf_(u) {
+  const ids = String((u && u.Profiles) || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (ids.length) return ids;
+  const d = ROLE_DEFAULT_PROFILE[roleOf_(u)];
+  return d ? [d] : [];
+}
 
 function roleOf_(u) {
   const r = String((u && u.Role) || '');
@@ -60,9 +114,36 @@ function roleOf_(u) {
   return ALL_ROLES.indexOf(r) !== -1 ? r : 'CUSTOMER';
 }
 function isStaff_(u) { return STAFF_ROLES.indexOf(roleOf_(u)) !== -1; }
-function can_(u, perm) { return !!u && (PERMS[perm] || []).indexOf(roleOf_(u)) !== -1; }
-function permissionsOf_(u) { return Object.keys(PERMS).filter(p => can_(u, p)); }
-function needsMfa_(u) { return MFA_ROLES.indexOf(roleOf_(u)) !== -1; }
+/** Effective permissions: super admin has everything; partners and customers never hold staff permissions. */
+function permissionsOf_(u) {
+  if (!u) return [];
+  if (u.__perms) return u.__perms;
+  let out = [];
+  if (roleOf_(u) === 'SUPER_ADMIN') out = ALL_PERMS.slice();
+  else if (isStaff_(u)) {
+    const ids = profileIdsOf_(u), seen = {};
+    profiles_().filter(p => ids.indexOf(p.id) !== -1).forEach(p => p.perms.forEach(x => { seen[x] = 1; }));
+    out = ALL_PERMS.filter(x => seen[x]);
+  }
+  try { Object.defineProperty(u, '__perms', { value: out, enumerable: false, configurable: true }); } catch (e) { /* frozen object */ }
+  return out;
+}
+function can_(u, perm) { return permissionsOf_(u).indexOf(perm) !== -1; }
+function needsMfa_(u) { return roleOf_(u) === 'SUPER_ADMIN' || permissionsOf_(u).some(p => PRIVILEGED_PERMS.indexOf(p) !== -1); }
+/** Account tier stored in Users.Role for staff, derived from what their profiles allow (used for labels and older code paths). */
+function tierFor_(perms) {
+  if (perms.indexOf('users.manage') !== -1 && perms.indexOf('customers.erase') !== -1) return 'ADMIN';
+  if (perms.indexOf('users.manage') !== -1 || perms.indexOf('ops.assign') !== -1 || perms.indexOf('ops.view.all') !== -1) return 'MANAGEMENT';
+  if (perms.indexOf('pay.verify') !== -1 || perms.indexOf('ops.view.money') !== -1) return 'FINANCE';
+  return 'OPERATIONS';
+}
+function permsOfProfiles_(ids) {
+  const seen = {};
+  profiles_().filter(p => ids.indexOf(p.id) !== -1).forEach(p => p.perms.forEach(x => { seen[x] = 1; }));
+  return ALL_PERMS.filter(x => seen[x]);
+}
+/** Staff holding a permission (for notifications). */
+function staffWith_(perm) { return readTable_('Users').filter(u => u.Status !== 'disabled' && isStaff_(u) && can_(u, perm)); }
 
 /** Signed-in user holding a permission. Privileged sessions must have passed MFA. */
 function requirePerm_(token, perm) {
@@ -313,7 +394,7 @@ function resetUserMfa_(b) {
   if (email === actor.Email) throw userError_('You cannot reset your own authenticator. Ask another administrator.');
   const target = findUser_(email);
   if (!target) throw userError_('User not found.');
-  if (roleOf_(target) === 'SUPER_ADMIN' || (roleOf_(target) === 'ADMIN' && roleOf_(actor) !== 'SUPER_ADMIN')) throw userError_('Only the super admin can reset this account.');
+  if (roleOf_(target) === 'SUPER_ADMIN') throw userError_('Only the super admin can reset this account.');
   setUserFields_(email, { MfaSecret: '', MfaEnabledAt: '', RecoveryCodes: '' });
   revokeSessions_(email);
   log_(actor.Email, 'mfa_reset', email, '');

@@ -22,7 +22,7 @@ const res = []; const check = (n, c, d) => { res.push(!!c); console.log(c ? '  â
   await p.click('.ops-table tbody tr:first-child [data-qa]'); await p.waitForSelector('.assign-menu');
   await p.waitForTimeout(400); await p.screenshot({ path: '/home/claude/ops-shots/assign-menu.png' });
   const opts = await p.$$eval('.assign-menu [data-to]', bs => bs.map(x => x.textContent));
-  check('menu lists employees who can work tickets (no Finance)', opts.some(o => /Nomsa/.test(o)) && !opts.some(o => /Fiona|Sam Pillay/.test(o)), opts.join(' | '));
+  check('menu lists people whose profile lets them own tickets (finance-only Fiona is not offered; Sam, Manager + Finance, is)', opts.some(o => /Nomsa/.test(o)) && opts.some(o => /Sam Pillay/.test(o)) && !opts.some(o => /Fiona/.test(o)), opts.join(' | '));
   check('menu shows each person\'s active ticket count', opts.some(o => /active/.test(o)));
   await p.click('.assign-menu [data-to="nomsa.ops@demo.kcm.test"]'); await p.waitForSelector('.toast'); await p.waitForTimeout(1500);
   let t = (await call('getTicket', { ref }, OWNER)).data;

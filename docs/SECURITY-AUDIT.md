@@ -29,11 +29,13 @@ Version 1.4.0 of the backend (`backend/apps-script`). Audit date: 19 November 20
 
 ## 2. Controls now in place
 
-- **Role rules:** nobody can change their own role; nobody can be made Super Admin through the website; only a Super Admin manages Admins.
+- **Access rules (v1.5):** access comes from access profiles (one or more per person). Nobody can change their own access; nobody can give or build a profile with access they don't hold themselves (no privilege escalation); only an administrator changes an administrator; nobody can be made Super Admin through the website. Partners and customers never hold staff permissions.
+- **Temporary passwords:** staff accounts start with a temporary password (Argon2id-hashed like any password) that works once, expires after 7 days and is never emailed. First sign-in requires a new password before any session or MFA step. `changeMyPassword` needs the current password and signs out other devices. The pick-up flag is set server-side only (`claimTicket`), never from the request body. Tested: `backend/dev/access-test.js` (52 checks).
+- **Least privilege for finance:** finance sees only tickets with a quotation or payment, as a read-only money summary (no notes, tasks, files, contact details); tasks, customer records and non-payment files of those tickets are refused.
 - **No IDOR:** Operations staff only reach tickets they own or support. Someone else's ticket answers exactly like a missing one, so ticket numbers can't be probed.
 - **Mass-assignment protection:** ticket updates go through a whitelist of fields (`TICKET_FIELDS`); unknown fields are ignored, and priority and owner changes need their own permissions.
 - **Concurrent edits:** each ticket has a `Version`. A stale save is refused with "someone else updated this ticket".
-- **Money:** only Finance (or Admin) can verify a payment. Unverified payments never count towards "paid". Refunds need approval. Payment status is calculated by the server, not typed in. Agents see payment status but not bank references.
+- **Money:** only Finance (or Admin) can verify a payment. Unverified payments never count towards "paid". Refunds and partner payouts are recorded by one person and approved by a manager (never the recorder). Payment status is calculated by the server, not typed in. Agents see payment status but not bank references.
 - **Bookings:** only Management/Admin can confirm a booking, and only once a quotation is accepted and a verified payment exists. Kaycee can't confirm anything; it only creates an enquiry.
 - **Status rules:** the 20-status lifecycle has guards (for example, only confirmed bookings can be completed, and an unpaid balance blocks completion unless a manager overrides it with a note; cancelling, on hold and lost all need a reason).
 - **Audit trail:** every change is written to `Activity` (who, when, old → new). Notes are append-only.

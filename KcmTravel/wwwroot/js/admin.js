@@ -56,9 +56,13 @@
             }
             if (window.KCMOps && !legacy) { const o = window.KCMOps(opsCtx()); Object.assign(VIEWS, o.views); Object.assign(TITLES, o.titles); o.start?.(); }
             $$("[data-perm]").forEach(a => { a.hidden = !a.dataset.perm.split("|").some(can); });
+            $("[data-mypw]").hidden = legacy;
             $$("[data-nav-group]").forEach(g => { let n = g.nextElementSibling, any = false; while (n && !n.hasAttribute("data-nav-group")) { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; });
             setupNavGroups();
-            if (!location.hash || !VIEWS[location.hash.slice(1).split("/")[0]]) location.replace("#" + (can("ops.edit.own") || can("ops.view.all") ? "workspace" : "overview"));
+            const firstTab = ($$("[data-view]").find(a => !a.hidden) || {}).dataset?.view || "overview";
+            const startView = can("ops.edit.own") ? "workspace" : can("ops.view.all") ? "ops" : firstTab;
+            if (!location.hash || !VIEWS[location.hash.slice(1).split("/")[0]]) location.replace("#" + startView);
+            if (can("ops.view.money") && !can("ops.view.all") && !can("ops.edit.own")) { const t = $("[data-view=tickets]"); if (t) t.lastChild.textContent = "Tickets with money"; }
             route();
         }
 
@@ -107,6 +111,30 @@
         }
 
         root.addEventListener("click", e => { if (e.target.closest("[data-sample]")) { sample = true; me = SAMPLE.me(); root.classList.remove("adm--gate"); $("[data-sample-pill]").hidden = false; route(); } });
+        /* Every staff member can change their own password (needs the current one; other devices are signed out). */
+        $("[data-mypw]").addEventListener("click", () => {
+            drawer.hidden = false; document.body.classList.add("adm-locked");
+            dbody.innerHTML = `<p class="eyebrow">My account</p><h2 id="drawer-title">Change my password</h2>
+                <form class="emp-form" data-mypw-form novalidate>
+                    <div class="field"><label for="m-cur">Current password</label><div class="pw-wrap"><input id="m-cur" name="current" type="password" autocomplete="current-password" required><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div></div>
+                    <div class="field"><label for="m-new">New password</label><div class="pw-wrap"><input id="m-new" name="password" type="password" autocomplete="new-password" minlength="10" required><button type="button" class="pw-toggle" data-pw-toggle aria-label="Show password">Show</button></div><p class="field-hint">At least 10 characters, with letters and a number.</p></div>
+                    <div class="field"><label for="m-new2">Type the new password again</label><input id="m-new2" name="password2" type="password" autocomplete="new-password" required></div>
+                    <p class="form-error" data-mypw-err hidden></p>
+                    <div class="btn-row"><button class="btn btn--primary" type="submit">Change password</button><button type="button" class="btn btn--ghost" data-drawer-close>Cancel</button></div>
+                    <p class="muted small">You stay signed in here. Any other device you used is signed out.</p>
+                </form>`;
+            const f = $("[data-mypw-form]", dbody), err = $("[data-mypw-err]", dbody);
+            f.current.focus();
+            f.addEventListener("submit", async e => {
+                e.preventDefault(); err.hidden = true;
+                const fail = m => { err.textContent = m; err.hidden = false; };
+                const pw = f.password.value;
+                if (!f.current.value) return fail("Enter your current password.");
+                if (pw.length < 10 || !/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) return fail("Use at least 10 characters, with letters and a number.");
+                if (pw !== f.password2.value) return fail("The two new passwords are not the same.");
+                try { await get("changeMyPassword", { current: f.current.value, password: pw }); toast("Password changed"); closeDrawer(); } catch (ex) { fail(ex.message); }
+            });
+        });
         $("[data-refresh]").addEventListener("click", () => { Object.keys(cache).forEach(k => delete cache[k]); route(); });
         window.addEventListener("hashchange", route);
 
@@ -118,7 +146,7 @@
             $$("[data-view]").forEach(a => a.classList.toggle("is-active", a.dataset.view === navView));
             openGroupOf($("[data-view].is-active"));
             $("[data-adm-title]").textContent = TITLES[view] || TITLES.overview;
-            $("[data-adm-eyebrow]").textContent = `${me.name || me.email} · ${ROLE_LABEL[me.role] || me.role}`;
+            $("[data-adm-eyebrow]").textContent = `${me.name || me.email} · ${me.jobTitle || ROLE_LABEL[me.role] || me.role}`;
             const fresh = body.cloneNode(false); body.replaceWith(fresh); body = fresh; // drop listeners from the previous view
             body.innerHTML = `<div class="adm-card"><p>Loading…</p></div>`;
             const deep = location.hash.slice(1).split("/")[1]; // e.g. #applications/P-2611-AB12 or #ticket/KCM-2026-000001
@@ -293,7 +321,7 @@
                     $("[data-list]", body).innerHTML = rows.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Trip</th><th>Partner</th><th class="num">Value</th><th class="num">Payout</th><th>Status</th><th></th></tr></thead><tbody>
                         ${rows.map(j => `<tr><td><strong>${esc(j.service)}</strong><span>${fmtDate(j.date)} · ${esc(j.id)}${j.bookingRef ? " · " + esc(j.bookingRef) : ""} · ${j.guests} guests</span></td><td>${esc(j.business)}</td>
                         <td class="num">${R(j.gross)}<span>${j.commissionPct}%</span></td><td class="num"><strong>${R(j.payout)}</strong></td>
-                        <td>${can("payouts.manage") ? `<select class="status-select" data-payout="${esc(j.id)}" aria-label="Payout status">${PAYOUT_STATUSES.map(s => `<option ${s === j.payoutStatus ? "selected" : ""}>${s}</option>`).join("")}</select>` : esc(j.payoutStatus)}${j.paidOn ? `<span>paid ${fmtDate(j.paidOn)}</span>` : ""}</td>
+                        <td>${can("payouts.manage") || can("payouts.approve") ? `<select class="status-select" data-payout="${esc(j.id)}" aria-label="Payout status">${PAYOUT_STATUSES.filter(s => s === j.payoutStatus || s === "Pending" || s === "On hold" || (s === "Approved" && can("payouts.approve")) || (s === "Paid" && can("payouts.manage") && j.payoutStatus === "Approved")).map(s => `<option ${s === j.payoutStatus ? "selected" : ""}>${s}</option>`).join("")}</select>` : esc(j.payoutStatus)}${j.paidOn ? `<span>paid ${fmtDate(j.paidOn)}</span>` : ""}</td>
                         <td>${j.bookingRef ? `<button type="button" class="btn btn--ghost btn--sm" data-ratelink="${esc(j.partnerId)}|${esc(j.bookingRef)}">Rating link</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
                         : empty("No trips", filter === "All" ? "Log the first trip on the right." : "Nothing with this status.");
                 };
@@ -361,70 +389,156 @@
             },
 
             async users() {
-                const list = await get("listUsers");
+                const [list, pr] = await Promise.all([get("listUsers"), get("listProfiles")]);
+                const profiles = pr.profiles, catalog = pr.catalog;
+                const pName = id => (profiles.find(p => p.id === id) || {}).name || id;
                 const isStaffRole = r => ["SUPER_ADMIN", "ADMIN", "MANAGEMENT", "FINANCE", "OPERATIONS"].includes(r);
                 const staff = list.filter(u => isStaffRole(u.role)), partners = list.filter(u => !isStaffRole(u.role));
-                const assignable = me.role === "SUPER_ADMIN" ? ["ADMIN", "MANAGEMENT", "FINANCE", "OPERATIONS", "PARTNER"] : ["MANAGEMENT", "FINANCE", "OPERATIONS", "PARTNER"];
-                const roleOpts = r => assignable.map(x => `<option value="${x}" ${x === r ? "selected" : ""}>${ROLE_LABEL[x]}</option>`).join("");
-                const mfaRoles = ["SUPER_ADMIN", "ADMIN", "MANAGEMENT", "FINANCE"];
-                const row = u => {
-                    const locked = u.role === "SUPER_ADMIN" || u.email === me.email || (u.role === "ADMIN" && me.role !== "SUPER_ADMIN") || !can("users.manage");
-                    return `<tr><td><strong>${esc(u.name || "—")}</strong><span>${esc(u.email)}</span></td>
-                        <td>${locked ? `<span class="role-chip">${esc(ROLE_LABEL[u.role] || u.role)}</span>` : `<select class="status-select" data-role="${esc(u.email)}" aria-label="Role for ${esc(u.email)}">${roleOpts(u.role)}</select>`}</td>
-                        <td>${locked ? esc(u.status) : `<select class="status-select" data-ustatus="${esc(u.email)}" aria-label="Status for ${esc(u.email)}"><option ${u.status === "active" ? "selected" : ""}>active</option><option ${u.status === "disabled" ? "selected" : ""}>disabled</option></select>`}</td>
-                        <td>${u.mfa ? `<span class="status status--good">On</span>${!locked ? ` <button type="button" class="link-btn" data-mfa-reset="${esc(u.email)}">Reset</button>` : ""}` : mfaRoles.includes(u.role) ? `<span class="status status--warn">Set up at next sign-in</span>` : `<span class="muted">Optional</span>`}</td>
-                        <td>${u.lastLogin ? fmtWhen(u.lastLogin) : `<span class="muted">${u.provider === "invited" ? "Invited, not signed in yet" : "—"}</span>`}</td></tr>`;
+                const tab = (location.hash.split("/")[1] || "team");
+                const canManage = can("users.manage");
+                const twoStep = u => u.mfa ? `<span class="status status--good">On</span>` : u.mfaRequired ? `<span class="status status--warn">At next sign-in</span>` : `<span class="muted">Not needed</span>`;
+                const signin = u => u.lastLogin ? fmtWhen(u.lastLogin) : `<span class="muted">${u.mustChangePassword ? (u.tempExpired ? "Temporary password expired" : "Not signed in yet") : "—"}</span>`;
+                const staffRow = u => {
+                    const locked = u.role === "SUPER_ADMIN" || u.email === me.email || !canManage;
+                    return `<tr class="${u.status === "disabled" ? "is-disabled" : ""}"><td><strong>${esc(u.name || "—")}</strong><span>${esc(u.email)}${u.username ? ` · @${esc(u.username)}` : ""}</span></td>
+                        <td>${esc(u.jobTitle || (u.role === "SUPER_ADMIN" ? "Owner" : ROLE_LABEL[u.role] || ""))}</td>
+                        <td>${u.role === "SUPER_ADMIN" ? `<span class="role-chip role-chip--owner">Super admin: everything</span>` : u.profiles.map(id => `<span class="role-chip">${esc(pName(id))}</span>`).join(" ")}</td>
+                        <td>${u.status === "disabled" ? `<span class="status status--bad">Disabled</span>` : u.mustChangePassword ? `<span class="status status--info">Must set password</span>` : `<span class="status status--good">Active</span>`}</td>
+                        <td>${twoStep(u)}</td><td>${signin(u)}</td>
+                        <td>${locked ? (u.email === me.email ? `<span class="muted">You</span>` : "") : `<button type="button" class="btn btn--ghost btn--sm" data-edit-user="${esc(u.email)}">Edit</button>`}</td></tr>`;
                 };
+                const tabsUsed = p => catalog.filter(c => c.kind === "tab" && p.perms.includes(c.id));
+                const matrix = () => `<div class="table-wrap"><table class="table access-matrix"><thead><tr><th>Can see / do</th>${profiles.map(p => `<th>${esc(p.name)}</th>`).join("")}</tr></thead><tbody>
+                    ${catalog.map(c => `<tr><td><strong>${esc(c.label)}</strong><span>${c.kind === "tab" ? "Menu tab" : esc(c.group)}</span></td>${profiles.map(p => `<td class="${p.perms.includes(c.id) ? "yes" : "no"}">${p.perms.includes(c.id) ? `<span aria-label="yes">✓</span>` : `<span aria-label="no">·</span>`}</td>`).join("")}</tr>`).join("")}
+                    </tbody></table></div>`;
                 body.innerHTML = `
-                    <div class="adm-grid">
-                        <div class="adm-card adm-span-2">
-                            <div class="card-head"><h2>KCM team</h2><p>People who can open this dashboard</p></div>
-                            <div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Two-step</th><th>Last sign-in</th></tr></thead><tbody>${staff.map(row).join("")}</tbody></table></div>
-                        </div>
-                        <div class="adm-card">
-                            <div class="card-head"><h2>Give someone access</h2><p>They'll get an email to set their password.</p></div>
-                            ${can("users.manage") ? `<form class="invite" data-invite novalidate>
-                                <div class="field"><label for="inv-email">Email *</label><input id="inv-email" name="email" type="email" required placeholder="name@example.com"></div>
-                                <div class="field"><label for="inv-name">Name</label><input id="inv-name" name="name"></div>
-                                <div class="field"><label for="inv-role">Role</label><select id="inv-role" name="role">${assignable.filter(r => r !== "PARTNER").map(r => `<option value="${r}" ${r === "OPERATIONS" ? "selected" : ""}>${ROLE_LABEL[r]}</option>`).join("")}</select></div>
-                                <button class="btn btn--primary btn--block" type="submit">Give access</button>
-                            </form>` : `<p class="muted">Only admins can give access.</p>`}
-                            <dl class="roles">
-                                <div><dt>Super admin</dt><dd>Everything, including adding admins. Two-step sign-in required.</dd></div>
-                                <div><dt>Admin</dt><dd>Users, partners, operations and finance approvals. Two-step required.</dd></div>
-                                <div><dt>Management</dt><dd>All tickets, assigning work, approving quotations, confirming bookings. Two-step required.</dd></div>
-                                <div><dt>Finance</dt><dd>Verifies payments and approves refunds; reads tickets. Two-step required.</dd></div>
-                                <div><dt>Operations</dt><dd>Registers enquiries and works on tickets assigned to them. Records payments as unverified.</dd></div>
-                                <div><dt>Partner</dt><dd>Only their own listings in the partner portal.</dd></div>
-                            </dl>
-                        </div>
-                        <div class="adm-card adm-span-3">
-                            <div class="card-head"><h2>Partner & customer accounts</h2><p>${partners.length} account${partners.length === 1 ? "" : "s"}</p></div>
-                            ${partners.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Two-step</th><th>Last sign-in</th></tr></thead><tbody>${partners.map(row).join("")}</tbody></table></div>` : empty("No partner accounts yet", "Partners appear here after they register.")}
-                        </div>
-                    </div>`;
-                const save = async (email, patch) => {
-                    const u = list.find(x => x.email === email) || {};
-                    try { await get("saveUser", { email, name: u.name, role: patch.role || u.role, status: patch.status || u.status }); Object.assign(u, patch); toast("Access updated. They'll need to sign in again."); }
-                    catch (err) { toast(err.message, true); route(); }
-                };
-                body.addEventListener("change", e => {
-                    const r = e.target.closest("[data-role]"); if (r) save(r.dataset.role, { role: r.value });
-                    const s = e.target.closest("[data-ustatus]"); if (s) save(s.dataset.ustatus, { status: s.value });
+                    <div class="chips sub-tabs" role="tablist">${[["team", `KCM team <b>${staff.length}</b>`], ["profiles", `Access profiles <b>${profiles.length}</b>`], ["matrix", "Who does what"], ["partners", `Partner accounts <b>${partners.length}</b>`]]
+                        .map(([k, l]) => `<a class="chip ${tab === k ? "is-active" : ""}" href="#users/${k}" role="tab" aria-selected="${tab === k}">${l}</a>`).join("")}</div>
+                    ${tab === "team" ? `<div class="adm-card">
+                        <div class="card-head card-head--row"><div><h2>KCM team</h2><p>Everyone who can open this dashboard. What they see comes from their access profiles.</p></div>
+                        ${canManage ? `<button type="button" class="btn btn--primary btn--sm" data-new-user>+ Add employee</button>` : ""}</div>
+                        <div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Job role</th><th>Access profiles</th><th>Account</th><th>Two-step</th><th>Last sign-in</th><th></th></tr></thead><tbody>${staff.map(staffRow).join("")}</tbody></table></div>
+                        <p class="muted small">New employees sign in with the temporary password you set (it works once and expires after 7 days), then choose their own. Changing someone's profiles, disabling them or setting a new temporary password signs them out at once.</p></div>` : ""}
+                    ${tab === "profiles" ? `<div class="adm-card">
+                        <div class="card-head card-head--row"><div><h2>Access profiles</h2><p>Each profile is a set of menu tabs and actions. A person can hold several; they get everything their profiles allow.</p></div>
+                        ${can("profiles.manage") ? `<button type="button" class="btn btn--primary btn--sm" data-new-profile>+ New profile</button>` : ""}</div>
+                        <div class="profile-grid">${profiles.map(p => `<article class="profile-card">
+                            <header><h3>${esc(p.name)}</h3>${p.locked ? `<span class="role-chip">Fixed</span>` : p.builtIn ? `<span class="role-chip">Built-in</span>` : `<span class="role-chip role-chip--custom">Custom</span>`}</header>
+                            <p>${esc(p.description || "")}</p>
+                            <p class="muted small">${tabsUsed(p).length} menu tab${tabsUsed(p).length === 1 ? "" : "s"} · ${p.perms.length - tabsUsed(p).length} action${p.perms.length - tabsUsed(p).length === 1 ? "" : "s"} · ${p.users} ${p.users === 1 ? "person" : "people"}</p>
+                            <button type="button" class="btn btn--ghost btn--sm" data-edit-profile="${esc(p.id)}">${p.locked || !can("profiles.manage") ? "View" : "Edit"}</button></article>`).join("")}</div></div>` : ""}
+                    ${tab === "matrix" ? `<div class="adm-card"><div class="card-head"><h2>Who does what</h2><p>Every profile side by side. Money going out (refunds and partner payouts) is recorded by finance and approved by a manager; nobody approves their own.</p></div>${matrix()}</div>` : ""}
+                    ${tab === "partners" ? `<div class="adm-card"><div class="card-head"><h2>Partner & customer accounts</h2><p>Partners only see their own listings in the partner portal. They never see the Operations Centre.</p></div>
+                        ${partners.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Type</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>${partners.map(u => `<tr><td><strong>${esc(u.name || "—")}</strong><span>${esc(u.email)}</span></td><td>${esc(ROLE_LABEL[u.role] || u.role)}</td>
+                            <td>${canManage ? `<select class="status-select" data-acct-status="${esc(u.email)}" aria-label="Status for ${esc(u.email)}"><option value="active" ${u.status !== "disabled" ? "selected" : ""}>Active</option><option value="disabled" ${u.status === "disabled" ? "selected" : ""}>Disabled</option></select>` : esc(u.status)}</td><td>${signin(u)}</td></tr>`).join("")}</tbody></table></div>` : empty("No partner accounts yet", "Partners appear here after they register.")}</div>` : ""}`;
+
+                body.addEventListener("change", async e => {
+                    const s = e.target.closest("[data-acct-status]"); if (!s) return;
+                    try { await get("saveUser", { email: s.dataset.acctStatus, status: s.value }); toast("Account updated"); } catch (err) { toast(err.message, true); route(); }
                 });
-                body.addEventListener("click", async e => {
-                    const b = e.target.closest("[data-mfa-reset]"); if (!b) return;
-                    if (!confirm(`Reset two-step verification for ${b.dataset.mfaReset}? They'll set it up again at their next sign-in, and are signed out everywhere.`)) return;
-                    try { await get("resetUserMfa", { email: b.dataset.mfaReset }); toast("Two-step verification reset"); route(); } catch (err) { toast(err.message, true); }
+                body.addEventListener("click", e => {
+                    if (e.target.closest("[data-new-user]")) openEmployee(null);
+                    const eu = e.target.closest("[data-edit-user]"); if (eu) openEmployee(list.find(u => u.email === eu.dataset.editUser));
+                    if (e.target.closest("[data-new-profile]")) openProfile(null);
+                    const ep = e.target.closest("[data-edit-profile]"); if (ep) openProfile(profiles.find(p => p.id === ep.dataset.editProfile));
                 });
-                $("[data-invite]", body)?.addEventListener("submit", async e => {
-                    e.preventDefault();
-                    const f = e.target, email = f.email.value.trim().toLowerCase();
-                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { toast("Please enter a valid email.", true); return; }
-                    const btn = f.querySelector("button"); btn.disabled = true;
-                    try { await get("saveUser", { email, name: f.name.value.trim(), role: f.role.value, status: "active" }); toast(`Access given to ${email}`); route(); }
-                    catch (err) { toast(err.message, true); btn.disabled = false; }
-                });
+
+                const tempPw = () => { const a = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz", d = "23456789", r = n => { const x = new Uint32Array(1); crypto.getRandomValues(x); return x[0] % n; };
+                    let s = ""; for (let i = 0; i < 4; i++) s += a[r(a.length)]; s += "-"; for (let i = 0; i < 4; i++) s += d[r(d.length)]; s += "-"; for (let i = 0; i < 4; i++) s += a[r(a.length)]; return s; };
+                const JOBS = ["Travel Consultant", "Senior Travel Consultant", "Junior Tourism Manager", "Operations Manager", "Finance Administrator", "Finance Manager", "Driver-Guide", "Marketing & Social Media", "Office Administrator"];
+                function seesList(ids) {
+                    const perms = new Set(profiles.filter(p => ids.includes(p.id)).flatMap(p => p.perms));
+                    const tabs = catalog.filter(c => c.kind === "tab" && perms.has(c.id)).map(c => c.label), acts = catalog.filter(c => c.kind === "action" && perms.has(c.id)).map(c => c.label);
+                    return perms.size ? `<p><strong>Menu tabs:</strong> ${tabs.map(esc).join(", ") || "none"}</p><p><strong>Can:</strong> ${acts.map(esc).join(", ") || "only look"}</p>` : `<p class="muted">Tick at least one profile.</p>`;
+                }
+                function openEmployee(u) {
+                    const editing = !!u;
+                    drawer.hidden = false; document.body.classList.add("adm-locked");
+                    dbody.innerHTML = `<p class="eyebrow">${editing ? "Edit employee" : "New employee"}</p><h2 id="drawer-title">${editing ? esc(u.name || u.email) : "Add an employee"}</h2>
+                        <form class="emp-form" data-emp novalidate>
+                            <div class="field-row"><div class="field"><label for="e-name">Full name (name and surname) *</label><input id="e-name" name="name" required autocomplete="off" value="${esc(u?.name || "")}"></div>
+                            <div class="field"><label for="e-user">Username *</label><input id="e-user" name="username" required autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. lindiwe.z" value="${esc(u?.username || "")}"></div></div>
+                            <div class="field-row"><div class="field"><label for="e-email">Email *</label><input id="e-email" name="email" type="email" required ${editing ? "readonly" : ""} value="${esc(u?.email || "")}"></div>
+                            <div class="field"><label for="e-job">Job role</label><input id="e-job" name="jobTitle" list="e-jobs" placeholder="What they are, e.g. Travel Consultant" value="${esc(u?.jobTitle || "")}"><datalist id="e-jobs">${JOBS.map(j => `<option value="${esc(j)}">`).join("")}</datalist></div></div>
+                            <fieldset class="field"><legend>Access profiles * <span class="muted">(what they can see and do; tick one or more)</span></legend>
+                                <div class="profile-picks">${profiles.map(p => `<label class="profile-pick"><input type="checkbox" name="profiles" value="${esc(p.id)}" ${u?.profiles?.includes(p.id) ? "checked" : ""}><span><strong>${esc(p.name)}</strong><small>${esc(p.description || "")}</small></span></label>`).join("")}</div></fieldset>
+                            <div class="sees" data-sees>${seesList(u?.profiles || [])}</div>
+                            <div class="field"><label for="e-pw">${editing ? "Set a new temporary password <span class=\"muted\">(only if they forgot theirs)</span>" : "Temporary password *"}</label>
+                                <div class="pw-wrap"><input id="e-pw" name="tempPassword" type="text" autocomplete="new-password" spellcheck="false" ${editing ? "" : "required"} placeholder="${editing ? "Leave empty to keep their password" : ""}"><button type="button" class="pw-toggle" data-gen-pw>Generate</button></div>
+                                <p class="field-hint">Works once. At their first sign-in they must choose their own password. Give it to them in person or by phone, not by email.</p></div>
+                            ${editing ? `<div class="field"><label for="e-status">Account</label><select id="e-status" name="status"><option value="active" ${u.status !== "disabled" ? "selected" : ""}>Active</option><option value="disabled" ${u.status === "disabled" ? "selected" : ""}>Disabled (cannot sign in)</option></select></div>` : ""}
+                            <p class="form-error" data-emp-err hidden></p>
+                            <div class="btn-row"><button class="btn btn--primary" type="submit">${editing ? "Save changes" : "Create account"}</button>
+                            ${editing && u.mfa ? `<button type="button" class="btn btn--ghost" data-mfa-reset="${esc(u.email)}">Reset two-step</button>` : ""}
+                            <button type="button" class="btn btn--ghost" data-drawer-close>Cancel</button></div>
+                        </form>`;
+                    const f = $("[data-emp]", dbody), err = $("[data-emp-err]", dbody);
+                    const picked = () => $$("input[name=profiles]:checked", f).map(x => x.value);
+                    f.addEventListener("change", e => { if (e.target.name === "profiles") $("[data-sees]", dbody).innerHTML = seesList(picked()); });
+                    const suggest = () => { const p = f.name.value.replace(/\(.*?\)/g, "").trim().toLowerCase().normalize("NFD").replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean); return p.length ? p[0] + (p[1] ? "." + p[p.length - 1][0] : "") : ""; };
+                    if (!editing) f.name.addEventListener("input", () => { f.username.placeholder = suggest() ? `Suggested: ${suggest()}` : "e.g. lindiwe.z"; });
+                    $("[data-gen-pw]", dbody).addEventListener("click", () => { f.tempPassword.value = tempPw(); f.tempPassword.select(); });
+                    $("[data-mfa-reset]", dbody)?.addEventListener("click", async e => {
+                        if (!confirm(`Reset two-step verification for ${u.email}? They'll set it up again at their next sign-in, and are signed out everywhere.`)) return;
+                        try { await get("resetUserMfa", { email: u.email }); toast("Two-step verification reset"); } catch (ex) { toast(ex.message, true); }
+                    });
+                    f.addEventListener("submit", async e => {
+                        e.preventDefault(); err.hidden = true;
+                        const fail = m => { err.textContent = m; err.hidden = false; };
+                        const name = f.name.value.trim().replace(/\s+/g, " ");
+                        if (name.split(" ").length < 2) return fail("Enter the employee's name and surname.");
+                        if (!f.username.value.trim() && !editing) f.username.value = suggest();
+                        if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(f.username.value.trim().toLowerCase())) return fail("Usernames are 3 to 30 characters: letters, numbers, dots, dashes or underscores.");
+                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email.value.trim())) return fail("Enter a valid email address.");
+                        if (!picked().length) return fail("Tick at least one access profile.");
+                        const pw = f.tempPassword.value.trim();
+                        if ((!editing || pw) && (pw.length < 10 || !/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw))) return fail("The temporary password needs at least 10 characters with letters and a number. Use Generate for a strong one.");
+                        const btn = $("button[type=submit]", f); btn.disabled = true;
+                        try {
+                            await get("saveUser", { email: f.email.value.trim().toLowerCase(), name, username: f.username.value.trim().toLowerCase(), jobTitle: f.jobTitle.value.trim(), profiles: picked(), status: editing ? f.status.value : "active", tempPassword: pw || undefined });
+                            if (pw) {
+                                dbody.innerHTML = `<p class="eyebrow">${editing ? "New temporary password" : "Account created"}</p><h2 id="drawer-title">${esc(name)}</h2>
+                                    <div class="handover-box"><p>Give ${esc(name.split(" ")[0])} these sign-in details in person or by phone:</p>
+                                    <dl class="kv"><div><dt>Username</dt><dd><code>${esc(f.username.value.trim().toLowerCase())}</code></dd></div><div><dt>Temporary password</dt><dd><code data-pw-show>${esc(pw)}</code></dd></div></dl>
+                                    <p class="muted small">It works once and expires in 7 days. At first sign-in they choose their own password${profiles.filter(p => picked().includes(p.id)).some(p => p.perms.some(x => ["users.manage", "profiles.manage", "pay.verify", "pay.refund.approve", "payouts.manage", "payouts.approve", "customers.erase", "ops.view.all", "ops.view.money"].includes(x))) ? " and set up an authenticator app on their phone" : ""}. This password is not shown again.</p></div>
+                                    <div class="btn-row"><button type="button" class="btn btn--primary" data-copy-cred>Copy details</button><button type="button" class="btn btn--ghost" data-drawer-close>Done</button></div>`;
+                                $("[data-copy-cred]", dbody).addEventListener("click", () => navigator.clipboard?.writeText(`KCM dashboard sign-in\nUsername: ${f.username.value.trim().toLowerCase()}\nTemporary password: ${pw}\nYou'll choose your own password when you sign in.`).then(() => toast("Copied")));
+                            } else { toast("Saved. Changes apply at once."); closeDrawer(); }
+                            route();
+                        } catch (ex) { fail(ex.message); btn.disabled = false; }
+                    });
+                }
+                function openProfile(p) {
+                    const ro = (p && p.locked) || !can("profiles.manage");
+                    const mine = new Set(me.permissions);
+                    drawer.hidden = false; document.body.classList.add("adm-locked");
+                    const groups = kind => [...new Set(catalog.filter(c => c.kind === kind).map(c => c.group))];
+                    const box = c => `<label class="perm-pick ${!mine.has(c.id) ? "is-off" : ""}"><input type="checkbox" name="perm" value="${esc(c.id)}" ${p?.perms.includes(c.id) ? "checked" : ""} ${ro || !mine.has(c.id) ? "disabled" : ""}><span><strong>${esc(c.label)}</strong><small>${esc(c.help)}${!mine.has(c.id) ? " (you don't have this yourself)" : ""}</small></span></label>`;
+                    dbody.innerHTML = `<p class="eyebrow">${p ? (p.locked ? "Fixed profile" : "Edit profile") : "New profile"}</p><h2 id="drawer-title">${p ? esc(p.name) : "Build an access profile"}</h2>
+                        <form class="emp-form" data-prof novalidate>
+                            <div class="field"><label for="p-name">Profile name *</label><input id="p-name" name="name" required value="${esc(p?.name || "")}" ${ro ? "readonly" : ""} placeholder="e.g. Bookings clerk"></div>
+                            <div class="field"><label for="p-desc">What is it for?</label><input id="p-desc" name="description" value="${esc(p?.description || "")}" ${ro ? "readonly" : ""} placeholder="One line people will see when giving access"></div>
+                            <h3>Menu tabs they see</h3>${groups("tab").map(g => `<fieldset class="perm-group"><legend>${esc(g)}</legend>${catalog.filter(c => c.kind === "tab" && c.group === g).map(box).join("")}</fieldset>`).join("")}
+                            <h3>What they can do</h3>${groups("action").map(g => `<fieldset class="perm-group"><legend>${esc(g)}</legend>${catalog.filter(c => c.kind === "action" && c.group === g).map(box).join("")}</fieldset>`).join("")}
+                            <p class="form-error" data-prof-err hidden></p>
+                            <div class="btn-row">${ro ? "" : `<button class="btn btn--primary" type="submit">${p ? "Save profile" : "Create profile"}</button>`}
+                            ${p && !p.builtIn && !ro ? `<button type="button" class="btn btn--ghost" data-del-profile>Delete</button>` : ""}<button type="button" class="btn btn--ghost" data-drawer-close>${ro ? "Close" : "Cancel"}</button></div>
+                            ${p ? `<p class="muted small">${p.users} ${p.users === 1 ? "person has" : "people have"} this profile. Changes apply to them straight away.</p>` : ""}
+                        </form>`;
+                    const f = $("[data-prof]", dbody), err = $("[data-prof-err]", dbody);
+                    f.addEventListener("submit", async e => {
+                        e.preventDefault(); err.hidden = true;
+                        const perms = $$("input[name=perm]:checked", f).map(x => x.value);
+                        if (f.name.value.trim().length < 3) { err.textContent = "Give the profile a name."; err.hidden = false; return; }
+                        if (!perms.length) { err.textContent = "Tick at least one tab or action."; err.hidden = false; return; }
+                        try { await get("saveProfile", { profile: { id: p?.id, name: f.name.value.trim(), description: f.description.value.trim(), permissions: perms } }); toast("Profile saved"); closeDrawer(); route(); }
+                        catch (ex) { err.textContent = ex.message; err.hidden = false; }
+                    });
+                    $("[data-del-profile]", dbody)?.addEventListener("click", async () => {
+                        if (!confirm(`Delete the profile "${p.name}"?`)) return;
+                        try { await get("deleteProfile", { id: p.id }); toast("Profile deleted"); closeDrawer(); route(); } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+                    });
+                }
             },
 
             async activity() {
@@ -658,7 +772,9 @@
                 getApplication: async ({ id }) => { const a = apps.find(x => x.id === id); return { ...a, description: "Sample application used to preview the dashboard.", regNumber: "2024/123456/07", years: "3–5 years", website: "", details: {}, photos: [] }; },
                 listBookings: async () => bookings,
                 listMessages: async () => [{ created: ago(1), name: "Nomsa D.", email: "nomsa@example.com", phone: "071 000 0000", message: "Hi, we're a church group of 45 looking at Kruger in March. Can you quote?" }],
-                listUsers: async () => users,
+                listUsers: async () => users.map(u => Object.assign({ profiles: u.role === "OPERATIONS" ? ["consultant"] : u.role === "FINANCE" ? ["finance"] : [], mfaRequired: u.role !== "OPERATIONS" && u.role !== "PARTNER" }, u)),
+                listProfiles: async () => ({ catalog: [{ id: "ops.edit.own", kind: "tab", group: "Operations Centre", label: "My Workspace and my tickets", help: "" }, { id: "pay.view", kind: "tab", group: "Operations Centre", label: "Payments", help: "" }, { id: "ops.claim", kind: "action", group: "Tickets", label: "Pick up unassigned tickets", help: "" }],
+                    profiles: [{ id: "consultant", name: "Travel Consultant", description: "Own and assigned tickets, picks up unassigned ones.", perms: ["ops.edit.own", "ops.claim"], builtIn: true, users: 1 }, { id: "finance", name: "Finance Administrator", description: "Payments and refunds.", perms: ["pay.view"], builtIn: true, users: 1 }] }),
                 listJobs: async () => jobs,
                 listRatings: async () => ratingsS,
                 saveJob: () => reject(), setPayoutStatus: () => reject(), setRatingStatus: () => reject(),

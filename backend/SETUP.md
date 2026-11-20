@@ -102,25 +102,30 @@ The email-code sign-in works without this step. To add the Google button:
    - the Sheet: **KCM Admin → Set Google Sign-In client ID**. Reload the Sheet first if the menu isn't there.
    - `KcmTravel/appsettings.json` → `"GoogleClientId": "…"`
 
-## Access levels
+## Access levels: roles and access profiles (v1.5)
 
 Every check happens on the server (in Apps Script). Hiding a button in the browser is only for tidiness, never for security.
 
-| Role | Can do |
+A person has a **job role** (what they are, e.g. Travel Consultant; just a label) and one or more **access profiles** (what they can see and do). Their access is everything their profiles allow together. Profiles live in the **AccessProfiles** tab; built-in ones are defined in the code and can be edited from the dashboard (except Administrator). See [docs/ACCESS-MODEL.md](../docs/ACCESS-MODEL.md) for who does what.
+
+| Profile | Can do |
 |---|---|
-| **Super Admin** | Everything, including managing Admins. Set automatically for the account that ran `setup`. Can't be given to anyone through the website. |
-| **Admin** | Everything except managing Super Admins and other Admins: users, partners, all tickets, approvals, payment verification, refunds, POPIA erasure. |
-| **Management** | All tickets, assignment, workload, quotation approval, confirming bookings, checklist templates and statuses, partner review. Cannot verify payments. |
-| **Finance** | Sees all tickets and payments; **verifies** payments, approves refunds, manages partner payouts. |
-| **Operations** | Registers enquiries (incl. WhatsApp/phone), works the tickets assigned to them or that they support, prepares quotations, records payments as *unverified*. Cannot confirm bookings or verify payments. |
-| **Partner** | Sees and updates only their own applications, jobs and statements. |
-| **Customer** | No dashboard access. |
+| **Administrator** | Everything, including staff accounts, access profiles and POPIA erasure. Fixed. |
+| **Manager** | All tickets, assigning, quotation approval, confirming bookings, **approving refunds and partner payouts**, workload, settings, partner review, staff accounts and profiles. |
+| **Finance Administrator** | Payments, balances, refunds (records them), partner trips and payouts (records them, marks approved ones Paid). Sees only tickets with a quotation or payment, read-only. |
+| **Travel Consultant** | Registers enquiries, works own and assigned tickets, sees and picks up unassigned tickets, prepares quotations, records payments as unverified. |
+| **Website & Partners Officer** | Website requests, messages, partner applications, ratings. No Operations Centre. |
+| **Read-only** | Looks at operations, payments and the website pages. |
 
-Old roles are mapped automatically: owner → Super Admin, admin → Admin, viewer → Operations, partner → Partner.
+Account types: **Super Admin** (the account that ran `setup`; everything; can't be created or changed from the website), **Partner** (only their own listings; never the Operations Centre), **Customer** (no dashboard).
 
-Nobody can change their own role. Changing someone's role, disabling them or resetting their password signs them out immediately.
+Rules: administrators and managers manage people equally; nobody changes their own access; nobody can give a profile with access they don't have themselves; money going out (refunds, payouts) is recorded by one person and approved by a manager, never the same person. Changing someone's profiles, disabling them or setting a new temporary password signs them out at once.
 
-To give someone access, sign in to the website and open **Admin → Users & access → Give someone access**. They then sign in with **Forgot or set password**.
+Accounts from before 1.5 keep working: an account with no profile gets the one matching its old role (Admin → Administrator, Management → Manager, Finance → Finance Administrator, Operations → Travel Consultant).
+
+**Add an employee:** dashboard → **Users & access → + Add employee**: full name, username, email, job role, profiles, temporary password. Give them the username and temporary password in person. It works once (expires after 7 days); at first sign-in they choose their own. Everyone can change their password later with **My password**. People sign in with their email or username.
+
+**Removing the test admin:** create your own employee accounts first, sign in as one to check what they see, then **KCM Admin → Remove test admin**.
 
 ## What's where
 

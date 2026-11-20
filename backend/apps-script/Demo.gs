@@ -18,13 +18,13 @@ const DEMO_TAG = '(demo)';
 /** Shared password for all demo staff and demo partners. Demo accounts are deleted by "Remove demo data". */
 const DEMO_PASSWORD = 'Demo-Lowveld-2026';
 const DEMO_STAFF = [
-  { key: 'mgr', email: 'thandi.manager@demo.kcm.test', name: 'Thandi Nkosi (demo)', role: 'MANAGEMENT' },
-  { key: 'fin', email: 'fiona.finance@demo.kcm.test', name: 'Fiona van Wyk (demo)', role: 'FINANCE' },
-  { key: 'fin2', email: 'sam.finance@demo.kcm.test', name: 'Sam Pillay (demo)', role: 'FINANCE' },
-  { key: 'nomsa', email: 'nomsa.ops@demo.kcm.test', name: 'Nomsa Mokoena (demo)', role: 'OPERATIONS' },
-  { key: 'sipho', email: 'sipho.ops@demo.kcm.test', name: 'Sipho Dlamini (demo)', role: 'OPERATIONS' },
-  { key: 'ayesha', email: 'ayesha.ops@demo.kcm.test', name: 'Ayesha Khan (demo)', role: 'OPERATIONS' },
-  { key: 'former', email: 'former.ops@demo.kcm.test', name: 'Pieter Botha (demo, access removed)', role: 'OPERATIONS', status: 'disabled' },
+  { key: 'mgr', email: 'thandi.manager@demo.kcm.test', name: 'Thandi Nkosi (demo)', role: 'MANAGEMENT', username: 'thandi.demo', job: 'Operations Manager', profiles: 'manager' },
+  { key: 'fin', email: 'fiona.finance@demo.kcm.test', name: 'Fiona van Wyk (demo)', role: 'FINANCE', username: 'fiona.demo', job: 'Finance Administrator', profiles: 'finance' },
+  { key: 'fin2', email: 'sam.finance@demo.kcm.test', name: 'Sam Pillay (demo)', role: 'MANAGEMENT', username: 'sam.demo', job: 'Finance Manager', profiles: 'manager,finance' },
+  { key: 'nomsa', email: 'nomsa.ops@demo.kcm.test', name: 'Nomsa Mokoena (demo)', role: 'OPERATIONS', username: 'nomsa.demo', job: 'Senior Travel Consultant', profiles: 'consultant' },
+  { key: 'sipho', email: 'sipho.ops@demo.kcm.test', name: 'Sipho Dlamini (demo)', role: 'OPERATIONS', username: 'sipho.demo', job: 'Travel Consultant', profiles: 'consultant' },
+  { key: 'ayesha', email: 'ayesha.ops@demo.kcm.test', name: 'Ayesha Khan (demo)', role: 'OPERATIONS', username: 'ayesha.demo', job: 'Junior Travel Consultant', profiles: 'consultant' },
+  { key: 'former', email: 'former.ops@demo.kcm.test', name: 'Pieter Botha (demo, access removed)', role: 'OPERATIONS', status: 'disabled', username: 'pieter.demo', job: 'Travel Consultant', profiles: 'consultant' },
 ];
 
 const DAY_MS = 86400000;
@@ -158,7 +158,8 @@ function demoSteps_() {
       const hash = newPasswordHash_(DEMO_PASSWORD);
       DEMO_STAFF.forEach(s => {
         upsertUser_(s.email, { name: s.name, role: s.role, provider: 'demo', status: s.status || 'active' });
-        setUserFields_(s.email, { Name: s.name, Role: s.role, Status: s.status || 'active', PasswordHash: hash.hash, PasswordSalt: hash.scheme, InvitedBy: 'demo data' });
+        setUserFields_(s.email, { Name: s.name, Role: s.role, Status: s.status || 'active', PasswordHash: hash.hash, PasswordSalt: hash.scheme, InvitedBy: 'demo data',
+          Username: s.username, JobTitle: s.job, Profiles: s.profiles, MustChangePassword: '' });
       });
     } },
     { name: 'Demo suppliers', run: T => {
@@ -309,7 +310,9 @@ function demoSteps_() {
       partners.forEach(p => refs.slice(0, 3).forEach((ref, i) => {
         const j = demoCall_('saveJob', T.fin, { job: { partnerId: p.ID, bookingRef: ref, service: p.PartnerType === 'accommodation' ? '2 nights, 2 guests' : 'Kruger day trip', guests: 2 + i, gross: 2500 + 900 * i, commissionPct: 15, date: dIso_(-30 + i * 9), notes: '[DEMO]' } });
         const s = statuses[k++ % statuses.length];
-        if (s !== 'Pending') demoCall_('setPayoutStatus', T.fin, { id: j.id, status: s });
+        // money out: finance recorded the trip, a manager approves, finance pays
+        if (s === 'Approved' || s === 'Paid') demoCall_('setPayoutStatus', T.mgr, { id: j.id, status: 'Approved' });
+        if (s === 'Paid' || s === 'On hold') demoCall_('setPayoutStatus', T.fin, { id: j.id, status: s });
         if (i < 2) submitRating_({ partnerId: p.ID, bookingRef: ref, name: ['Lerato K.', 'Johan P.', 'Grace C.'][i] + ' ' + DEMO_TAG, stars: 5 - (k % 2), comment: '[DEMO] ' + ['Friendly, on time and very knowledgeable.', 'Great experience, the kids loved it.'][i] });
       }));
     } },

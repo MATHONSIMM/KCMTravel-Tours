@@ -19,7 +19,7 @@
 
 const APP = {
   name: 'KCM Travel & Tours',
-  version: '1.4.0',
+  version: '1.5.0',
   sessionDays: 7,
   privilegedSessionHours: 12,
   codeMinutes: 15,
@@ -30,7 +30,9 @@ const APP = {
 
 
 const TABS = {
-  Users: ['Email', 'Name', 'Role', 'Status', 'Provider', 'Picture', 'Created', 'LastLogin', 'InvitedBy', 'PasswordHash', 'PasswordSalt', 'MfaSecret', 'MfaEnabledAt', 'RecoveryCodes'],
+  Users: ['Email', 'Name', 'Role', 'Status', 'Provider', 'Picture', 'Created', 'LastLogin', 'InvitedBy', 'PasswordHash', 'PasswordSalt', 'MfaSecret', 'MfaEnabledAt', 'RecoveryCodes',
+    'Username', 'JobTitle', 'Profiles', 'MustChangePassword'],
+  AccessProfiles: ['ProfileID', 'Name', 'Description', 'Permissions', 'Updated', 'UpdatedBy'],
   Partners: ['ID', 'Created', 'Email', 'ContactName', 'Phone', 'BusinessName', 'PartnerType', 'Province', 'City',
     'Services', 'Description', 'RegNumber', 'Website', 'Social', 'YearsInBusiness', 'Summary', 'Details',
     'Status', 'PhotoCount', 'DriveFolderId', 'ReviewedBy', 'ReviewedAt', 'ReviewNote', 'Updated', 'Tier'],
@@ -100,6 +102,7 @@ const ACTIONS = {
   googleSignIn: googleSignIn_,
   mfaVerify: mfaVerify_,
   mfaSetupConfirm: mfaSetupConfirm_,
+  setFirstPassword: setFirstPassword_,
   submitBooking: submitBooking_,
   submitMessage: submitMessage_,
   ratingInfo: ratingInfo_,
@@ -124,6 +127,10 @@ const ACTIONS = {
   listMessages: listMessages_,
   listUsers: listUsers_,
   saveUser: saveUser_,
+  changeMyPassword: changeMyPassword_,
+  listProfiles: listProfiles_,
+  saveProfile: saveProfile_,
+  deleteProfile: deleteProfile_,
   resetUserMfa: resetUserMfa_,
   activity: activity_,
   listJobs: listJobs_,
@@ -226,18 +233,75 @@ function loginRateLimit_(email) {
   cache.put(g, String(gn + 1), 120);
 }
 
-/** Email + password sign-in. Partners can only sign in once an application has been approved (or we asked them for more info). */
+/** Turns what the person typed (email or username) into the account email, or '' if there is no such account. */
+function loginEmail_(id) {
+  const v = String(id || '').trim().toLowerCase().slice(0, 254);
+  if (!v) return '';
+  if (v.indexOf('@') !== -1) return cleanEmail_(v);
+  const u = readTable_('Users').find(x => String(x.Username || '').toLowerCase() === v);
+  return u ? u.Email : '';
+}
+function tempPasswordExpired_(u) { const t = day_(u.MustChangePassword); return !!t && t < Date.now(); }
+
+/** Email-or-username + password sign-in. Partners can only sign in once an application has been approved (or we asked them for more info). */
 function signIn_(b) {
-  const email = cleanEmail_(b.email);
-  loginRateLimit_(email);
-  const user = findUser_(email);
-  const wrong = userError_('That email or password is incorrect. First time signing in? Use "Forgot or set password".');
+  const typed = String(b.email || b.login || '').trim().toLowerCase();
+  if (!typed) throw userError_('Enter your email or username.');
+  loginRateLimit_(typed);
+  const email = loginEmail_(typed);
+  const user = email ? findUser_(email) : null;
+  const wrong = userError_('That email, username or password is incorrect. First time signing in? Use the temporary password your manager gave you, or "Forgot or set password".');
   const password = String(b.password || '').slice(0, 128);
   if (!user || !user.PasswordHash) { if (!user) argonHash_(password, randomBytes_(16), false); throw wrong; } // same work either way (timing)
   if (!verifyPassword_(user, password)) { log_(email, 'sign_in_failed', email, ''); throw wrong; }
-  CacheService.getScriptCache().remove('login-rate:' + email);
+  CacheService.getScriptCache().remove('login-rate:' + typed);
   if (String(user.PasswordHash).indexOf('$argon2id$') !== 0) { setPassword_(email, password); log_(email, 'password_rehashed', email, 'argon2id'); }
+  if (user.MustChangePassword) {
+    if (user.Status === 'disabled') accessGate_(user);
+    if (tempPasswordExpired_(user)) throw userError_('Your temporary password has expired. Ask your manager to set a new one.');
+    const challenge = randomToken_();
+    CacheService.getScriptCache().put('pwchg:' + hash_(challenge), JSON.stringify({ email, attempts: 0 }), 600);
+    return { mustChangePassword: true, challenge, name: String(user.Name || '').split(' ')[0] };
+  }
   return finishLogin_(email, { provider: 'password' });
+}
+
+/** First sign-in with a temporary password: the person chooses their own password, then continues (authenticator if required). */
+function setFirstPassword_(b) {
+  const key = 'pwchg:' + hash_(String(b.challenge || ''));
+  const raw = CacheService.getScriptCache().get(key);
+  if (!raw) throw userError_('This step has expired. Please sign in again with your temporary password.', 'auth');
+  const st = JSON.parse(raw);
+  const password = checkPassword_(b.password);
+  const user = findUser_(st.email);
+  if (!user || !user.MustChangePassword) throw userError_('Please sign in again.', 'auth');
+  if (verifyPassword_(user, password)) throw userError_('Choose a new password, not the temporary one.');
+  CacheService.getScriptCache().remove(key);
+  setPassword_(st.email, password);
+  setUserFields_(st.email, { MustChangePassword: '' });
+  log_(st.email, 'password_changed', st.email, 'first sign-in');
+  return finishLogin_(st.email, { provider: 'password' });
+}
+
+/** Signed in: change my own password. Needs the current one; other devices are signed out. */
+function changeMyPassword_(b) {
+  const user = requireUser_(b.token);
+  if (!user.PasswordHash || !verifyPassword_(user, String(b.current || '').slice(0, 128))) {
+    log_(user.Email, 'password_change_failed', user.Email, '');
+    throw userError_('Your current password is not right.');
+  }
+  const password = checkPassword_(b.password);
+  if (password === String(b.current)) throw userError_('Your new password must be different from the current one.');
+  setPassword_(user.Email, password);
+  setUserFields_(user.Email, { MustChangePassword: '' });
+  const keep = hash_(String(b.token));
+  withLock_(() => {
+    const sh = sheet_('Sessions');
+    const rows = sh.getDataRange().getValues();
+    for (let i = rows.length - 1; i >= 1; i--) if (rows[i][1] === user.Email && rows[i][0] !== keep) { CacheService.getScriptCache().remove('sess:' + rows[i][0]); sh.deleteRow(i + 1); }
+  });
+  log_(user.Email, 'password_changed', user.Email, 'self-service');
+  return { changed: true };
 }
 
 /** Forgot / first-time password: verify the emailed code, then save the new password and sign in. */
@@ -247,6 +311,7 @@ function resetPassword_(b) {
   verifyCodeOnly_(email, b.code);
   if (!findUser_(email)) throw userError_('We couldn\'t find an account for that email. New partners: please register first.');
   setPassword_(email, password);
+  setUserFields_(email, { MustChangePassword: '' });
   revokeSessions_(email); // a password reset signs out every other device
   log_(email, 'password_set', email, '');
   return finishLogin_(email, { provider: 'password' });
@@ -345,47 +410,145 @@ function upsertUser_(email, opts) {
 
 /** What the browser may know about a user. Never includes hashes, secrets or recovery codes. */
 function publicUser_(u) {
-  return { email: u.Email, name: u.Name || '', role: roleOf_(u), picture: u.Picture || '', isStaff: isStaff_(u), canEdit: can_(u, 'partners.review'),
-    permissions: permissionsOf_(u), mfaRequired: needsMfa_(u), mfaEnabled: !!u.MfaSecret };
+  return { email: u.Email, name: u.Name || '', username: u.Username || '', jobTitle: u.JobTitle || '', role: roleOf_(u), picture: u.Picture || '', isStaff: isStaff_(u),
+    canEdit: can_(u, 'partners.review'), permissions: permissionsOf_(u), profiles: isStaff_(u) ? profileIdsOf_(u) : [], mfaRequired: needsMfa_(u), mfaEnabled: !!u.MfaSecret };
 }
 
 function listUsers_(b) {
   requirePerm_(b.token, 'users.view');
-  return readTable_('Users').map(u => ({ email: u.Email, name: u.Name, role: roleOf_(u), status: u.Status, provider: u.Provider, created: iso_(u.Created), lastLogin: iso_(u.LastLogin), invitedBy: u.InvitedBy, mfa: !!u.MfaSecret }));
+  return readTable_('Users').map(u => ({ email: u.Email, name: u.Name, username: u.Username || '', jobTitle: u.JobTitle || '', role: roleOf_(u), status: u.Status,
+    provider: u.Provider, created: iso_(u.Created), lastLogin: iso_(u.LastLogin), invitedBy: u.InvitedBy, mfa: !!u.MfaSecret, mfaRequired: needsMfa_(u),
+    profiles: isStaff_(u) ? profileIdsOf_(u) : [], mustChangePassword: !!u.MustChangePassword, tempExpired: tempPasswordExpired_(u) }));
 }
 
-/** Invite a new user or change an existing user's role/status. Only the super admin manages admins; nobody changes their own access. */
+const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,29}$/;
+
+/**
+ * Create a staff account or change one. Admins and managers (users.manage) have the same powers here, except:
+ * nobody changes their own access, the super admin can't be created or changed, and nobody can give a profile
+ * that allows more than they are allowed themselves (no privilege escalation).
+ * A temporary password works once: at first sign-in the employee must choose their own (expires after 7 days).
+ * Partner accounts can only be enabled or disabled here.
+ */
 function saveUser_(b) {
   const actor = requirePerm_(b.token, 'users.manage');
   const email = cleanEmail_(b.email);
-  const role = LEGACY_ROLES[String(b.role)] || String(b.role || 'OPERATIONS').toUpperCase();
   const status = String(b.status || 'active');
-  if (ALL_ROLES.indexOf(role) === -1 || ['active', 'disabled'].indexOf(status) === -1) throw userError_('Invalid role or status.');
-  if (email === actor.Email) throw userError_('You cannot change your own access.');
-  if (role === 'SUPER_ADMIN') throw userError_('The super admin role cannot be assigned here.');
+  if (['active', 'disabled'].indexOf(status) === -1) throw userError_('Invalid status.');
+  if (email === actor.Email) throw userError_('You cannot change your own access. Ask another administrator or manager.');
+  if (String(b.role || '').toUpperCase() === 'SUPER_ADMIN') throw userError_('The super admin role cannot be assigned here.');
   const target = findUser_(email);
   if (target && roleOf_(target) === 'SUPER_ADMIN') throw userError_('The super admin account cannot be changed.');
-  if (roleOf_(actor) !== 'SUPER_ADMIN' && (role === 'ADMIN' || (target && roleOf_(target) === 'ADMIN'))) throw userError_('Only the super admin can add or change admins.');
+
+  // partner / customer accounts: status only
+  if (target && !isStaff_(target) || String(b.role || '').toUpperCase() === 'PARTNER') {
+    if (!target) throw userError_('Partners register themselves on the Partners page.');
+    setUserFields_(email, { Status: status });
+    if (status === 'disabled') revokeSessions_(email);
+    log_(actor.Email, 'user_updated', email, roleOf_(target) + ' / ' + status);
+    return { saved: true };
+  }
+
+  // which profiles: explicit list, or (older callers) the default profile for a role
+  let ids = Array.isArray(b.profiles) ? b.profiles.map(String) : null;
+  if (!ids && b.role) { const d = ROLE_DEFAULT_PROFILE[LEGACY_ROLES[String(b.role)] || String(b.role).toUpperCase()]; if (!d) throw userError_('Invalid role.'); ids = [d]; }
+  if (!ids && target) ids = profileIdsOf_(target);
+  const known = profiles_().map(p => p.id);
+  ids = ids.filter((x, i) => known.indexOf(x) !== -1 && ids.indexOf(x) === i);
+  if (!ids.length) throw userError_('Give at least one access profile.');
+  const perms = permsOfProfiles_(ids);
+  const mine = permissionsOf_(actor);
+  const over = perms.filter(p => mine.indexOf(p) === -1);
+  if (over.length) throw userError_('You cannot give access you do not have yourself (' + over.map(x => (PERM_CATALOG.find(c => c.id === x) || {}).label || x).join(', ') + ').', 'forbidden');
+  if (target && roleOf_(target) === 'ADMIN' && mine.indexOf('customers.erase') === -1) throw userError_('Only an administrator can change an administrator.', 'forbidden');
+
+  const name = safe_(String(b.name || (target && target.Name) || '').replace(/\s+/g, ' ').trim(), 80);
+  if (!target && name.split(' ').filter(Boolean).length < 2 && Array.isArray(b.profiles)) throw userError_('Enter the employee\'s name and surname.');
+  let username = String(b.username !== undefined ? b.username : (target && target.Username) || '').trim().toLowerCase();
+  if (username) {
+    if (!USERNAME_RE.test(username)) throw userError_('Usernames are 3 to 30 characters: letters, numbers, dots, dashes or underscores.');
+    if (readTable_('Users').some(u => u.Email !== email && String(u.Username || '').toLowerCase() === username)) throw userError_('That username is taken. Try another.');
+  }
+  const jobTitle = safe_(String(b.jobTitle !== undefined ? b.jobTitle : (target && target.JobTitle) || '').trim(), 60);
+  const temp = b.tempPassword ? checkPassword_(b.tempPassword) : '';
+  if (!target && Array.isArray(b.profiles) && !temp) throw userError_('Set a temporary password for the new employee.');
+  const tier = tierFor_(perms);
 
   withLock_(() => {
     const sh = sheet_('Users');
     const rows = sh.getDataRange().getValues();
     const idx = rows.findIndex((r, i) => i > 0 && r[0] === email);
     if (idx === -1) {
-      sh.appendRow([email, safe_(b.name || ''), role, status, 'invited', '', new Date(), '', actor.Email, '', '']);
-    } else {
-      sh.getRange(idx + 1, 3, 1, 2).setValues([[role, status]]);
-      if (b.name) sh.getRange(idx + 1, 2).setValue(safe_(b.name));
+      const row = TABS.Users.map(() => '');
+      Object.assign(row, { 0: email, 1: name, 2: tier, 3: status, 4: 'invited', 6: new Date(), 8: actor.Email });
+      sh.appendRow(row);
     }
   });
-  if (target && (roleOf_(target) !== role || status === 'disabled')) revokeSessions_(email); // role changes apply immediately
-  log_(actor.Email, target ? 'user_updated' : 'user_invited', email, (target ? roleOf_(target) + ' → ' : '') + role + ' / ' + status);
-  if (!target && STAFF_ROLES.indexOf(role) !== -1) {
-    sendMail_(email, `You've been given access to ${APP.name}`,
-      `<p>Hi${b.name ? ' ' + esc_(b.name) : ''},</p><p>${esc_(actor.Name || actor.Email)} has given you <strong>${role}</strong> access to the ${APP.name} admin dashboard.</p>
-       <p>Go to the website, click <strong>Sign in</strong>, then <strong>Forgot or set password</strong> to create your password with this email address (${esc_(email)}).${MFA_ROLES.indexOf(role) !== -1 ? ' You\'ll also be asked to set up an authenticator app (such as Google Authenticator or Microsoft Authenticator) on your phone.' : ''}</p>${siteLink_('/admin', 'Open the admin dashboard')}`);
+  const fields = { Name: name, Role: tier, Status: status, Username: username, JobTitle: jobTitle, Profiles: ids.join(',') };
+  setUserFields_(email, fields);
+  if (temp) { setPassword_(email, temp); setUserFields_(email, { MustChangePassword: new Date(Date.now() + 7 * 86400000).toISOString() }); }
+  const before = target ? profileIdsOf_(target).join(',') : '';
+  if (target && (before !== ids.join(',') || status === 'disabled' || temp)) revokeSessions_(email); // changes apply immediately
+  log_(actor.Email, target ? 'user_updated' : 'user_created', email, (target ? before + ' → ' : '') + ids.join(',') + ' / ' + status + (temp ? ' / temporary password set' : ''));
+  if (!target) {
+    const how = temp ? `Your manager will give you a <strong>temporary password</strong>. Sign in with ${username ? `your username <strong>${esc_(username)}</strong> or ` : ''}this email address, then choose your own password.`
+      : `Go to the website, click <strong>Sign in</strong>, then <strong>Forgot or set password</strong> to create your password with this email address (${esc_(email)}).`;
+    sendMail_(email, `Your ${APP.name} staff account`,
+      `<p>Hi${name ? ' ' + esc_(name.split(' ')[0]) : ''},</p><p>${esc_(actor.Name || actor.Email)} has created your staff account for the ${APP.name} dashboard${jobTitle ? ' (' + esc_(jobTitle) + ')' : ''}.</p>
+       <p>${how}${needsMfa_({ Role: tier, Profiles: ids.join(',') }) ? ' You\'ll also be asked to set up an authenticator app (such as Google Authenticator or Microsoft Authenticator) on your phone.' : ''}</p>${siteLink_('/admin', 'Open the dashboard')}`);
   }
   return { saved: true };
+}
+
+/* ---------- access profiles ---------- */
+
+function listProfiles_(b) {
+  requirePerm_(b.token, 'users.view');
+  const users = readTable_('Users').filter(u => isStaff_(u) && roleOf_(u) !== 'SUPER_ADMIN');
+  return { catalog: PERM_CATALOG, profiles: profiles_().map(p => Object.assign({}, p, { users: users.filter(u => profileIdsOf_(u).indexOf(p.id) !== -1 && u.Status !== 'disabled').length })) };
+}
+
+function saveProfile_(b) {
+  const actor = requirePerm_(b.token, 'profiles.manage');
+  const d = b.profile || {};
+  const name = safe_(String(d.name || '').trim(), 50);
+  if (name.length < 3) throw userError_('Give the profile a name.');
+  const perms = cleanPerms_(d.permissions);
+  if (!perms.length) throw userError_('Tick at least one tab or action.');
+  const mine = permissionsOf_(actor);
+  const over = perms.filter(p => mine.indexOf(p) === -1);
+  if (over.length) throw userError_('You cannot build a profile with access you do not have yourself.', 'forbidden');
+  let id = String(d.id || '').trim();
+  const existing = id ? profiles_().find(p => p.id === id) : null;
+  if (id && !existing) throw userError_('Profile not found.', 'notfound');
+  if (existing && existing.locked) throw userError_('The Administrator profile cannot be changed.');
+  if (profiles_().some(p => p.id !== id && p.name.toLowerCase() === name.toLowerCase())) throw userError_('There is already a profile with that name.');
+  if (!id) id = 'p-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) + '-' + randomCode_(4).toLowerCase();
+  const row = { ProfileID: id, Name: name, Description: safe_(d.description || '', 200), Permissions: perms.join(','), Updated: new Date(), UpdatedBy: actor.Email };
+  withLock_(() => {
+    const sh = sheet_('AccessProfiles');
+    const rows = sh.getDataRange().getValues();
+    const idx = rows.findIndex((r, i) => i > 0 && r[0] === id);
+    const vals = TABS.AccessProfiles.map(h => row[h]);
+    if (idx > 0) sh.getRange(idx + 1, 1, 1, vals.length).setValues([vals]); else sh.appendRow(vals);
+  });
+  PROFILE_CACHE_ = null;
+  log_(actor.Email, existing ? 'profile_updated' : 'profile_created', id, name + ': ' + perms.join(', '));
+  return { id };
+}
+
+function deleteProfile_(b) {
+  const actor = requirePerm_(b.token, 'profiles.manage');
+  const id = String(b.id || '');
+  const p = profiles_().find(x => x.id === id);
+  if (!p) throw userError_('Profile not found.', 'notfound');
+  if (p.builtIn) throw userError_('Built-in profiles cannot be deleted. You can edit them instead.');
+  const inUse = readTable_('Users').filter(u => isStaff_(u) && profileIdsOf_(u).indexOf(id) !== -1);
+  if (inUse.length) throw userError_('Remove this profile from ' + inUse.length + ' person(s) first.');
+  withLock_(() => deleteRowsWhere_(sheet_('AccessProfiles'), r => r[0] === id));
+  PROFILE_CACHE_ = null;
+  log_(actor.Email, 'profile_deleted', id, p.name);
+  return { deleted: true };
 }
 
 /* =====================================================================
@@ -481,7 +644,7 @@ function finalizeApplication_(b) {
     `<p>Hi ${esc_(app.row.ContactName)},</p><p>Thank you for applying to partner with ${APP.name}. Your application <strong>${app.row.ID}</strong> for <strong>${esc_(app.row.BusinessName)}</strong> is now with our team.</p>
      <p>We review every partner carefully, including the photos and documents, and usually reply within 3 working days. Once you're approved you can sign in with this email address and the password you chose.</p>`);
   whatsapp_(`${wasNeedsInfo ? '🔁 Partner application updated' : '🆕 New partner application'} (${app.row.ID})\n${app.row.BusinessName}\n${t.label}\n${app.row.City}, ${app.row.Province}\nContact: ${app.row.ContactName} · ${app.row.Phone}\n${files.length} photos & documents\n\nReview it: ${siteUrl_('/admin#applications/' + app.row.ID)}`);
-  staffEmails_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT']).forEach(to => sendMail_(to, `New partner application: ${app.row.BusinessName}`,
+  staffEmails_('partners.review').forEach(to => sendMail_(to, `New partner application: ${app.row.BusinessName}`,
     `<p>A new ${esc_(PARTNER_TYPES[app.row.PartnerType].label.toLowerCase())} application is waiting for review.</p>
      <p><strong>${esc_(app.row.BusinessName)}</strong> · ${esc_(app.row.City)}, ${esc_(app.row.Province)}<br>${esc_(app.row.Summary)}</p>${siteLink_('/admin#applications', 'Review it in the dashboard')}`));
   return { status: 'Pending' };
@@ -605,7 +768,7 @@ function submitBooking_(b) {
 
   const travellers = num_(d.adults) + num_(d.children) + num_(d.pensioners) + num_(d.infants);
   const q = { reference: ref, tour: tourTitle, startDate: startDate || 'flexible', nights: est ? est.nights : num_(d.nights), room: d.room, extras: est ? est.extras : [], total: est ? est.total : 0, name };
-  staffEmails_(['SUPER_ADMIN', 'ADMIN', 'MANAGEMENT']).forEach(to => sendMail_(to, `New enquiry ${ref}: ${tourTitle}`,
+  staffEmails_('ops.assign').forEach(to => sendMail_(to, `New enquiry ${ref}: ${tourTitle}`,
     `<p><strong>${esc_(name)}</strong> (${esc_(phone)}${email ? ', ' + esc_(email) : ''}) asked about <strong>${esc_(tourTitle)}</strong> from ${esc_(q.startDate)} for ${travellers} travellers via ${source === 'chat' ? 'Kaycee' : 'the booking form'}.${est ? ' Website estimate: R' + zar_(est.total) + '.' : ''}</p>${siteLink_('/admin#ticket/' + ref, 'Open the ticket')}`));
   whatsapp_(`🧳 New enquiry ${ref}${source === 'chat' ? ' (via Kaycee)' : ''}\n${tourTitle}\nWhen: ${q.startDate}${q.nights ? ' · ' + q.nights + ' nights' : ''}\nTravellers: ${travellers || '-'}\n${est ? 'Estimate: R' + zar_(est.total) + '\n' : ''}${name} · ${phone}${email ? ' · ' + email : ''}\n\nOpen: ${siteUrl_('/admin#ticket/' + ref)}`);
   if (email) sendMail_(email, `Your KCM trip quote ${ref}`, quoteHtml_(q, travellers));
@@ -807,19 +970,32 @@ function saveJob_(b) {
   return { id, payout };
 }
 
+/**
+ * Money out to partners: whoever records the trip (payouts.manage) cannot approve it. A manager (payouts.approve) approves,
+ * then finance marks it Paid. "On hold" can be set by either.
+ */
 function setPayoutStatus_(b) {
-  const actor = requirePerm_(b.token, 'payouts.manage');
+  const actor = requireAnyPerm_(b.token, ['payouts.manage', 'payouts.approve']);
   if (PAYOUT_STATUSES.indexOf(b.status) === -1) throw userError_('Invalid payout status.');
   let job = null;
   withLock_(() => {
     const sh = sheet_('Jobs');
     const rows = sh.getDataRange().getValues();
     const idx = rows.findIndex((r, i) => i > 0 && r[0] === b.id);
-    if (idx > 0) {
-      sh.getRange(idx + 1, TABS.Jobs.indexOf('PayoutStatus') + 1).setValue(b.status);
-      sh.getRange(idx + 1, TABS.Jobs.indexOf('PaidOn') + 1).setValue(b.status === 'Paid' ? new Date() : '');
-      job = rowToObj_(TABS.Jobs, rows[idx]);
+    if (idx < 1) return;
+    const cur = rowToObj_(TABS.Jobs, rows[idx]);
+    if (b.status === 'Approved') {
+      if (!can_(actor, 'payouts.approve')) throw userError_('A manager must approve payouts.', 'forbidden');
+      if (cur.CreatedBy === actor.Email) throw userError_('You recorded this trip, so someone else must approve the payout (two-person rule).', 'forbidden');
     }
+    if (b.status === 'Paid') {
+      if (!can_(actor, 'payouts.manage')) throw userError_('Finance marks payouts as paid.', 'forbidden');
+      if (cur.PayoutStatus !== 'Approved' && cur.PayoutStatus !== 'Paid') throw userError_('A manager must approve this payout before it is paid.');
+    }
+    if (b.status === 'Pending' && cur.PayoutStatus === 'Paid' && !can_(actor, 'payouts.approve')) throw userError_('Only a manager can reopen a paid payout.', 'forbidden');
+    sh.getRange(idx + 1, TABS.Jobs.indexOf('PayoutStatus') + 1).setValue(b.status);
+    sh.getRange(idx + 1, TABS.Jobs.indexOf('PaidOn') + 1).setValue(b.status === 'Paid' ? new Date() : '');
+    job = cur;
   });
   if (!job) throw userError_('Trip not found.');
   log_(actor.Email, 'payout_' + String(b.status).toLowerCase().replace(/\s/g, '_'), b.id, 'R' + job.Payout);
@@ -942,8 +1118,9 @@ function partnersFolder_() {
   return folder;
 }
 
-function staffEmails_(roles) {
-  return readTable_('Users').filter(u => roles.indexOf(roleOf_(u)) !== -1 && u.Status !== 'disabled' && !/\.test$/.test(u.Email)).map(u => u.Email);
+/** Email addresses of active staff holding a permission (test accounts excluded). */
+function staffEmails_(perm) {
+  return staffWith_(perm).filter(u => !/\.test$/.test(u.Email)).map(u => u.Email);
 }
 
 /** Checks the file's real signature (magic bytes), not just the type the browser claims. */
@@ -972,9 +1149,15 @@ function sheet_(name) {
     sh = ss.insertSheet(name);
     sh.getRange(1, 1, 1, TABS[name].length).setValues([TABS[name]]).setFontWeight('bold');
     sh.setFrozenRows(1);
+  } else if (!SHEET_CHECKED_[name] && TABS[name]) {
+    // columns added in a later version: write the missing header cells once (existing rows keep their data)
+    const have = sh.getLastColumn();
+    if (have < TABS[name].length) sh.getRange(1, have + 1, 1, TABS[name].length - have).setValues([TABS[name].slice(have)]).setFontWeight('bold');
   }
+  SHEET_CHECKED_[name] = true;
   return sh;
 }
+const SHEET_CHECKED_ = {};
 
 function readTable_(name) {
   const values = sheet_(name).getDataRange().getValues();

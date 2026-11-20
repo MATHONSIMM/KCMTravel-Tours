@@ -48,34 +48,46 @@ sec('about', 'What the system is', f'''
 <p>Behind both sits a private <b>Google Sheet</b> that stores the records, and a Google Apps Script program that enforces the rules.</p>
 <h3>The one idea to understand: the ticket</h3>
 <p>Every enquiry becomes a <b>ticket</b> with a number like <b>KCM-2026-000014</b>. The ticket follows the customer's request from start to finish: who is handling it, what the customer wants, the quotation, the payments, notes, tasks and a full history. Whether the enquiry came from the website, Kaycee, WhatsApp, a phone call or a walk-in, it ends up as a ticket in the same place.</p>
-<p>Each ticket has three separate statuses. The system checks every action against the person's role, so hiding a menu item is never the only protection.</p>
+<p>Each ticket has three separate statuses. The system checks every action against the person's access, so hiding a menu item is never the only protection.</p>
 {table(['Status', 'What it tells you'], [
  ['<b>Operational</b>', 'Where the work is in the journey, e.g. QUOTATION SENT, BOOKING CONFIRMED'],
  ['<b>Payment</b>', 'Worked out from verified payments (nobody types it in), e.g. Deposit pending, Fully paid'],
  ['<b>Customer response</b>', 'What the customer said about the quotation, e.g. Accepted, Declined'],
 ])}
 <h3>Who uses it</h3>
-{table(['Role', 'Typical person', 'What they can do'], [
- ['<b>Super Admin</b>', 'The owner', 'Everything, including managing other admins.'],
- ['<b>Admin</b>', 'Office manager', 'Users and access, partners, all tickets, payment verification, refunds, customer data erasure.'],
- ['<b>Management</b>', 'Operations manager', 'All tickets, assigning work, approving quotations, confirming and completing bookings, workload, settings, partner review.'],
- ['<b>Finance</b>', 'Bookkeeper', 'Sees all tickets and payments; <b>verifies</b> payments, approves refunds, manages partner payouts.'],
- ['<b>Operations</b>', 'Travel consultant', 'Registers enquiries and works on the tickets given to them: notes, tasks, checklists, quotations, recording payments (unverified).'],
- ['<b>Partner</b>', 'Lodge, driver, guide', 'Only their own listings, trips, payouts and ratings in the partner portal.'],
+<p>Each person has a <b>job role</b> (what they are, for example Travel Consultant) and one or more <b>access profiles</b> (what they can see and do). The built-in profiles are:</p>
+{table(['Access profile', 'Typical person', 'What they can do'], [
+ ['<b>Super Admin</b> (account type)', 'The owner', 'Everything. Cannot be created or changed from the website.'],
+ ['<b>Administrator</b>', 'Office manager', 'Everything, including staff accounts, access profiles and customer data erasure.'],
+ ['<b>Manager</b>', 'Operations manager', 'All tickets, assigning work, approving quotations, <b>approving refunds and partner payouts</b>, confirming bookings, workload, staff accounts and profiles.'],
+ ['<b>Finance Administrator</b>', 'Bookkeeper', 'Payments, balances, refunds and partner payouts. Sees <b>only tickets that have money on them</b>, read-only. Records refunds and payouts; a manager approves them.'],
+ ['<b>Travel Consultant</b>', 'Consultant', 'Registers enquiries, works on own and assigned tickets, sees and <b>picks up</b> unassigned tickets, prepares quotations, records payments (unverified).'],
+ ['<b>Website &amp; Partners Officer</b>', 'Marketing / admin', 'Website requests, messages, partner applications and ratings. No Operations Centre.'],
+ ['<b>Read-only</b>', 'Owner\'s advisor, auditor', 'Looks at operations, payments and website pages; changes nothing.'],
+ ['<b>Partner</b> (account type)', 'Lodge, driver, guide', 'Only their own listings, trips, payouts and ratings in the partner portal. Never the Operations Centre.'],
 ], 'roles')}
 ''')
 
 sec('signin', 'Signing in', f'''
 <h3>Staff sign-in</h3>
 {steps('Open the website and click ' + btn('Sign in') + ' at the top right (Figure ' + str(fig_no[0]+1) + '), or go straight to <b>/admin</b>.',
-       'Type your email address and password, then click ' + btn('Sign in') + '.',
+       'Type your <b>email address or username</b> and password, then click ' + btn('Sign in') + '.',
        'If your role needs it, type the 6-digit code from your authenticator app (see below).')}
 {fig('04-header-signin', 'The Sign in button in the website header.')}
 {fig('06-admin-signin', 'The dashboard sign-in: (1) email, (2) password, (3) Sign in.')}
-<h3>First time, or forgot your password</h3>
-<p>Click <b>Forgot or set password?</b> under the sign-in button. Enter your email, then the 6-digit code that arrives in your inbox, then choose a password of at least 10 characters. Very common passwords (such as "password123") are refused. Setting a new password signs you out on every other device.</p>
+<h3>Your first sign-in (temporary password)</h3>
+<p>Your manager creates your account and gives you a username and a <b>temporary password</b> in person or by phone. It works once and expires after 7 days.</p>
+{steps('Sign in with your username (or email) and the temporary password.',
+       'The dashboard asks you to choose your own password (1). Type it twice and click ' + btn('Save my password') + ' (2).',
+       'If your profile needs it, set up your authenticator app (below). You land in the dashboard.')}
+{fig('73-first-password', 'First sign-in: choose your own password.')}
+<h3>Change your password</h3>
+<p>Click {btn('My password')} at the top of the dashboard (1), type your current password and the new one twice, then click {btn('Change password')} (2). You stay signed in; other devices are signed out.</p>
+{fig('76-my-password', 'Changing your own password.')}
+<h3>Forgot your password</h3>
+<p>Ask your manager for a new temporary password, or click <b>Forgot or set password?</b> under the sign-in button. Enter your email, then the 6-digit code that arrives in your inbox, then choose a password of at least 10 characters. Very common passwords (such as "password123") are refused. Setting a new password signs you out on every other device.</p>
 <h3>Two-step sign-in (authenticator app)</h3>
-<p><b>Super Admin, Admin, Management and Finance</b> must use an authenticator app such as Google Authenticator or Microsoft Authenticator. Operations staff and partners don't need one.</p>
+<p>Anyone whose profile can manage staff, see all tickets or handle money (Administrator, Manager, Finance Administrator, Read-only) must use an authenticator app such as Google Authenticator or Microsoft Authenticator. Travel Consultants, Website officers and partners don't need one.</p>
 {steps('The first time you sign in, a QR code appears (Figure ' + str(fig_no[0]+1) + ').',
        'On your phone, open the authenticator app, tap <b>+</b> and scan the code.',
        'Type the 6-digit code the app shows and click ' + btn('Turn on two-step verification') + '.',
@@ -83,7 +95,7 @@ sec('signin', 'Signing in', f'''
        'From then on, every sign-in asks for the current 6-digit code from the app.')}
 {fig('07-mfa-setup', 'Setting up the authenticator: scan the QR code, then type the 6-digit code.', 'tall')}
 {fig('08-recovery-codes', 'Your 8 recovery codes. Tick the box to confirm you saved them.', 'tall')}
-{tip('Lost your phone and your recovery codes? Ask a Super Admin or Admin to click <b>Reset</b> next to your name in <b>Users &amp; access</b>. You set the app up again at your next sign-in.', 'tip')}
+{tip('Lost your phone and your recovery codes? Ask an Administrator or Manager to open your name in <b>Users &amp; access</b> and click <b>Reset two-step</b> in <b>Users &amp; access</b>. You set the app up again at your next sign-in.', 'tip')}
 ''')
 
 sec('layout', 'Finding your way around', f'''
@@ -92,7 +104,7 @@ sec('layout', 'Finding your way around', f'''
  ['<b>KCM Operations Centre</b>', 'My Workspace, Operations Overview, Incoming Enquiries, Unassigned Tickets, All Tickets, My Assigned Tickets, Tasks &amp; Follow-ups, Quotations, Bookings, Payments, Completed Orders, Employee Workload, Activity &amp; Audit History, Checklists &amp; statuses'],
  ['<b>Website &amp; partners</b>', 'Website overview, Partner applications, Partners, Partner trips &amp; payouts, Ratings, Website requests, Messages, Users &amp; access'],
 ])}
-<p>You only see the pages your role is allowed to use. For example, Operations staff do not see Payments, Workload or Users &amp; access (Figure {fig_no[0]+2}).</p>
+<p>You only see the pages your access profiles allow. For example, Travel Consultants do not see Payments, Workload or Users &amp; access (Figure {fig_no[0]+2}), and Finance sees only <b>Tickets with money</b>, <b>Payments</b> and <b>Partner trips &amp; payouts</b>.</p>
 <div class="two">{fig('65-menu-collapsed', 'Click a group heading (1) to fold or unfold it.', 'narrow')}{fig('33-agent-menu', 'The menu as an Operations consultant sees it.', 'narrow')}</div>
 <h3>The buttons at the top of every page</h3>
 <ul>
@@ -280,21 +292,42 @@ sec('lifecycle', 'The ticket journey: all statuses', f'''
 ], 'status-table')}
 ''')
 
-sec('access', 'For admins: giving and removing access', f'''
-<p>Open <b>Users &amp; access</b> (Super Admin and Admin only).</p>
-<h3>Give someone access</h3>
-{steps('In <b>Give someone access</b>, type their email (1) and name.',
-       'Choose the role (2): Management, Finance or Operations (only a Super Admin can create an Admin).',
-       'Click ' + btn('Give access') + ' (3). They then sign in with <b>Forgot or set password?</b> to choose their password.')}
-{fig('60-give-access', 'Giving a new employee access.')}
-<h3>Change a role, remove access or reset two-step sign-in</h3>
-<ul>
-<li><b>Change role</b>: pick a new role from the drop-down in the Role column (A). The change happens at once and the person must sign in again.</li>
-<li><b>Remove access</b>: change Status to <b>disabled</b> (B). They are signed out immediately and cannot sign in. Change it back to <b>active</b> to restore access. Their past work stays on the tickets.</li>
-<li><b>Reset</b> (in the Two-step column): for someone who lost their phone. They set up the authenticator again at their next sign-in.</li>
-</ul>
-{fig('61-users-access', 'Users &amp; access: (A) role, (B) status (active / disabled).', 'tall')}
-{tip('Nobody can change their own role, and nobody can be made Super Admin from the website. This stops anyone from giving themselves more power.', 'warn')}
+sec('access', 'For administrators and managers: people and access', f'''
+<p>Open <b>Users &amp; access</b>. Administrators and managers have the same powers here, with three rules: nobody changes their own access, nobody can give access they don't have themselves, and the Super Admin can't be changed.</p>
+<h3>Who does what (the business model)</h3>
+{table(['Area', 'Who does it', 'Who checks or approves'], [
+ ['New enquiries', 'Anyone with Register enquiries; website and Kaycee create tickets automatically', 'Managers see them in Incoming and Unassigned'],
+ ['Who handles a ticket', 'Managers assign; consultants can pick up an unassigned ticket themselves', 'Workload page shows the spread'],
+ ['Working a ticket', 'The assigned consultant (and supporters)', 'Managers can edit any ticket'],
+ ['Quotations', 'Consultant prepares', 'Manager approves before it is sent'],
+ ['Money in', 'Consultant or finance records the payment (unverified)', 'Finance verifies against the bank; never the person who recorded it'],
+ ['Money out: refunds', 'Finance records the refund', '<b>Manager approves</b>; never the person who recorded it'],
+ ['Money out: partner payouts', 'Finance records the trip', '<b>Manager approves</b>, then finance marks it Paid'],
+ ['Booking confirmed', 'Manager, only after the deposit is verified', 'Audit history'],
+ ['Staff accounts and profiles', 'Administrators and managers', 'Audit history records every change'],
+])}
+{fig('79-who-does-what', 'Who does what: every access profile side by side.', 'tall')}
+<h3>Add an employee</h3>
+{steps('Click ' + btn('+ Add employee') + '. Enter the full name, name and surname (1), a username (2), their email and job role.',
+       'Tick one or more access profiles (3). The box underneath lists the menu tabs and actions they will get.',
+       'Click ' + btn('Generate') + ' (4) for a temporary password, then ' + btn('Create account') + ' (5).',
+       'Give the username and temporary password to the person in person or by phone (never by email). They get an email that their account exists, without the password.')}
+{fig('70-add-employee', 'Adding an employee: name, username, access profiles, temporary password.', 'tall')}
+{fig('71-credentials', 'The sign-in details to hand over. The password is not shown again.')}
+<h3>Change access, disable someone, or set a new temporary password</h3>
+<p>Click <b>Edit</b> next to the person (A). Tick or untick profiles (one person can hold several, for example Manager and Finance Administrator), set <b>Account</b> to <b>Disabled</b> when someone leaves, or type a new temporary password if they forgot theirs. Each of these signs them out at once. Their past work stays on the tickets.</p>
+{fig('72-users-access', 'The KCM team list: job role, access profiles, account and two-step status. (A) Edit.', 'tall')}
+<h3>Build an access profile</h3>
+<p>Open <b>Access profiles</b> and click {btn('+ New profile')} (1), or <b>Edit</b> on an existing one. Name it, then tick the <b>menu tabs they see</b> and <b>what they can do</b> (A). Changes apply straight away to everyone who has the profile. The Administrator profile is fixed, built-in profiles can be edited but not deleted, and a custom profile can only be deleted when nobody has it.</p>
+{fig('77-profiles', 'Access profiles: (1) New profile.')}
+{fig('78-profile-builder', 'The profile builder: tick tabs and actions (A).')}
+<h3>What a consultant sees</h3>
+<p>A Travel Consultant sees their own work and the Unassigned list (A). Clicking {btn('Pick up')} (1) makes the ticket theirs and adds a task to contact the customer within 24 hours.</p>
+{fig('74-consultant-menu', 'A new consultant\'s menu (A): no Payments, Workload or Users &amp; access.')}
+{fig('75-pickup', 'Picking up an unassigned ticket (1).')}
+<h3>What finance sees</h3>
+<p>Finance opens tickets through <b>Tickets with money</b>: a read-only summary with the quotations, payments and money history (A, B). Notes, tasks, files and phone numbers stay with the people working the ticket.</p>
+{fig('57-finance-ticket', 'Finance view of a ticket: money only.')}
 <h3>Activity &amp; Audit History</h3>
 <p>Every sign-in, change, approval and payment is written to a permanent log that cannot be edited from the dashboard. Use the filter to search by person, action or ticket number.</p>
 {fig('19-activity', 'Activity &amp; Audit History.')}
@@ -334,14 +367,14 @@ sec('demo', 'Demo data for testing', f'''
        'Wait until the message appears (it can take a few minutes). If it says "Part loaded", click the menu item again to continue.')}
 <h3>Demo accounts</h3>
 <p>All demo accounts use the password <b>Demo-Lowveld-2026</b>. Management and Finance accounts set up an authenticator at their first sign-in, like real ones.</p>
-{table(['Email', 'Role', 'Use it to try'], [
- ['nomsa.ops@demo.kcm.test', 'Operations', 'A consultant\'s day: workspace, notes, tasks, quotations'],
- ['sipho.ops@demo.kcm.test', 'Operations', 'Second consultant'],
- ['ayesha.ops@demo.kcm.test', 'Operations', 'Third consultant'],
- ['thandi.manager@demo.kcm.test', 'Management', 'Assigning, approving quotations, confirming bookings'],
- ['fiona.finance@demo.kcm.test', 'Finance', 'Verifying payments'],
- ['sam.finance@demo.kcm.test', 'Finance', 'Approving refunds recorded by Fiona'],
- ['former.ops@demo.kcm.test', 'Operations (disabled)', 'Shows what removed access looks like'],
+<p>Sign in with the username or the email.</p>
+{table(['Username', 'Profiles', 'Use it to try'], [
+ ['nomsa.demo', 'Travel Consultant', 'A consultant\'s day: workspace, picking up tickets, notes, tasks, quotations'],
+ ['sipho.demo / ayesha.demo', 'Travel Consultant', 'Other consultants'],
+ ['thandi.demo', 'Manager', 'Assigning, approving quotations, refunds and payouts, staff accounts'],
+ ['fiona.demo', 'Finance Administrator', 'Verifying payments, recording refunds; sees only tickets with money'],
+ ['sam.demo', 'Manager + Finance Administrator', 'One person with two profiles; approves refunds Fiona records'],
+ ['pieter.demo', 'Travel Consultant (disabled)', 'Shows what removed access looks like'],
  ['lowveld.partner0@demo.kcm.test', 'Partner (approved)', 'The partner portal'],
 ])}
 <h3>Remove it before going live</h3>
@@ -351,7 +384,7 @@ sec('demo', 'Demo data for testing', f'''
 sec('golive', 'Going-live checklist', f'''
 {steps('<b>KCM Admin → Remove demo data</b>.',
        '<b>KCM Admin → Remove test admin</b> (admin@kcm.test).',
-       'Give each real employee access in <b>Users &amp; access</b> and make sure every Super Admin, Admin, Management and Finance user has set up their authenticator and saved their recovery codes.',
+       'Create each real employee in <b>Users &amp; access</b>, sign in as one of them to check what they see, and make sure everyone whose profile needs it has set up their authenticator and saved their recovery codes.',
        'Turn on Google\'s own 2-Step Verification for the Google account that owns the Sheet: whoever controls that account controls all the data.',
        'Don\'t share the Google Sheet itself with staff; they use the dashboard.',
        'Check the privacy policy page and name an Information Officer (POPIA).',
@@ -362,11 +395,12 @@ sec('help', 'Troubleshooting', f'''
 {table(['What you see', 'What to do'], [
  ['"We couldn\'t reach the server" when signing in', 'In Apps Script, open <b>Deploy → Manage deployments</b>, edit the deployment and check <b>Who has access</b> is <b>Anyone</b>. Then deploy a new version.'],
  ['The left menu is empty, or a yellow note says the Operations Centre isn\'t switched on', 'The Google backend is an old version. Paste the latest <b>KCM-Backend.gs</b> into Apps Script, run <b>setup</b>, then <b>Deploy → Manage deployments → Edit → New version</b>.'],
- ['Not sure which backend version is live', 'Open the backend web-app link in a browser. It shows the version number, for example "1.4.0".'],
+ ['Not sure which backend version is live', 'Open the backend web-app link in a browser. It shows the version number, for example "1.5.0".'],
  ['"Someone else updated this ticket a moment ago"', 'Two people edited the same ticket. Click Refresh to see their change, then make yours again. Nothing was overwritten.'],
  ['"Only management can confirm a booking" or another red message', 'The system is protecting a rule. The message says what is missing (for example, finance must verify the deposit first).'],
- ['A new employee doesn\'t see a page', 'Each role only sees its own pages. Check their role in Users &amp; access.'],
- ['Lost authenticator phone', 'Use a recovery code, or ask an admin to click Reset next to your name.'],
+ ['A new employee doesn\'t see a page', 'People only see what their access profiles allow. Check their profiles in Users &amp; access (Who does what shows every profile).'],
+ ['"Your temporary password has expired"', 'Temporary passwords last 7 days. A manager opens the person in Users &amp; access and sets a new one.'],
+ ['Lost authenticator phone', 'Use a recovery code, or ask an administrator or manager to click Reset two-step on your account.'],
  ['The website doesn\'t show my change', 'Press Ctrl+F5 to reload the page without the browser\'s saved copy.'],
 ])}
 ''')
@@ -438,7 +472,7 @@ table.status-table td:nth-child(2) {{ font-weight: 800; font-size: 8.5pt; white-
   <div><img class="logo" src="{LOGO_URI}" alt="KCM Travel &amp; Tours"></div>
   <div><h1>User Guide<br><em>KCM Operations Centre</em></h1><p class="lead">How to use the KCM Travel &amp; Tours website and staff dashboard: from a customer's first enquiry to a completed trip. Written for the whole team, with pictures.</p></div>
   <div class="shot"><img src="img/10-ops-overview.jpg" alt=""></div>
-  <div class="meta"><span>Version 1.4 · {today}<br>Screenshots show demo data, not real customers</span><span class="by">Created by<img src="{MTECH_URI}" alt="M-Tech Business Solutions"></span></div>
+  <div class="meta"><span>Version 1.5 · {today}<br>Screenshots show demo data, not real customers</span><span class="by">Created by<img src="{MTECH_URI}" alt="M-Tech Business Solutions"></span></div>
 </div>
 <div class="toc"><h2>Contents</h2><ol>{toc}</ol>
 <div class="howto"><h3 style="margin-top:0">How to read this guide</h3>

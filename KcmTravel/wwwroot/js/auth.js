@@ -48,6 +48,7 @@
         const node = tpl.content.firstElementChild.cloneNode(true);
         container.appendChild(node);
         const pwForm = $("[data-step-password]", node), emailForm = $("[data-step-email]", node), codeForm = $("[data-step-code]", node);
+        const newPwForm = $("[data-step-newpw]", node);
         const mfaForm = $("[data-step-mfa]", node), setupForm = $("[data-step-mfa-setup]", node), recoveryStep = $("[data-step-recovery]", node);
         let challenge = "", useRecovery = false;
         const err = $("[data-error]", node);
@@ -55,11 +56,12 @@
         const info = m => { showErr(m); err.classList.add("form-error--info"); };
         let email = "";
         const busy = (form, on, label) => { const b = $("button[type=submit]", form); b.disabled = on; if (label) b.textContent = label; };
-        const step = f => { [pwForm, emailForm, codeForm, mfaForm, setupForm, recoveryStep].forEach(x => { x.hidden = x !== f; }); $("[data-google-wrap]", node).hidden = !(f === pwForm && K.googleClientId && K.configured); showErr(""); };
+        const step = f => { [pwForm, emailForm, codeForm, newPwForm, mfaForm, setupForm, recoveryStep].forEach(x => { x.hidden = x !== f; }); $("[data-google-wrap]", node).hidden = !(f === pwForm && K.googleClientId && K.configured); showErr(""); };
         const validEmail = v => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
         const finish = r => { K.session.set(r.token, r.user); onDone?.(r.user); };
         /* Every sign-in method can come back with an MFA step instead of a session (privileged roles). */
         const done = r => {
+            if (r && r.mustChangePassword) { challenge = r.challenge; $("[data-newpw-hi]", node).textContent = r.name ? `Welcome, ${r.name}.` : "Welcome."; newPwForm.reset(); step(newPwForm); newPwForm.password.focus(); return; }
             if (r && r.mfa === "verify") { challenge = r.challenge; useRecovery = false; mfaForm.code.value = ""; $("[data-mfa-code-wrap]", node).hidden = false; $("[data-mfa-recovery-wrap]", node).hidden = true; step(mfaForm); mfaForm.code.focus(); return; }
             if (r && r.mfa === "setup") { challenge = r.challenge; showSetup(r); return; }
             if (r && r.recoveryCodes) { showRecovery(r); return; }
@@ -86,6 +88,16 @@
         }
         $("[data-copy-secret]", node).addEventListener("click", () => navigator.clipboard?.writeText($("[data-mfa-secret]", node).textContent.replace(/\s/g, "")).then(() => info("Key copied.")));
         $("[data-mfa-use-recovery]", node).addEventListener("click", () => { useRecovery = !useRecovery; $("[data-mfa-code-wrap]", node).hidden = useRecovery; $("[data-mfa-recovery-wrap]", node).hidden = !useRecovery; (useRecovery ? mfaForm.recovery : mfaForm.code).focus(); });
+        newPwForm.addEventListener("submit", async e => {
+            e.preventDefault(); showErr("");
+            const pw = newPwForm.password.value;
+            if (pw.length < 10 || !/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) { showErr("Use at least 10 characters, with letters and a number."); newPwForm.password.focus(); return; }
+            if (pw !== newPwForm.password2.value) { showErr("The two passwords are not the same."); newPwForm.password2.focus(); return; }
+            busy(newPwForm, true, "Saving…");
+            try { done(await K.call("setFirstPassword", { challenge, password: pw })); }
+            catch (ex) { showErr(ex.message); if (ex.code === "auth") step(pwForm); }
+            busy(newPwForm, false, "Save my password");
+        });
         mfaForm.addEventListener("submit", async e => {
             e.preventDefault(); showErr("");
             const payload = useRecovery ? { challenge, recoveryCode: mfaForm.recovery.value.trim() } : { challenge, code: mfaForm.code.value.replace(/\D/g, "") };
@@ -112,14 +124,14 @@
             e.preventDefault(); showErr("");
             if (notReady()) return;
             email = pwForm.email.value.trim().toLowerCase();
-            if (!validEmail(email)) { showErr("Please enter a valid email address."); pwForm.email.focus(); return; }
+            if (!email || (email.includes("@") && !validEmail(email))) { showErr("Please enter your email address or username."); pwForm.email.focus(); return; }
             if (!pwForm.password.value) { showErr("Please enter your password."); pwForm.password.focus(); return; }
             busy(pwForm, true, "Signing in…");
             try { done(await K.call("signIn", { email, password: pwForm.password.value })); }
             catch (ex) { ex.code === "pending" ? info(ex.message) : showErr(ex.message); }
             busy(pwForm, false, "Sign in");
         });
-        $("[data-forgot]", node).addEventListener("click", () => { emailForm.email.value = pwForm.email.value; step(emailForm); emailForm.email.focus(); });
+        $("[data-forgot]", node).addEventListener("click", () => { emailForm.email.value = pwForm.email.value.includes("@") ? pwForm.email.value : ""; step(emailForm); emailForm.email.focus(); });
         $("[data-back-password]", node).addEventListener("click", () => step(pwForm));
         emailForm.addEventListener("submit", async e => {
             e.preventDefault(); showErr("");

@@ -95,7 +95,8 @@
             const c = await config();
             const f = filters[view] ||= { q: "", status: "", priority: "", assignee: "", source: "", paymentStatus: "", destination: "", from: "", to: "", overdue: false, sort: opts.sort || "updated" };
             const b = body();
-            b.innerHTML = `${opts.intro ? `<p class="ops-intro">${opts.intro}</p>` : ""}
+            const intro = typeof opts.intro === "function" ? opts.intro() : opts.intro;
+            b.innerHTML = `${intro ? `<p class="ops-intro">${intro}</p>` : ""}
                 <div class="adm-card">
                     <form class="ops-filters" data-filters>
                         <input class="search" type="search" name="q" value="${esc(f.q)}" placeholder="Search ticket, customer, phone, email, destination…" aria-label="Search tickets">
@@ -117,6 +118,12 @@
                 </div>`;
             let timer = null, last = [];
             if (can("ops.assign")) wireAssign(b, () => last, () => load());
+            else if (can("ops.claim")) b.addEventListener("click", async e => {
+                const btn = e.target.closest("[data-claim]"); if (!btn) return;
+                btn.disabled = true; btn.textContent = "Picking up…";
+                try { await get("claimTicket", { ref: btn.dataset.claim }); toast(`${btn.dataset.claim} is now yours. It's in My Assigned Tickets.`); load(); }
+                catch (err) { toast(err.message, true); load(); }
+            });
             const load = async () => {
                 const payload = Object.assign({ view: opts.apiView || "all" }, f, { overdue: f.overdue || undefined });
                 try {
@@ -138,11 +145,10 @@
             load();
         }
         /* ---------- quick assign from any ticket list (management) ---------- */
-        const WORK_ROLES = ["SUPER_ADMIN", "ADMIN", "MANAGEMENT", "OPERATIONS"]; // finance can't own tickets
         function wireAssign(b, rows, reload) {
             const card = $(".adm-card", b);
             let counts = {};
-            const people = () => cfg.staff.filter(s => WORK_ROLES.includes(s.role));
+            const people = () => cfg.staff.filter(s => s.canOwn !== false); // only people whose profile lets them own tickets
             const loadCounts = async () => { if (!can("ops.workload")) return; try { (await get("workload")).forEach(w => { counts[w.email] = w.activeTickets; }); } catch { /* counts are a nice-to-have */ } };
             loadCounts();
             const label = s => `${s.name}${counts[s.email] !== undefined ? ` · ${counts[s.email]} active` : ""}`;
@@ -164,7 +170,7 @@
                 const m = document.createElement("div");
                 m.className = "assign-menu"; m.dataset.ref = t.ref; m.setAttribute("role", "menu");
                 m.innerHTML = `<p class="assign-menu-head">${t.assignedTo ? "Reassign" : "Assign"} ${esc(t.ref)} to…</p>
-                    ${people().map(s => `<button type="button" role="menuitem" data-to="${esc(s.email)}" class="${s.email === t.assignedTo ? "is-current" : ""}"><span>${esc(s.name)}</span><small>${esc(ROLE_LABEL[s.role] || s.role)}${counts[s.email] !== undefined ? ` · ${counts[s.email]} active` : ""}</small></button>`).join("")}
+                    ${people().map(s => `<button type="button" role="menuitem" data-to="${esc(s.email)}" class="${s.email === t.assignedTo ? "is-current" : ""}"><span>${esc(s.name)}</span><small>${esc(s.jobTitle || ROLE_LABEL[s.role] || s.role)}${counts[s.email] !== undefined ? ` · ${counts[s.email]} active` : ""}</small></button>`).join("")}
                     ${t.assignedTo ? `<button type="button" role="menuitem" data-to="" class="assign-menu-unassign"><span>Unassign</span><small>back to Unassigned Tickets</small></button>` : ""}
                     <button type="button" role="menuitem" data-more class="assign-menu-more">More options: handover note, supporters, deadline…</button>`;
                 document.body.append(m);
@@ -222,6 +228,7 @@
         }
         function ticketTable(list, o = {}) {
             const pick = !!o.assign && can("ops.assign"); // registers only: tick-boxes + click-to-assign
+            const claim = !pick && can("ops.claim"); // consultants pick up unassigned tickets themselves
             return `<div class="table-wrap"><table class="table ops-table"><thead><tr>${pick ? `<th class="sel-col"><input type="checkbox" data-selall aria-label="Select all tickets"></th>` : ""}<th>Ticket</th><th>Customer</th><th>Trip</th><th>Status</th><th>Payment</th><th>Assigned</th><th>Next action</th></tr></thead><tbody>
                 ${list.map(t => `<tr class="${t.overdue ? "is-overdue" : ""}">
                     ${pick ? `<td class="sel-col"><input type="checkbox" data-sel="${esc(t.ref)}" aria-label="Select ${esc(t.ref)}"></td>` : ""}<td>${ticketLink(t.ref)} ${priBadge(t.priority)}<span>${esc(t.source)} · ${fmtDate(t.created)}</span></td>
@@ -229,7 +236,7 @@
                     <td>${esc(t.package || t.destination || "—")}<span>${t.departDate ? fmtDate(t.departDate) : "Dates TBC"}${t.travellers ? " · " + t.travellers + " pax" : ""}</span></td>
                     <td>${opBadge(t.opStatus)}${respBadge(t.responseStatus)}</td>
                     <td>${payBadge(t.paymentStatus)}</td>
-                    <td>${pick ? `<button type="button" class="assign-chip ${t.assignedTo ? "" : "is-none"}" data-qa="${esc(t.ref)}" aria-haspopup="menu" title="${t.assignedTo ? "Reassign" : "Assign"} ${esc(t.ref)}">${t.assignedTo ? esc(staffName(t.assignedTo)) : "Unassigned"}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>` : t.assignedTo ? esc(staffName(t.assignedTo)) : `<span class="status status--warn">Unassigned</span>`}${t.openTasks ? `<span>${t.openTasks} open task${t.openTasks > 1 ? "s" : ""}${t.overdueTasks ? `, <b class="overdue-txt">${t.overdueTasks} overdue</b>` : ""}</span>` : ""}</td>
+                    <td>${pick ? `<button type="button" class="assign-chip ${t.assignedTo ? "" : "is-none"}" data-qa="${esc(t.ref)}" aria-haspopup="menu" title="${t.assignedTo ? "Reassign" : "Assign"} ${esc(t.ref)}">${t.assignedTo ? esc(staffName(t.assignedTo)) : "Unassigned"}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>` : t.assignedTo ? esc(staffName(t.assignedTo)) : claim && t.open !== false ? `<button type="button" class="btn btn--primary btn--sm" data-claim="${esc(t.ref)}">Pick up</button>` : `<span class="status status--warn">Unassigned</span>`}${t.openTasks ? `<span>${t.openTasks} open task${t.openTasks > 1 ? "s" : ""}${t.overdueTasks ? `, <b class="overdue-txt">${t.overdueTasks} overdue</b>` : ""}</span>` : ""}</td>
                     <td>${esc(t.nextAction || "—")}<span class="${t.overdue ? "overdue-txt" : ""}">${t.nextActionDue ? (t.overdue ? "Overdue · " : "Due ") + fmtWhen(t.nextActionDue) : ""}</span></td></tr>`).join("")}
                 </tbody></table></div>`;
         }
@@ -342,7 +349,7 @@
             const t = await get("getTicket", { ref });
             ctx.setTitle(t.ref);
             const b = body(), A = t.allowed;
-            const tab = ticketTab[ref] || "summary";
+            const tab = t.limited && !["quotes", "pay", "hist"].includes(ticketTab[ref]) ? "pay" : ticketTab[ref] || "summary";
             const doneCount = t.checklist.filter(c => c.done).length, applicable = t.checklist.filter(c => c.applicable).length;
             const openTasks = t.tasks.filter(k => !["COMPLETED", "CANCELLED"].includes(k.status));
             const c = t.customer || {};
@@ -353,6 +360,7 @@
                             <h2>${esc(c.name || t.customerRef)} <a class="tk-cust" href="#customer/${encodeURIComponent(t.customerRef)}">${esc(t.customerRef)}</a></h2>
                             <p class="muted">${esc(t.package || t.destination || t.enquiryType || "Trip enquiry")}${t.departDate ? " · " + fmtDate(t.departDate) : ""}${t.travellers ? " · " + t.travellers + " travellers" : ""}</p></div>
                         <div class="tk-actions">
+                            ${A.claim ? `<button class="btn btn--primary btn--sm" type="button" data-act="claim">Pick up this ticket</button>` : ""}
                             ${A.edit ? `<button class="btn btn--primary btn--sm" type="button" data-act="status">Change status</button>` : ""}
                             ${A.assign ? `<button class="btn btn--ghost btn--sm" type="button" data-act="assign">${t.assignedTo ? "Reassign / hand over" : "Assign"}</button>` : ""}
                             ${A.edit ? `<button class="btn btn--ghost btn--sm" type="button" data-act="note">Add note</button><button class="btn btn--ghost btn--sm" type="button" data-act="task">Add task</button>` : ""}
@@ -367,9 +375,11 @@
                         <div><dt>Next action</dt><dd class="${t.overdue ? "overdue-txt" : ""}">${esc(t.nextAction || "—")}${t.nextActionDue ? `<span>${t.overdue ? "Overdue · " : "Due "}${fmtWhen(t.nextActionDue)}</span>` : ""}${A.edit ? ` <button type="button" class="link-btn" data-act="next">Edit</button>` : ""}</dd></div>
                         ${t.deadline ? `<div><dt>Deadline</dt><dd>${fmtDate(t.deadline)}</dd></div>` : ""}
                     </dl>
-                    ${!A.edit ? `<p class="muted tk-ro">You can view this ticket. Changes are made by the assigned employee or management.</p>` : ""}
+                    ${t.limited ? `<p class="muted tk-ro">Finance view: money only (quotations and payments). Notes, tasks, files and contact details stay with the people working on the ticket.</p>`
+                        : A.claim ? `<p class="muted tk-ro">Nobody owns this ticket yet. Pick it up to start working on it.</p>`
+                        : !A.edit ? `<p class="muted tk-ro">You can view this ticket. Changes are made by the assigned employee or management.</p>` : ""}
                 </div>
-                <nav class="tk-tabs" role="tablist">${[["summary", "Summary"], ["req", "Requirements"], ["tasks", `Tasks (${openTasks.length})`], ["check", `Checklist ${doneCount}/${applicable}`], ["notes", `Notes (${t.notes.length})`], ["quotes", `Quotations (${t.quotes.length})`], ["pay", "Payments"], ["supp", `Suppliers (${t.supplierQuotes.length})`], ["files", `Files (${t.files.length})`], ["hist", "History"]]
+                <nav class="tk-tabs" role="tablist">${(t.limited ? [["quotes", `Quotations (${t.quotes.length})`], ["pay", "Payments"], ["hist", "History"]] : [["summary", "Summary"], ["req", "Requirements"], ["tasks", `Tasks (${openTasks.length})`], ["check", `Checklist ${doneCount}/${applicable}`], ["notes", `Notes (${t.notes.length})`], ["quotes", `Quotations (${t.quotes.length})`], ["pay", "Payments"], ["supp", `Suppliers (${t.supplierQuotes.length})`], ["files", `Files (${t.files.length})`], ["hist", "History"]])
                     .map(([k, l]) => `<button type="button" role="tab" class="${tab === k ? "is-active" : ""}" aria-selected="${tab === k}" data-tab="${k}">${l}</button>`).join("")}</nav>
                 <div data-tabbody></div>`;
             const reload = () => ticket(ref);
@@ -384,6 +394,9 @@
         }
 
         const ACT = {
+            async claim(t, reload) {
+                try { await get("claimTicket", { ref: t.ref, version: t.version }); toast(`${t.ref} is now yours`); reload(); } catch (e) { toast(e.message, true); reload(); }
+            },
             status(t, reload) {
                 const list = cfg.statuses.filter(s => s !== t.opStatus);
                 modal(`Change status of ${t.ref}`, `<p class="muted">Current: ${opBadge(t.opStatus)}. Some changes need earlier steps first (for example, a booking is confirmed only after finance verifies the deposit). The system will tell you what's missing.</p>
@@ -395,7 +408,7 @@
                 await config(true); // pick up employees added since the page loaded
                 const staff = cfg.staff;
                 modal(t.assignedTo ? `Reassign ${t.ref}` : `Assign ${t.ref}`, `
-                    <div class="field"><label>Assigned employee</label><select name="assignee">${opt(staff.map(s => [s.email, `${s.name} (${ROLE_LABEL[s.role] || s.role})`]), t.assignedTo, "Unassigned")}</select></div>
+                    <div class="field"><label>Assigned employee</label><select name="assignee">${opt(staff.map(s => [s.email, `${s.name} (${s.jobTitle || ROLE_LABEL[s.role] || s.role})`]), t.assignedTo, "Unassigned")}</select></div>
                     <fieldset class="field"><legend class="field-legend">Supporting employees</legend><div class="check-grid">${staff.map(s => `<label class="check-pill"><input type="checkbox" name="sup" value="${esc(s.email)}" ${String(t.supportBy || "").includes(s.email) ? "checked" : ""}><span>${esc(s.name)}</span></label>`).join("")}</div></fieldset>
                     <div class="field-row"><div class="field"><label>Priority</label><select name="priority">${opt(cfg.priorities, t.priority)}</select></div>
                     <div class="field"><label>Processing deadline</label><input type="date" name="deadline" value="${dInput(t.deadline)}"></div></div>
@@ -706,7 +719,7 @@
             el.innerHTML = `<div class="adm-card"><div class="card-head"><h2>Payments</h2>${A.payRecord && m.final ? `<button class="btn btn--primary btn--sm" type="button" data-newpay>Record payment</button>` : ""}</div>
                 ${m.final ? `<dl class="q-sum pay-sum"><div><dt>Quotation total</dt><dd>${money(m.final)}</dd></div><div><dt>Deposit required</dt><dd>${money(m.deposit)}</dd></div><div><dt>Paid (verified)</dt><dd>${money(m.paid)}</dd></div><div><dt>Awaiting verification</dt><dd>${money(m.unverified)}</dd></div><div><dt>Outstanding</dt><dd><strong>${money(m.outstanding)}</strong></dd></div><div><dt>Status</dt><dd>${payBadge(t.paymentStatus)}</dd></div></dl>`
                     : `<p class="muted">Payments can be recorded once the customer has accepted a quotation.</p>`}
-                <p class="muted">Recorded payments stay <strong>unverified</strong> until someone in finance (not the person who recorded it) checks the bank statement or payment gateway. A screenshot from a customer is not proof of payment. Refunds need a second person to approve.</p>
+                <p class="muted">Recorded payments stay <strong>unverified</strong> until someone in finance (not the person who recorded it) checks the bank statement or payment gateway. A screenshot from a customer is not proof of payment. Refunds are recorded by finance and approved by a manager, never by the person who recorded them.</p>
                 ${t.payments.length ? `<ul class="pay-list">${t.payments.map(p => `<li class="${p.verification === "Voided" ? "is-void" : ""}">
                     <div><strong>${esc(p.type[0].toUpperCase() + p.type.slice(1))} · ${money(p.amount)}</strong> <span class="status status--${vTone[p.verification] || "muted"}">${esc(p.verification)}</span>${p.approvalStatus ? ` <span class="status status--${p.approvalStatus === "Approved" ? "good" : p.approvalStatus === "Rejected" ? "bad" : "warn"}">${esc(p.approvalStatus)}</span>` : ""}
                     <span>${esc(p.method)}${p.reference ? " · ref " + esc(p.reference) : ""} · paid ${fmtDate(p.paidOn)} · recorded by ${esc(staffName(p.recordedBy))}${p.verifiedBy ? ` · ${p.verification.toLowerCase()} by ${esc(staffName(p.verifiedBy))} ${fmtWhen(p.verifiedAt)}` : ""}${p.verificationSource ? " (" + esc(p.verificationSource) + ")" : ""}${p.voidReason ? " · void: " + esc(p.voidReason) : ""}</span></div>
@@ -720,7 +733,7 @@
                 if (e.target.closest("[data-newpay]")) {
                     const key = uuid();
                     modal(`Record a payment on ${t.ref}`, `
-                        <div class="field-row"><div class="field"><label>Type</label><select name="type">${opt([["deposit", "Deposit"], ["instalment", "Instalment"], ["balance", "Balance"]].concat(t.allowed.payVerify ? [["refund", "Refund (needs a second approver)"]] : []), t.money.paid ? "balance" : "deposit")}</select></div>
+                        <div class="field-row"><div class="field"><label>Type</label><select name="type">${opt([["deposit", "Deposit"], ["instalment", "Instalment"], ["balance", "Balance"]].concat(t.allowed.payVerify ? [["refund", "Refund (a manager approves it)"]] : []), t.money.paid ? "balance" : "deposit")}</select></div>
                         <div class="field"><label>Amount (R)</label><input type="number" min="0.01" step="0.01" name="amount" value="${t.money.paid ? t.money.outstanding : t.money.deposit}" required></div></div>
                         <div class="field-row"><div class="field"><label>Method</label><select name="method">${opt(cfg.paymentMethods, "EFT")}</select></div>
                         <div class="field"><label>Payment reference</label><input name="reference" maxlength="60" placeholder="Bank / gateway reference"></div></div>
@@ -914,7 +927,7 @@
             const b = body();
             b.innerHTML = `<div class="adm-grid"><div class="adm-card adm-span-3"><div class="card-head"><h2>Active tickets per employee</h2><p>overdue in brackets</p></div><div data-wl></div></div>
                 <div class="adm-card adm-span-3"><div class="table-wrap"><table class="table"><thead><tr><th>Employee</th><th class="num">Active</th><th class="num">Overdue tickets</th><th class="num">Supporting</th><th class="num">Open tasks</th><th class="num">Overdue tasks</th><th class="num">Completed (month)</th><th>Last activity</th></tr></thead><tbody>
-                ${list.map(w => `<tr class="${w.overdueTickets || w.overdueTasks ? "is-overdue" : ""}"><td><strong>${esc(w.name)}</strong><span>${esc(ROLE_LABEL[w.role] || w.role)}</span></td><td class="num"><a href="#tickets" data-emp="${esc(w.email)}">${w.activeTickets}</a></td><td class="num">${w.overdueTickets}</td><td class="num">${w.supporting}</td><td class="num">${w.openTasks}</td><td class="num">${w.overdueTasks}</td><td class="num">${w.completedThisMonth} <span>${w.tasksDoneThisMonth} tasks</span></td><td>${w.lastActivity ? fmtWhen(w.lastActivity) : "—"}</td></tr>`).join("")}</tbody></table></div></div></div>`;
+                ${list.map(w => `<tr class="${w.overdueTickets || w.overdueTasks ? "is-overdue" : ""}"><td><strong>${esc(w.name)}</strong><span>${esc((cfg.staff.find(s => s.email === w.email) || {}).jobTitle || ROLE_LABEL[w.role] || w.role)}</span></td><td class="num"><a href="#tickets" data-emp="${esc(w.email)}">${w.activeTickets}</a></td><td class="num">${w.overdueTickets}</td><td class="num">${w.supporting}</td><td class="num">${w.openTasks}</td><td class="num">${w.overdueTasks}</td><td class="num">${w.completedThisMonth} <span>${w.tasksDoneThisMonth} tasks</span></td><td>${w.lastActivity ? fmtWhen(w.lastActivity) : "—"}</td></tr>`).join("")}</tbody></table></div></div></div>`;
             if (list.length) hBars($("[data-wl]", b), list.map(w => ({ label: `${w.name}${w.overdueTickets + w.overdueTasks ? ` (${w.overdueTickets + w.overdueTasks})` : ""}`, value: w.activeTickets })));
             b.addEventListener("click", e => { const a = e.target.closest("[data-emp]"); if (a) { (filters.tickets ||= { sort: "updated" }).assignee = a.dataset.emp; } });
         }
@@ -984,7 +997,7 @@
             views: {
                 workspace, ops: overview, ticket, intake, tasks, quotes, payments, workload, opssettings: settings, customer,
                 incoming: reg("incoming", { apiView: "incoming", intro: "New enquiries from Kaycee, the website and staff intake that nobody has reviewed yet.", emptyTitle: "No new enquiries", emptyText: "New website, Kaycee and staff-registered enquiries appear here." }),
-                unassigned: reg("unassigned", { apiView: "unassigned", hideAssignee: true, sort: "created", intro: "Open tickets without an owner. Click <b>Unassigned</b> in a row to choose who handles it, or tick several tickets and assign them together.", emptyTitle: "Everything is assigned", emptyText: "Every open ticket has an accountable employee." }),
+                unassigned: reg("unassigned", { apiView: "unassigned", hideAssignee: true, sort: "created", intro: () => can("ops.assign") ? "Open tickets without an owner. Click <b>Unassigned</b> in a row to choose who handles it, or tick several tickets and assign them together." : "Open tickets without an owner. Click <b>Pick up</b> to take one; it moves to My Assigned Tickets and you become responsible for it.", emptyTitle: "Everything is assigned", emptyText: "Every open ticket has an accountable employee." }),
                 tickets: reg("tickets", { apiView: "all" }),
                 mine: reg("mine", { apiView: "mine", hideAssignee: true, sort: "due", emptyTitle: "No tickets assigned to you" }),
                 opsbookings: reg("opsbookings", { apiView: "bookings", intro: "Confirmed bookings (deposit verified and confirmed by management) through to completion.", emptyTitle: "No confirmed bookings yet" }),

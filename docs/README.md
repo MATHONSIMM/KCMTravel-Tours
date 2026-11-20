@@ -2,8 +2,9 @@
 
 | Document | For | What it covers |
 |---|---|---|
-| **[KCM-User-Guide.pdf](KCM-User-Guide.pdf)** | The whole team | 41-page illustrated guide: signing in and the authenticator app, the menu, how enquiries arrive, a consultant's daily work, tickets, quotations, payments, management, all 20 ticket statuses, giving and removing access, partners, demo data, going-live checklist, troubleshooting. Screenshots use demo data. |
+| **[KCM-User-Guide.pdf](KCM-User-Guide.pdf)** | The whole team | 54-page illustrated guide: signing in (username, temporary password, changing your password) and the authenticator app, the menu, how enquiries arrive, a consultant's daily work, tickets, quotations, payments, management, all 20 ticket statuses, staff accounts and access profiles (who does what), partners, demo data, going-live checklist, troubleshooting. Screenshots use demo data. |
 | **[marketing/KCM-Travel-and-Tours-Brochure.pdf](marketing/KCM-Travel-and-Tours-Brochure.pdf)** | Customers, social media | 7-page launch brochure: who KCM is, what you can do with KCM, all trips (no prices, so it stays current), how booking works, the explainer video script, "Launching soon". |
+| **[ACCESS-MODEL.md](ACCESS-MODEL.md)** | Owner, managers | The business model of who does what: roles vs access profiles, the six built-in profiles, money-out approvals, what each person sees. |
 | [../backend/SETUP.md](../backend/SETUP.md) | Owner / admin | Connecting the Google Sheet, deploying the Apps Script backend, two-step sign-in, access levels, what each tab holds, demo data, updating to a new version. |
 | [SECURITY-AUDIT.md](SECURITY-AUDIT.md) | Owner / technical | Security problems found and fixed, controls in place, test results, known limits of the pilot platform, production requirements, POPIA notes. |
 | [OPERATIONS-CENTRE-PLAN.md](OPERATIONS-CENTRE-PLAN.md) | Technical | How the Operations Centre was designed on top of the existing site and backend. |
@@ -24,7 +25,7 @@ The PDF is generated from `guide-src/build_guide.py` and the screenshots in `gui
 node backend/dev/mock-server.js &                 # http://127.0.0.1:8787
 curl -s http://127.0.0.1:8787/__demo              # load demo data (emulator only)
 cd KcmTravel && Site__ApiUrl=http://127.0.0.1:8787 dotnet run --urls http://127.0.0.1:5217 &
-# 2. screenshots + 18 workflow checks (needs Playwright + Chrome), then convert PNG -> JPG into docs/guide-src/img
+# 2. screenshots + 25 workflow checks (needs Playwright + Chrome), then convert PNG -> JPG into docs/guide-src/img
 node backend/dev/guide-shots.js
 # 3. build the HTML, then print it to A4 PDF with Chrome
 python3 docs/guide-src/build_guide.py             # writes docs/guide-src/guide.html

@@ -203,7 +203,7 @@ const FAKE_PDF = "data:application/pdf;base64," + Buffer.from("<script>alert(1)<
     const v2 = await ok("verifyPayment", { id: p2.id, decision: "verify", source: "FNB statement 20 Nov" }, T.finance2);
     check("second finance user verifies; fully paid, nothing outstanding", v2.paymentStatus === "Fully paid" && v2.outstanding === 0);
     const rf = await ok("recordPayment", { ref: T.ref1, payment: { type: "refund", amount: 500, method: "EFT", reference: "RF-1", notes: "Goodwill refund: late pickup" } }, T.finance);
-    await expectError("refund needs a different approver (two-person rule)", "approveRefund", { id: rf.id }, T.finance, /different person/i);
+    await expectError("finance cannot approve refunds: a manager approves money out", "approveRefund", { id: rf.id }, T.finance, /access/i);
     const ar = await ok("approveRefund", { id: rf.id }, T.admin2);
     check("refund approved by a second person; balance updates", ar.paymentStatus === "Partially paid");
     const pl = await ok("listPayments", {}, T.finance);
@@ -220,7 +220,7 @@ const FAKE_PDF = "data:application/pdf;base64," + Buffer.from("<script>alert(1)<
     await expectError("IDOR: employee cannot add notes to another employee's ticket", "addNote", { ref: manual.ref, content: "x" }, T.agent2, /not found/i);
     await expectError("employee cannot change their own role (no user management)", "saveUser", { email: "agent1@kcm.test.co", role: "ADMIN" }, T.agent1, /access/i);
     await expectError("admin cannot change their own role", "saveUser", { email: "admin2@kcm.test.co", role: "MANAGEMENT" }, T.admin2, /own access/i);
-    await expectError("admin cannot create another admin (super admin only)", "saveUser", { email: "x@kcm.test.co", role: "ADMIN" }, T.admin2, /super admin/i);
+    await expectError("manager cannot give the Administrator profile (no access beyond their own)", "saveUser", { email: "x@kcm.test.co", role: "ADMIN" }, T.manager, /do not have yourself/i);
     await expectError("nobody can assign SUPER_ADMIN", "saveUser", { email: "y@kcm.test.co", role: "SUPER_ADMIN" }, T.owner, /super admin/i);
     await expectError("manager cannot erase customer data", "eraseCustomer", { ref: t1.customerRef, reason: "x" }, T.manager, /access/i);
     await expectError("POPIA erase blocked while tickets are open", "eraseCustomer", { ref: t1.customerRef, reason: "Customer request 19 Nov" }, T.owner, /open tickets/i);

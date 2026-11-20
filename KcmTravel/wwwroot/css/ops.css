@@ -263,3 +263,45 @@ body.staff-mode .chat, body.staff-mode .wa-float { display: none !important; }
 .kca-teaser-cta { margin-top: 3px; font-weight: 800; color: var(--accent, #b4542a); }
 .kca-teaser-x { position: absolute; top: -10px; left: -10px; width: 26px; height: 26px; border: 0; border-radius: 50%; background: var(--night, #14201b); color: #fff; font-size: 16px; line-height: 1; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,.25); }
 @media (prefers-reduced-motion: reduce) { .kca-teaser { transition: none; } }
+
+/* ---------- Users & access: team, employee form, access profiles, who does what ---------- */
+.sub-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.sub-tabs .chip { text-decoration: none; }
+.sub-tabs .chip.is-active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.card-head--row { align-items: flex-start; }
+.card-head--row p { max-width: 62ch; }
+.adm .small { font-size: 13px; }
+.table tr.is-disabled td { opacity: .55; }
+.role-chip { margin: 2px 4px 2px 0; text-transform: none; letter-spacing: 0; font-weight: 700; font-size: 12px; }
+.role-chip--owner { background: #2b1d14; color: #f3d6a4; }
+.role-chip--custom { background: #e6f1f5; color: #0a5a75; }
+.profile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.profile-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
+.profile-card header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.profile-card h3 { margin: 0; font-size: 17px; }
+.profile-card p { margin: 0; color: var(--ink-soft); font-size: 14px; }
+.profile-card .btn { align-self: flex-start; margin-top: auto; }
+.emp-form fieldset { border: 0; padding: 0; margin: 0 0 14px; }
+.emp-form legend { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+.emp-form h3 { margin: 22px 0 8px; font-size: 16px; }
+.profile-picks { display: grid; gap: 8px; }
+.profile-pick, .perm-pick { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; background: var(--card); }
+.profile-pick:has(input:checked), .perm-pick:has(input:checked) { border-color: var(--ink); background: var(--bone); }
+.profile-pick input, .perm-pick input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--ink); }
+.profile-pick strong, .perm-pick strong { display: block; font-size: 14px; }
+.profile-pick small, .perm-pick small { display: block; color: var(--ink-soft); font-size: 12.5px; line-height: 1.4; }
+.perm-pick.is-off { cursor: not-allowed; opacity: .55; }
+.perm-group { display: grid; gap: 6px; }
+.perm-group legend { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); }
+.sees { background: var(--bone); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 13.5px; }
+.sees p { margin: 4px 0; }
+.handover-box { border: 1px dashed var(--ink); border-radius: 12px; padding: 16px; margin: 12px 0 18px; }
+.handover-box code { font-size: 17px; background: var(--bone); padding: 2px 8px; border-radius: 6px; user-select: all; }
+.access-matrix th:not(:first-child), .access-matrix td:not(:first-child) { text-align: center; white-space: nowrap; }
+.access-matrix td.yes { color: #237a2a; font-weight: 800; }
+.access-matrix td.no { color: #b9bfbb; }
+.access-matrix thead th { position: sticky; top: 0; background: var(--card); }
+@media (max-width: 760px) { .emp-form .field-row { grid-template-columns: 1fr; } }
+.field label.profile-pick, .emp-form label.profile-pick, .emp-form label.perm-pick { display: grid; font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink); margin: 0; }
+.emp-form legend { text-transform: none; letter-spacing: 0; }
+.emp-form .perm-group legend { text-transform: uppercase; letter-spacing: .08em; }

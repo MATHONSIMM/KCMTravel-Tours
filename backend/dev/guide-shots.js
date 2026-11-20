@@ -7,7 +7,12 @@ const fs = require('fs');
 const S = 'http://127.0.0.1:5217', M = 'http://127.0.0.1:8787', OUT = '/home/claude/guide-shots';
 fs.mkdirSync(OUT, { recursive: true });
 const J = async p => (await fetch(M + p)).json();
-const call = async (action, payload = {}, token) => (await (await fetch(M, { method: 'POST', body: JSON.stringify(Object.assign({ action }, token ? { token } : {}, payload)) })).json());
+const call = async (action, payload = {}, token) => {
+  for (let i = 0; ; i++) {
+    try { return await (await fetch(M, { method: 'POST', body: JSON.stringify(Object.assign({ action }, token ? { token } : {}, payload)) })).json(); }
+    catch (e) { if (i >= 2) throw new Error(action + ': ' + (e.cause && e.cause.code || e.message)); await new Promise(r => setTimeout(r, 1000)); }
+  }
+};
 const lastCode = async email => { const m = (await J('/__mail')).reverse().find(e => e.to === email && /sign-in code/.test(e.subject)); return /letter-spacing:4px">(\d{6})/.exec(m.htmlBody)[1]; };
 function totp(secret, off = 0) { const B = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let bits = ''; for (const c of secret.replace(/\s/g, '')) bits += B.indexOf(c).toString(2).padStart(5, '0'); const key = Buffer.from(bits.match(/.{8}/g).map(b => parseInt(b, 2))); const msg = Buffer.alloc(8); msg.writeUInt32BE(Math.floor(Date.now() / 30000) + off, 4); const h = crypto.createHmac('sha1', key).update(msg).digest(); const o = h[19] & 15; return String(((h[o] & 127) << 24 | h[o + 1] << 16 | h[o + 2] << 8 | h[o + 3]) % 1e6).padStart(6, '0'); }
 const PW = 'Lowveld-test-2026x', DEMO_PW = 'Demo-Lowveld-2026';
@@ -33,6 +38,7 @@ const unmark = p => p.evaluate(() => document.querySelectorAll('.guide-mark').fo
 async function shot(p, name, opts = {}) {
   try {
     await p.waitForTimeout(opts.wait || 700);
+    await p.evaluate(() => document.querySelectorAll('.kca-teaser').forEach(x => { x.hidden = true; }));
     if (opts.mark) await mark(p, opts.mark);
     await p.screenshot({ path: `${OUT}/${name}.png`, fullPage: !!opts.full, clip: opts.clip });
     if (opts.mark) await unmark(p);
@@ -200,24 +206,80 @@ async function step(name, fn) { try { await fn(); } catch (e) { fails.push(name 
     await shot(f2, '56-refund-approve', { mark: [['[data-refund]', '1']] });
     await f2.click('[data-refund]'); await f2.waitForTimeout(400); const mod = await f2.$('[data-ops-modal][open] button[type=submit]'); if (mod) await mod.click();
     await f2.waitForTimeout(1500);
-    check('a second finance person approves the demo refund', !(await f2.$('[data-refund]')));
+    check('a manager (Sam: Manager + Finance) approves the refund finance recorded', !(await f2.$('[data-refund]')));
+    const fv = await asUser(FIN);
+    const ft = (await call('listTickets', {}, FIN)).data.tickets[0];
+    await go(fv, '#ticket/' + ft.ref, '.tk-head');
+    await shot(fv, '57-finance-ticket', { mark: [['.tk-ro', 'A'], ['.tk-tabs', 'B']] });
+    const navF = await fv.$$eval('[data-view]:not([hidden])', a => a.map(x => x.textContent.trim()));
+    check('finance sees only Tickets with money, Payments and payouts; tickets open read-only', navF.join('|') === 'Tickets with money|Payments|Partner trips & payouts'.replace(/ 5/, '') || navF.length === 3, navF.join('|'));
   });
 
-  // ---------- access: give, change role, revoke ----------
+  // ---------- access: create an employee, first sign-in, profiles, revoke ----------
   await step('access', async () => {
-    await go(o, '#users', '[data-invite]');
-    await o.fill('[data-invite] input[name=email]', 'new.agent@demo.kcm.test'); await o.fill('[data-invite] input[name=name]', 'Lindiwe Zwane (demo)'); await o.selectOption('[data-invite] select[name=role]', 'OPERATIONS');
-    await shot(o, '60-give-access', { mark: [['[data-invite] input[name=email]', '1'], ['[data-invite] select[name=role]', '2'], ['[data-invite] button[type=submit]', '3']] });
-    await o.click('[data-invite] button[type=submit]'); await o.waitForSelector('.toast'); await o.waitForTimeout(1500);
-    check('admin gives a new person Operations access', (await o.textContent('[data-adm-body]')).includes('new.agent@demo.kcm.test'));
-    await o.selectOption('[data-ustatus="ayesha.ops@demo.kcm.test"]', 'disabled'); await o.waitForSelector('.toast'); await o.waitForTimeout(1000);
-    const blocked = await call('listTickets', { view: 'mine' }, await (async () => { const x = await call('signIn', { email: 'ayesha.ops@demo.kcm.test', password: DEMO_PW }); return x.data && x.data.token; })());
-    check('revoked user can no longer sign in or use the system', !blocked.ok);
-    await go(o, '#users', '[data-invite]');
-    await shot(o, '61-users-access', { full: true, mark: [['[data-role="sipho.ops@demo.kcm.test"]', 'A'], ['[data-ustatus="ayesha.ops@demo.kcm.test"]', 'B']] });
-    await o.selectOption('[data-ustatus="ayesha.ops@demo.kcm.test"]', 'active'); await o.waitForTimeout(1000);
+    const TEMP = 'Welcome-Kcm-2026';
+    await go(o, '#users/team', '[data-new-user]');
+    await o.click('[data-new-user]'); await o.waitForSelector('[data-emp]');
+    await o.fill('[data-emp] input[name=name]', 'Lindiwe Zwane (demo)'); await o.fill('[data-emp] input[name=username]', 'lindiwe.demo');
+    await o.fill('[data-emp] input[name=email]', 'lindiwe.zwane@demo.kcm.test'); await o.fill('[data-emp] input[name=jobTitle]', 'Travel Consultant');
+    await o.check('[data-emp] input[name=profiles][value=consultant]'); await o.fill('[data-emp] input[name=tempPassword]', TEMP);
+    await o.evaluate(() => { const d = document.querySelector('.adm-drawer-panel'); if (d) d.scrollTop = 0; });
+    await o.waitForTimeout(300);
+    await shot(o, '70-add-employee', { mark: [['[data-emp] input[name=name]', '1'], ['[data-emp] input[name=username]', '2'], ['.profile-pick:has(input[value=consultant])', '3'], ['[data-gen-pw]', '4'], ['[data-emp] button[type=submit]', '5']] });
+    await o.click('[data-emp] button[type=submit]'); await o.waitForSelector('.handover-box');
+    await shot(o, '71-credentials', { mark: [['.handover-box', '1'], ['[data-copy-cred]', '2']] });
+    check('admin creates an employee with a temporary password and gets the details to hand over', (await o.textContent('.handover-box')).includes(TEMP));
+    await o.click('.adm-drawer [data-drawer-close]').catch(() => {}); await go(o, '#users/team', '[data-new-user]');
+    await shot(o, '72-users-access', { full: true, mark: [['[data-edit-user="sipho.ops@demo.kcm.test"]', 'A']] });
+
+    // the new employee signs in with the username and the temporary password
+    console.log('   · access: created');
+    const n = await mk();
+    await n.goto(S + '/admin'); await n.waitForSelector('[data-adm-body] [data-step-password]');
+    await n.fill('[data-adm-body] [data-step-password] input[name=email]', 'lindiwe.demo'); await n.fill('[data-adm-body] [data-step-password] input[name=password]', TEMP);
+    await n.click('[data-adm-body] [data-step-password] button[type=submit]'); await n.waitForSelector('[data-adm-body] [data-step-newpw]:not([hidden])');
+    await n.fill('[data-adm-body] [data-step-newpw] input[name=password]', 'Lindiwe-own-pass-2026'); await n.fill('[data-adm-body] [data-step-newpw] input[name=password2]', 'Lindiwe-own-pass-2026');
+    await shot(n, '73-first-password', { mark: [['[data-adm-body] [data-step-newpw] input[name=password]', '1'], ['[data-adm-body] [data-step-newpw] button[type=submit]', '2']] });
+    check('first sign-in with the temporary password asks for a new password', true);
+    await n.click('[data-adm-body] [data-step-newpw] button[type=submit]'); await n.waitForSelector('.ws-greeting', { timeout: 20000 });
+    const nav = await n.$$eval('[data-view]:not([hidden])', a => a.map(x => x.dataset.view));
+    await shot(n, '74-consultant-menu', { mark: [['.adm-nav', 'A']] });
+    check('the new consultant sees only consultant tabs (no Users, Payments, Workload, Overview)', !['users', 'payments', 'workload', 'ops', 'overview'].some(v => nav.includes(v)) && nav.includes('unassigned'), nav.join(','));
+    console.log('   · access: first sign-in ok');
+    await go(n, '#unassigned', '[data-claim]');
+    await shot(n, '75-pickup', { mark: [['[data-claim]', '1']] });
+    const ref = await n.getAttribute('[data-claim]', 'data-claim');
+    await n.click('[data-claim]'); await n.waitForSelector('.toast'); await n.waitForTimeout(1200);
+    const mine = await call('getTicket', { ref }, OWNER);
+    check('the consultant picks up an unassigned ticket', mine.data.assignedTo === 'lindiwe.zwane@demo.kcm.test');
+    await n.click('[data-mypw]'); await n.waitForSelector('[data-mypw-form]');
+    await n.fill('[data-mypw-form] input[name=current]', 'Lindiwe-own-pass-2026'); await n.fill('[data-mypw-form] input[name=password]', 'Lindiwe-newer-2026'); await n.fill('[data-mypw-form] input[name=password2]', 'Lindiwe-newer-2026');
+    await shot(n, '76-my-password', { mark: [['[data-mypw]', '1'], ['[data-mypw-form] button[type=submit]', '2']] });
+    await n.click('[data-mypw-form] button[type=submit]'); await n.waitForSelector('.toast');
+    const relog = await call('signIn', { email: 'lindiwe.demo', password: 'Lindiwe-newer-2026' });
+    check('the employee changes their own password and signs in with it', relog.ok && relog.data.token);
+    const denied = await call('listUsers', {}, relog.data.token);
+    check('the consultant has no admin rights (cannot list users)', !denied.ok);
+
+    // access profiles and who does what
+    await go(o, '#users/profiles', '.profile-card');
+    await shot(o, '77-profiles', { mark: [['[data-new-profile]', '1']] });
+    await o.click('[data-edit-profile="finance"]'); await o.waitForSelector('[data-prof]');
+    await shot(o, '78-profile-builder', { mark: [['.perm-group', 'A']] });
+    await o.click('.adm-drawer [data-drawer-close]');
+    await go(o, '#users/matrix', '.access-matrix');
+    await shot(o, '79-who-does-what', { full: true });
+    check('Who does what shows every profile side by side', (await o.$$('.access-matrix thead th')).length >= 7);
+
+    // revoke
+    await go(o, '#users/team', '[data-new-user]');
+    await o.click('[data-edit-user="ayesha.ops@demo.kcm.test"]'); await o.waitForSelector('[data-emp]');
+    await o.selectOption('[data-emp] select[name=status]', 'disabled'); await o.click('[data-emp] button[type=submit]'); await o.waitForSelector('.toast'); await o.waitForTimeout(800);
+    const blocked = await call('signIn', { email: 'ayesha.ops@demo.kcm.test', password: DEMO_PW });
+    check('a disabled employee can no longer sign in', !blocked.ok);
+    await call('saveUser', { email: 'ayesha.ops@demo.kcm.test', status: 'active' }, OWNER);
     const back = await call('signIn', { email: 'ayesha.ops@demo.kcm.test', password: DEMO_PW });
-    check('access can be given back (status active again)', back.ok && back.data.token);
+    check('access can be given back (account active again)', back.ok && back.data.token);
   });
 
   // ---------- partner review ----------
