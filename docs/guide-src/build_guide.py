@@ -12,6 +12,7 @@ def data_uri(path, mime): return f'data:{mime};base64,' + base64.b64encode(path.
 LOGO_URI = data_uri(WWW / 'images/brand/kcm-logo.svg', 'image/svg+xml')
 FRAUNCES_URI = data_uri(WWW / 'fonts/fraunces.woff2', 'font/woff2')
 MANROPE_URI = data_uri(WWW / 'fonts/manrope.woff2', 'font/woff2')
+MTECH_URI = data_uri(ROOT / 'img/mtech-logo.jpg', 'image/jpeg')
 FRAUNCES_I_URI = data_uri(WWW / 'fonts/fraunces-italic.woff2', 'font/woff2')
 E = html.escape
 
@@ -371,12 +372,17 @@ doc = f'''<!DOCTYPE html><html lang="en-ZA"><head><meta charset="utf-8"><title>K
 body {{ font-family: Manrope, Inter, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.55; margin: 0; }}
 h1, h2, h3 {{ font-family: Fraunces, Georgia, serif; font-weight: 500; line-height: 1.15; }}
 .cover {{ height: 262mm; display: flex; flex-direction: column; justify-content: space-between; padding: 8mm 4mm; page-break-after: always; background: linear-gradient(160deg, #fbf8f3 0%, #f3ece1 100%); border-radius: 6mm; }}
-.cover img.logo {{ width: 70mm; }}
-.cover h1 {{ font-size: 40pt; margin: 0 0 6mm; letter-spacing: -.01em; }}
+.cover img.logo {{ width: 46mm; }}
+.cover h1 {{ font-size: 36pt; margin: 0 0 5mm; letter-spacing: -.01em; }}
 .cover h1 em {{ color: var(--accent); }}
 .cover p.lead {{ font-size: 14pt; color: var(--soft); max-width: 140mm; margin: 0; }}
-.cover .shot {{ width: 100%; border-radius: 3mm; box-shadow: 0 6px 24px rgba(0,0,0,.18); }}
-.cover .meta {{ font-size: 9.5pt; color: var(--soft); display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 4mm; }}
+.cover .shot {{ height: 92mm; overflow: hidden; border-radius: 3mm; box-shadow: 0 6px 24px rgba(0,0,0,.18); flex-shrink: 0; }}
+.cover .shot img {{ width: 100%; display: block; }}
+.cover .by {{ display: flex; align-items: center; gap: 3mm; }}
+.cover .by img {{ height: 15mm; background: #fff; border-radius: 2mm; padding: 1.2mm 2mm; }}
+.credit {{ display: flex; align-items: center; gap: 4mm; margin-top: 3mm; padding-top: 3mm; border-top: 1px solid var(--line); font-size: 9.5pt; }}
+.credit img {{ height: 11mm; background: #fff; border-radius: 1.5mm; padding: 1mm 1.5mm; }}
+.cover .meta {{ font-size: 9pt; color: var(--soft); display: flex; justify-content: space-between; align-items: center; gap: 6mm; border-top: 1px solid var(--line); padding-top: 4mm; }}
 .toc {{ page-break-after: always; }}
 .toc h2 {{ font-size: 24pt; margin: 0 0 6mm; }}
 .toc ol {{ list-style: none; padding: 0; columns: 1; }}
@@ -417,13 +423,14 @@ table.status-table td:nth-child(2) {{ font-weight: 800; font-size: 8.5pt; white-
 <div class="cover">
   <div><img class="logo" src="{LOGO_URI}" alt="KCM Travel &amp; Tours"></div>
   <div><h1>User Guide<br><em>KCM Operations Centre</em></h1><p class="lead">How to use the KCM Travel &amp; Tours website and staff dashboard: from a customer's first enquiry to a completed trip. Written for the whole team, with pictures.</p></div>
-  <img class="shot" src="img/10-ops-overview.jpg" alt="" style="max-height:105mm;object-fit:cover;object-position:top">
-  <div class="meta"><span>Version 1.4 · {today}</span><span>Screenshots show demo data, not real customers</span></div>
+  <div class="shot"><img src="img/10-ops-overview.jpg" alt=""></div>
+  <div class="meta"><span>Version 1.4 · {today}<br>Screenshots show demo data, not real customers</span><span class="by">Created by<img src="{MTECH_URI}" alt="M-Tech Business Solutions"></span></div>
 </div>
 <div class="toc"><h2>Contents</h2><ol>{toc}</ol>
 <div class="howto"><h3 style="margin-top:0">How to read this guide</h3>
-<p><b>Orange numbered circles</b> on the pictures show where to click, in order. Button names appear like {btn('this')}. Sections 5 to 9 cover everyday work for consultants, managers and finance; sections 11 to 12 are for admins.</p>
-<p>All names, numbers and amounts in the pictures are <b>demo data</b> created for testing. They are not real customers or real money.</p></div></div>
+<p><b>Orange numbered circles</b> on the pictures show where to click, in order. Button names appear like {btn('this')}. Sections 5 to 10 cover everyday work for consultants, managers and finance; sections 12 and 13 are for admins.</p>
+<p>All names, numbers and amounts in the pictures are <b>demo data</b> created for testing. They are not real customers or real money.</p>
+<div class="credit"><img src="{MTECH_URI}" alt="M-Tech Business Solutions"><p style="margin:0">The KCM Travel &amp; Tours website, Operations Centre and this guide were designed and built by <b>M-Tech Business Solutions</b>.</p></div></div></div>
 {body}
 </body></html>'''
 (ROOT / 'guide.html').write_text(doc, encoding='utf-8')
